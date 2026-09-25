@@ -7,41 +7,26 @@
              saveIssue/maintenance/complaints/notices/fines/inspections/billsplits,
              renderActivityLog, calcBillSplit, saveBillSplit, saveCheckin,
              deleteCheckin, saveNotice, deleteNotice, saveFine, payFine,
-             deleteFine, drawCharts, enforceDataRetention,
+             deleteFine, enforceDataRetention,
              (the logo uploader was removed — the brand mark is fixed)
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
-function drawCharts() {} // charts are rendered as HTML bars
 
-async function saveMaintenance() {
-  const title = document.getElementById('mt-title')?.value?.trim();
-  if(!title){toast('Enter a title','error');return;}
-  if(!DB.maintenance) DB.maintenance=[];
-  logActivity('Maintenance Added', title, 'Maintenance');
-  DB.maintenance.push({
-    id:'mt_'+uid(), seq:_issNextSeq(DB.maintenance), title, roomId:document.getElementById('mt-room')?.value||'',
-    priority:document.getElementById('mt-priority')?.value||'Medium',
-    description:document.getElementById('mt-desc')?.value?.trim()||'',
-    date:document.getElementById('mt-date')?.value||today(),
-    status:'Open', resolvedDate:''
-  });
-  await saveDB(); closeModal(); renderPage('maintenance'); toast('Maintenance request added','success');
-}async function saveComplaint() {
-  const subject = document.getElementById('cp-subject')?.value?.trim();
-  if(!subject){toast('Enter a subject','error');return;}
-  if(!DB.complaints) DB.complaints=[];
-  logActivity('Complaint Added', subject, 'Complaint');
-  DB.complaints.push({
-    id:'cp_'+uid(), seq:_issNextSeq(DB.complaints), subject,
-    studentId: document.getElementById('cp-student')?.value||'',
-    category: document.getElementById('cp-category')?.value||'General',
-    description: document.getElementById('cp-desc')?.value?.trim()||'',
-    date: document.getElementById('cp-date')?.value||today(),
-    status:'Open', resolvedDate:''
-  });
-  await saveDB(); closeModal(); renderPage('complaints'); toast('Complaint added','success');
-}
+/* saveMaintenance() and saveComplaint() stood here and are deleted.
+
+   They pushed straight into DB.maintenance and DB.complaints, and they had NO
+   CALLERS — verified across the renderer and index.html before removing, and
+   they had already outlived the 2026-09-08 redesign that gave the register its
+   own saveIssue(). The dead-function sweep missed them.
+
+   Left in place they would have become live damage rather than clutter: since
+   2026-09-21 the register reads DB.issues, so a stray call to either would have
+   written a record into a collection nothing displays, and the warden would
+   have watched a saved complaint not appear.
+
+   The one way in is showIssueModal() -> saveIssue() in modules/issues.js. */
+
 async function saveCheckin() {
   const studentId = document.getElementById('ci-student')?.value;
   if(!studentId){toast('Select a student','error');return;}
@@ -667,10 +652,23 @@ function renderRulesPanel() {
         <span class="set-note__i">${setIco(SET_ICO.info, 15, 2)}</span>
         <span><b>Starter text — review and save it before printing admission forms.</b> It names no hostel and no person; change anything that does not match your hostel.</span>
       </div>` : ''}
-      <div class="field"><label for="und-rules">Rules <span class="opt">one per line &mdash; printed as a numbered list</span></label>
-        <textarea class="form-control" id="und-rules" rows="12" maxlength="6000">${escHtml(cur.rules)}</textarea></div>
+      ${''/* URDU, TYPED AND PASTED (owner review #16, 2026-09-18). Nothing
+             was filtering the characters — undSave() stores whatever is typed
+             — so the text went in fine and came out reading wrong. The fault
+             was direction: an LTR textarea puts Urdu's full stop, its numerals
+             and any Latin word in the wrong place, and a mixed list looked
+             broken enough to seem unsupported.
+
+             `dir="auto"` asks the browser to take the direction from the first
+             strong character, so an English rule stays LTR, an Urdu rule goes
+             RTL, and a list holding both gets each line right. The font stack
+             gains the Urdu faces Windows ships; Inter carries no Arabic script
+             at all, so every glyph was already falling through to whatever came
+             next. */}
+      <div class="field"><label for="und-rules">Rules <span class="opt">one per line &mdash; printed as a numbered list &middot; English or اردو</span></label>
+        <textarea class="form-control is-bidi" id="und-rules" rows="12" maxlength="6000" dir="auto" lang="und">${escHtml(cur.rules)}</textarea></div>
       <div class="field" style="margin-top:12px"><label for="und-decl">Responsibility declaration</label>
-        <textarea class="form-control" id="und-decl" rows="4" maxlength="1500">${escHtml(cur.declaration)}</textarea></div>
+        <textarea class="form-control is-bidi" id="und-decl" rows="4" maxlength="1500" dir="auto" lang="und">${escHtml(cur.declaration)}</textarea></div>
       <div style="display:flex;justify-content:flex-end;margin-top:12px">
         <button class="btn btn-primary" id="und-save" onclick="setRulesSave()">Save as new version</button>
       </div>
@@ -719,8 +717,8 @@ function setRulesView(v) {
   const x = undVersion(v);
   if (!x) return;
   showModal('modal-md', 'Rules &amp; Undertaking — version ' + escHtml(String(x.v)),
-    `<ol style="margin:0 0 14px 20px;line-height:1.65">${undRuleLines(x.rules).map(l => `<li>${escHtml(l)}</li>`).join('')}</ol>
-     <div class="cfg-note">${icon('info', 'xs')}<span>${escHtml(x.declaration)}</span></div>`,
+    `<ol class="is-bidi" style="margin:0 0 14px 20px;line-height:1.65">${undRuleLines(x.rules).map(l => `<li dir="auto">${escHtml(l)}</li>`).join('')}</ol>
+     <div class="cfg-note">${icon('info', 'xs')}<span class="is-bidi" dir="auto">${escHtml(x.declaration)}</span></div>`,
     `<button class="btn btn-secondary" onclick="closeModal()">Close</button>`);
 }
 
@@ -812,13 +810,6 @@ async function rtStep(id, delta) {
   await rtSetCap(id, next);
 }
 
-async function saveRoomTypes() {
-  _rtTouch();
-  await saveDB();
-  rtRefreshStrip();
-  toast('Room types saved', 'success');
-}
-
 /* ── Reorder ─────────────────────────────────────────────────────────────────
    The array order is the order every other screen lists types in, so dragging
    a row is a real edit, not a view preference. The row is only made draggable
@@ -874,6 +865,68 @@ async function rtDrop(ev, id) {
   await saveDB();
   renderPage('settings');
   toast('Room type order updated', 'success');
+}
+
+/* ── Expense categories: reorder ─────────────────────────────────────────────
+   Owner, 2026-09-21: "the expenses categries should be dragable not fixed".
+
+   The same five handlers as the room-type table above, and deliberately a copy
+   of that shape rather than a shared abstraction over both: the two lists are
+   different types (objects with ids, and bare strings), so a generic version
+   would spend its first three lines working out which it had been handed.
+
+   DRAGGING DOES NOT REPAINT THE REPORT. The Expense Breakdown used to colour
+   each bar by the category's POSITION in this array, so a drag would have
+   recoloured every bar on Reports. expenseCatHue() in utils.js keys the colour
+   by name instead — changed in the same commit as this, and the reason that
+   function exists. */
+let _ecDrag = null;
+
+function ecGrab(el) {
+  const tr = el.closest('tr'); if (!tr) return;
+  /* Only draggable while the pointer is on the grip. Leaving `draggable` on
+     permanently stops text selection inside the row, and releasing on the
+     grip's own mouseup is not enough because the pointer is usually off a 16px
+     icon by the time the button comes up. The `!_ecDrag` guard is what keeps a
+     real drag alive past this. */
+  tr.draggable = true;
+  document.addEventListener('mouseup', function clear() {
+    if (!_ecDrag) tr.draggable = false;
+  }, { once: true });
+}
+
+function ecDragStart(ev, i) {
+  _ecDrag = i;
+  try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', String(i)); } catch (e) {}
+  ev.currentTarget.classList.add('is-dragging');
+}
+function ecDragOver(ev, i) {
+  if (_ecDrag === null || _ecDrag === i) return;
+  ev.preventDefault();
+  try { ev.dataTransfer.dropEffect = 'move'; } catch (e) {}
+  ev.currentTarget.classList.toggle('is-over-up',   i < _ecDrag);
+  ev.currentTarget.classList.toggle('is-over-down', i > _ecDrag);
+}
+function ecDragLeave(ev) { ev.currentTarget.classList.remove('is-over-up', 'is-over-down'); }
+function ecDragEnd(ev) {
+  _ecDrag = null;
+  if (ev.currentTarget) ev.currentTarget.draggable = false;
+  document.querySelectorAll('#expense-cats-list tr').forEach(tr => {
+    tr.classList.remove('is-dragging', 'is-over-up', 'is-over-down');
+    tr.draggable = false;
+  });
+}
+async function ecDrop(ev, i) {
+  ev.preventDefault();
+  const list = DB.settings.expenseCategories || [];
+  const from = _ecDrag;
+  _ecDrag = null;
+  if (from === null || from === i || from < 0 || from >= list.length
+      || i < 0 || i >= list.length) { ecDragEnd(ev); return; }
+  list.splice(i, 0, list.splice(from, 1)[0]);
+  await saveDB();
+  renderPage('settings');
+  toast('Category order updated', 'success');
 }
 
 /* ── DATA MANAGEMENT ─────────────────────────────────────────────────────── */
@@ -1266,7 +1319,8 @@ function _cfgCard(o) {
       </div>
     </div>
     ${o.rows ? `<div class="set-table-wrap"><table class="set-table cfg-table">
-        <thead><tr>${o.cols}</tr></thead><tbody>${o.rows}</tbody></table></div>`
+        <thead><tr>${o.cols}</tr></thead>
+        <tbody${o.bodyId ? ` id="${o.bodyId}"` : ''}>${o.rows}</tbody></table></div>`
              : `<div class="set-empty"><div class="set-empty__i">${icon(o.ico)}</div>
                 <div class="set-empty__t">Nothing here yet</div></div>`}
     <div class="cfg-note">${icon('info', 'xs')}<span>${escHtml(o.note)}</span></div>
@@ -1304,8 +1358,22 @@ function renderConfigurationPanel() {
     </tr>`;
   }).join('');
 
-  const cats = (s.expenseCategories || []).map((c, i) => `<tr>
-      <td class="cfg-n">${i + 1}</td>
+  /* DRAGGABLE, NOT FIXED (owner, 2026-09-21). The array order is the order
+     every expense form lists categories in, so dragging a row is a real edit
+     and not a view preference — the same thing rtDrop() does for room types,
+     and it reuses that table's drop-line styling.
+
+     KEYED BY INDEX, NOT BY NAME. A category is a plain string typed by the
+     owner, and threading one through an inline ondragstart="" attribute makes
+     the first name containing an apostrophe a broken handler. The index is
+     stable for the life of one render, and every drop re-renders. */
+  const cats = (s.expenseCategories || []).map((c, i) => `<tr
+      ondragstart="ecDragStart(event,${i})" ondragover="ecDragOver(event,${i})"
+      ondragleave="ecDragLeave(event)" ondrop="ecDrop(event,${i})" ondragend="ecDragEnd(event)">
+      <td class="cfg-n">
+        <span class="set-grip__h" onmousedown="ecGrab(this)"
+              title="Drag to reorder — this is the order expense forms list categories in">${i + 1}</span>
+      </td>
       <td>${_cfgIconPicker('category', c)}</td>
       <td class="cfg-name">${escHtml(c)}</td>
       ${_cfgActs('category', c)}
@@ -1344,7 +1412,9 @@ function renderConfigurationPanel() {
         ico: 'receipt', hue: 'dh-amber', kind: 'category', addLabel: 'Add category',
         cols: '<th class="cfg-n">#</th><th>Icon</th><th>Category name</th><th>Actions</th>',
         rows: cats,
-        note: 'Every expense is filed under one of these, and the register totals by them.',
+        // ecDragEnd() sweeps this tbody to clear the drop line off every row.
+        bodyId: 'expense-cats-list',
+        note: 'Drag a row by its number to reorder. Every expense is filed under one of these, and the register totals by them.',
       })}
 
       ${_cfgCard({
@@ -2642,7 +2712,7 @@ async function licRefresh() {
          ${icon(d.readOnly || d.blocked ? 'lock' : 'check', 'xs')}${d.readOnly || d.blocked ? 'Read-only' : 'Enabled'}</span>
      </div>`
     + (d.banner && (d.readOnly || d.blocked || d.state === 'GRACE')
-        ? `<div class="lic-enforce__msg">${escHtml(typeof d.banner === 'string' ? d.banner : (d.banner.body || d.banner.title || ''))}</div>`
+        ? `<div class="lic-enforce__msg">${escHtml(typeof d.banner === 'string' ? d.banner : (d.banner.text || d.banner.body || d.banner.title || ''))}</div>`
         : '');
 
   const chip = document.getElementById('lic-state');
@@ -2758,7 +2828,6 @@ function openLicenseSettingsWindow() {
     toast('License settings window not available in dev/browser mode.', 'info');
   }
 }
-function _doLicenseUnlock() { openLicenseSettingsWindow(); }
 async function liveUpdateSetting(key, val) {
   DB.settings[key] = val;
   await saveDB();
@@ -2956,10 +3025,6 @@ function _applyChargesToStudent(student, newRent, newMess, messOptIn) {
 }
 
 // Kept for older call sites that only know about rent.
-function _applyRentToStudentCore(student, newRent) {
-  _applyChargesToStudent(student, newRent, Number(student.mess) || 0, student.messOptIn);
-}
-
 /* ── ROOM RENT WRITE-THROUGH ──────────────────────────────────────────────────
    Rooms are the third copy of the price and were the one nothing wrote to:
    applyRentByType()/applyRentToAll() updated the room TYPE and the STUDENTS but
@@ -3365,12 +3430,6 @@ async function removeRoomType(id) {
   _rtTouch();
   await saveDB(); renderPage('settings'); toast('Room type removed','info');
 }
-async function addPaymentMethod() {
-  const val=document.getElementById('new-pm').value.trim();
-  if(!val||DB.settings.paymentMethods.includes(val)){toast(val?'Already exists':'Enter a name','error');return;}
-  DB.settings.paymentMethods.push(val);
-  await saveDB(); renderPage('settings'); toast('Payment method added','success');
-}
 async function removePaymentMethod(m) {
   if(DB.settings.paymentMethods.length<=1){toast('Must keep at least one method','error');return;}
   // Room types and floors have always refused to be removed while something is
@@ -3385,12 +3444,6 @@ async function removePaymentMethod(m) {
   logActivity('Payment Method Removed', m, 'Settings');
   await saveDB(); renderPage('settings');
 }
-async function addExpenseCategory() {
-  const val=document.getElementById('new-ec').value.trim();
-  if(!val||DB.settings.expenseCategories.includes(val)){toast(val?'Already exists':'Enter a name','error');return;}
-  DB.settings.expenseCategories.push(val);
-  await saveDB(); renderPage('settings'); toast('Category added','success');
-}
 async function removeExpenseCategory(c) {
   if(DB.settings.expenseCategories.length<=1){toast('Must keep at least one category','error');return;}
   const _inUse = (DB.expenses||[]).filter(e=>e.category===c).length;
@@ -3398,12 +3451,6 @@ async function removeExpenseCategory(c) {
   DB.settings.expenseCategories=DB.settings.expenseCategories.filter(x=>x!==c);
   logActivity('Expense Category Removed', c, 'Settings');
   await saveDB(); renderPage('settings');
-}
-async function addFloor() {
-  const val=document.getElementById('new-fl').value.trim();
-  if(!val||DB.settings.floors.includes(val)){toast(val?'Already exists':'Enter a name','error');return;}
-  DB.settings.floors.push(val);
-  await saveDB(); renderPage('settings'); toast('Floor added','success');
 }
 async function removeFloor(f) {
   if(DB.settings.floors.length<=1){toast('Must keep at least one floor','error');return;}
@@ -3721,6 +3768,10 @@ async function confirmExcelImport() {
       notes: r.paidAtAdmission > 0 ? 'Paid at admission (imported)' : 'Imported via Excel',
       byWarden: ''
     });
+    /* An imported record carries what the spreadsheet said it was billed
+       (finance Phase 6). It is marked `import` so a later reader knows the
+       figure came from a sheet rather than from this app raising a bill. */
+    billFreeze(DB.payments[DB.payments.length - 1], 'excel-import');
     ledgerTrack(DB.payments[DB.payments.length - 1]);
     added++;
   });
@@ -3751,8 +3802,12 @@ async function resetAllData() {
     DB.payments=[];
     DB.expenses=[];
     DB.cancellations=[];
+    /* All three: `issues` is what the register reads, and the other two are
+       migration 003's rollback copies. Leaving those behind would mean Reset
+       All Data emptied the screen while the old records sat in the file. */
     DB.maintenance=[];
     DB.complaints=[];
+    DB.issues=[];
     DB.fines=[];
     DB.notices=[];
     DB.activityLog=[];
@@ -3767,7 +3822,7 @@ async function resetAllData() {
     DB.handovers=[];
     DB.handoverItems=[];
     DB.concessions=[];
-    DB.rooms=generateRooms();
+    DB.rooms=[];   // empty, like a new install — no demo rooms (owner, 2026-09-24)
     await saveDB();
     // Reset is a restore to empty — the one other action allowed to replace
     // the student ledger (owner, 2026-09-14).

@@ -57,7 +57,7 @@ vm.createContext(sandbox);
 // payments.js is required, not optional: payIsOverdue() lives there and is the
 // rule this function reuses rather than restates.
 for (const f of ['config.js', 'utils.js', 'finance.js',
-                 'modules/dashboard.js', 'modules/payments.js']) {
+                 'periods.js', 'modules/dashboard.js', 'modules/payments.js']) {
   vm.runInContext(R(f), sandbox, { filename: f });
 }
 

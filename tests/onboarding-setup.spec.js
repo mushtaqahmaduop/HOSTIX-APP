@@ -48,7 +48,7 @@ async function launch() {
   await win.waitForFunction(
     () => typeof WARDENS !== 'undefined' && WARDENS.warden1 && WARDENS.warden1.pw,
     null, { timeout: 60000 });
-  await win.fill('#login-user', 'warden1');
+  await win.selectOption('#login-user', 'warden1');
   await win.fill('#login-input', 'admin123');
   await win.click('#login-btn');
   await win.waitForFunction(
@@ -212,6 +212,29 @@ test('the wizard never opens on an install that is already in use', async () => 
   expect(answers.done, 'setup is offered again after it was finished').toBe(false);
   expect(answers.hasRooms, 'a hostel with rooms on file was offered a setup wizard').toBe(false);
   expect(answers.hasStudents, 'a hostel with students on file was offered a setup wizard').toBe(false);
+
+  await app.close();
+});
+
+/* Owner, 2026-09-24: "the buttons there were not working, and the skip for now
+   also". Every test above drives the wizard by calling its functions, so none
+   of them could see this: the wizard sits at z-index 9000 and every dialog at
+   350, so Skip's confirm opened UNDER the wizard where nothing could reach it.
+   This one only clicks, the way a warden does. */
+test('Skip for now asks, and its answer can actually be clicked', async () => {
+  const { app, win } = await launch();
+  await openWizard(win);
+
+  await win.click('.onb-skip');
+  const confirm = win.locator('.modal-overlay button', { hasText: 'Confirm' });
+  // trial: Playwright checks the button would receive the click, without clicking.
+  await confirm.click({ trial: true, timeout: 5000 });
+  await confirm.click();
+
+  await expect(win.locator('#onb')).toBeHidden();
+  const s = await win.evaluate(() => ({ step: DB.settings.setupStep, done: DB.settings.setupCompletedAt }));
+  expect(s.step, 'skipping lost the position setup had reached').toBe(0);
+  expect(s.done, 'skipping marked setup as finished, so it will never be offered again').toBeUndefined();
 
   await app.close();
 });

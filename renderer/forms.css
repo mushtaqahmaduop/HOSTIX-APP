@@ -545,3 +545,40 @@ body.has-titlebar .modal-overlay { top: var(--titlebar-offset, var(--titlebar-h)
 @media (max-width: 880px) {
     .msf { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ══ A BIG SHEET DOES NOT BOUNCE (owner, 2026-09-19: "make the opening a
+   little smooth because it opens very awkward") ═══════════════════════════
+
+   style.css opens every modal with `slideUp .25s cubic-bezier(.34,1.56,.64,1)`
+   — 24px of travel, a 0.98 scale, and an easing whose third control point is
+   past 1, so it OVERSHOOTS and settles back. On a confirm dialog that reads as
+   a pop. On the Edit Payment sheet, which is `modal-xl` at 1360px wide and
+   most of the window tall, the same curve moves several hundred thousand
+   pixels past their resting place and back: the whole panel wobbles, and the
+   text inside it is re-rastered at a fractional scale the entire way.
+
+   The large sheets get their own entrance — less travel, no scale, and an
+   easing that decelerates into place without passing it. Small dialogs keep
+   the pop; it suits them. */
+@keyframes modalRise {
+    from { transform: translateY(10px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+.modal.modal-lg,
+.modal.modal-xl {
+    animation: modalRise .2s cubic-bezier(.16,.84,.44,1);
+}
+
+/* The overlay's blur is the expensive half. Fading an 8px backdrop-filter over
+   the whole window is what makes a slow machine drop the first frames of the
+   sheet's own animation, which is the jerk you see before it settles. Telling
+   the compositor what is about to change lets it promote the layer up front;
+   it is cleared the moment the animation ends so nothing is held on the GPU
+   for the life of the dialog. */
+.modal-overlay { will-change: opacity; }
+.modal-overlay, .modal { animation-fill-mode: both; }
+
+/* Motion is a preference, not a feature. */
+@media (prefers-reduced-motion: reduce) {
+    .modal-overlay, .modal, .modal.modal-lg, .modal.modal-xl { animation: none; }
+}

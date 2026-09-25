@@ -14,6 +14,29 @@
    they are DERIVED here rather than written back to the record.
    ══════════════════════════════════════════════════════════════════════════ */
 
+/* THE DAY MONEY LAST CAME IN (owner, 2026-09-20: "in students and payments
+   there are no dates for date of admission and date of payment").
+
+   The register showed `month` — what the record BILLS — and never the day
+   anybody paid, so a warden asking "when did this come in" had to open the
+   record. It is NOT a new figure: the instalment trail already carries the date
+   of every collection, and the latest of those is the answer. A record that has
+   collected nothing has no payment date and says so.
+
+   The fallback is for records written before the trail existed (finance Phase
+   1): they hold money with nothing behind it, and their own paidDate/date is
+   the only day on them. */
+function payLastCollectedOn(p) {
+  if (!p) return '';
+  const days = (p.partialPayments || [])
+    .filter(x => x && money(x.amount) > 0 && x.date)
+    .map(x => String(x.date).slice(0, 10))
+    .sort();
+  if (days.length) return days[days.length - 1];
+  if (money(p.amount) > 0) return String(p.paidDate || p.date || '').slice(0, 10);
+  return '';
+}
+
 // A pending payment is overdue once its own dueDate is in the past.
 function payIsOverdue(p) {
   if (!p || p.status === 'Paid') return false;
@@ -256,11 +279,6 @@ function payStatusIcon(s) {
    fmtPKRk() already implements the spec's thresholds exactly (§7: PKR 8K,
    PKR 476.5K, PKR 1.24M), so this adds the tooltip and nothing else. Both
    halves come from the one formatter, so there is never a second "PKR". */
-function payMoney(n) {
-  const compact = fmtPKRk(n), exact = fmtPKR(n);
-  return compact === exact ? compact : `<span title="${exact}">${compact}</span>`;
-}
-
 /* The split behind a Charge/Mo figure, for its tooltip.
 
    NOT chargesBreakdown(). That helper reads resolveCharges()'s shape — it opens
@@ -305,10 +323,6 @@ function payAvatarHue(name) {
    well as the first seven.
 
    cnicHtml() returns escaped markup and adds the hover reveal. */
-function payMaskCnic(c) {
-  return cnicHtml(c);
-}
-
 // Every month present in the data, newest first — the month select is built
 // from real records, so it can never offer a month with nothing behind it.
 /* THE PICKER LISTS MONTH KEYS, NOT WHATEVER STRING IS IN THE RECORD (owner,
@@ -378,8 +392,12 @@ function _payResetFilter() {
 
 /** Payments, showing only what is still owed (lower-section spec §17). */
 function openPaymentsPending() {
+  /* The month the warden was LOOKING AT, read before navigate() leaves the
+     dashboard and puts its month back to the real one. */
+  const mo = dashMonth();
   navigate('payments');
   _payResetFilter();
+  if (mo !== thisMonth()) payFilter.month = mo;
   payFilter.status = 'Owing';
   renderPage('payments');
 }
@@ -388,8 +406,10 @@ function openPaymentsPending() {
     An unknown name would filter the table to nothing and look broken, so
     'Other' (and anything Settings does not know) opens the table unfiltered. */
 function openPaymentsByMethod(name) {
+  const mo = dashMonth();   // see openPaymentsPending()
   navigate('payments');
   _payResetFilter();
+  if (mo !== thisMonth()) payFilter.month = mo;
   const known = (DB.settings && Array.isArray(DB.settings.paymentMethods))
     ? DB.settings.paymentMethods.map(m => String(m).trim()) : [];
   const hit = known.find(m => m.toLowerCase() === String(name || '').trim().toLowerCase());
@@ -454,6 +474,7 @@ function payFiltered() {
     paid:    p => Number(p.amount || 0),
     unpaid:  p => outstandingOf(p),
     method:  p => p.method,
+    paidon:  p => payLastCollectedOn(p),
     status:  p => payStatusOf(p),
     // Sortable like the rest, as the reference draws them (owner, 2026-09-15).
     adm:     p => Number(p.admissionFee || p.fee || 0),
@@ -476,7 +497,118 @@ function payFiltered() {
    lives in the column heading. */
 
 /** "17,000.00" — the reference's money shape. */
+/* ── WHAT THE PAYMENT WAS MADE OF ────────────────────────────────────────────
+   The hover card on Amount Paid, replacing the Adm. Fee / Extra / Concession
+   columns (owner, 2026-09-23). Refunds join them: they never had a column at
+   all, and "why is this row's paid figure lower than it was" is exactly the
+   question the card exists to answer.
+
+   ONLY WHAT HAPPENED IS NAMED. A row with no fee, no extra, no concession and
+   no refund — which is most rows in most months — says so in one line instead
+   of printing three zeroes across three columns. That asymmetry is the whole
+   reason these stopped being columns.
+
+   EVERY FIGURE IS READ THE SAME WAY THE COLUMNS READ IT, off the record's own
+   fields through the same fallbacks calculateReportTotals() uses, so the card
+   and the exports cannot disagree about one record.
+
+   Plain text, not markup: `data-tip` is an attribute, and the tooltip escapes
+   what it is given. Newlines survive — `.ui-tip` is `white-space:pre-wrap`.
+
+   AND IT IS WRITTEN THE WAY THE CELL IT HANGS OFF IS WRITTEN. These lines used
+   fmtPKR(), the app's canonical formatter, which carries no decimals — so the
+   card read "Rs. 14,500" beside a cell reading "Rs. 14,500.00": the same figure
+   in two shapes, a hover apart. That was invisible while the register's
+   two-decimal money sat under a "(Rs.)" heading with nothing beside it to
+   compare against; moving the currency word into the cell put the two together.
+
+   payCash() is that shape, and a card explaining the register's figure follows
+   the register. */
+function payPaidParts(p, chg) {
+  const num = v => Number(v || 0);
+  const out = [];
+  const fee = num(p.admissionFee != null ? p.admissionFee : p.fee);
+  if (fee > 0) out.push('Admission fee   ' + payCash(fee));
+
+  const extras = Array.isArray(p.extraCharges) ? p.extraCharges.filter(c => c && num(c.amount) > 0) : [];
+  if (extras.length) {
+    extras.forEach(c => out.push((c.label ? String(c.label) : 'Extra charge') + '   ' + payCash(c.amount)));
+  } else if (num(p.extraTotal) > 0) {
+    out.push('Extra charges   ' + payCash(p.extraTotal));
+  }
+
+  const conc = num(p.concession != null ? p.concession : p.discount);
+  if (conc > 0) {
+    const why = String(p.concessionDesc || '').trim();
+    out.push('Concession   \u2212' + payCash(conc) + (why ? '  (' + why + ')' : ''));
+  }
+
+  /* `p.reversals` — money that went back OUT, which REDUCES what the row
+     shows as paid. Each carries its own reason where one was given.
+
+     THE TWO KINDS ARE NAMED APART (owner, 2026-09-23) because they leave the
+     student in opposite positions: a refund settles the month, a correction
+     re-opens the debt. A card that called both "Refunded" would explain a
+     figure while hiding the only thing about it that matters. Entries written
+     before the kind existed read as corrections, which is what they were. */
+  const revs = Array.isArray(p.reversals) ? p.reversals.filter(r => r && num(r.amount) > 0) : [];
+  revs.forEach(r => {
+    const why = String(r.reason || r.note || '').trim();
+    out.push((r.kind === 'refund' ? 'Refunded' : 'Reversed') + '   \u2212'
+      + payCash(r.amount) + (why ? '  (' + why + ')' : ''));
+  });
+
+  return out;
+}
+
+/** The `data-tip` attribute for the Amount Paid cell, or '' when there is
+    nothing to explain beyond the figure itself. */
+function payPaidTip(p, chg, paid) {
+  const parts = payPaidParts(p, chg);
+  const head  = 'Collected   ' + payCash(paid);
+  const body  = parts.length
+    ? head + '\n' + parts.join('\n')
+    : head + '\nNo admission fee, extra charge, concession or refund on this record.';
+  return ' data-tip="' + escHtml(body) + '" data-tip-label="Payment breakdown" data-tip-always';
+}
+
+/* ── WHO PUT THE FIGURE THERE ────────────────────────────────────────────────
+   "Added by X" until somebody edits the record, then "Edited by X" (owner,
+   2026-09-23). The editor wins when both are known: the question a byline
+   answers is who to ask about this figure, and after an edit that is whoever
+   changed it. Both are kept on the record.
+
+   `collectedBy` has been written since long before this — it is the account
+   that recorded the collection — so "Added by" is answerable for every
+   existing record. `editedByName` starts today, which is why a record edited
+   last week still reads "Added by": that is the honest answer, not a guess. */
+function payByline(p) {
+  const ed = String((p && p.editedByName) || '').trim();
+  const by = String((p && p.collectedBy) || '').trim();
+  const who = ed || by;
+  if (!who) return '';
+  const verb = ed ? 'Edited by' : 'Added by';
+  return '<div class="pay-by" data-tip="' + escHtml(verb + ' ' + who) + '" data-tip-always>'
+       + escHtml(verb + ' ' + ledgerFirstName(who)) + '</div>';
+}
+
+/* THE FIGURE CARRIES ITS CURRENCY (owner, 2026-09-23: "we will use the Rs.
+   with the amounts and remove from heading because we have no space").
+
+   "Rs." lived in the column HEADING — "Charge / Month (Rs.)" — on two lines,
+   which cost the row's three money columns a line of header height each and
+   said the word three times for something every figure on the page shares.
+   With three columns folding into a hover card on the same day, the heading is
+   the one place it was no longer paying for itself.
+
+   Two decimals stay: they are the owner's own example ("1400.0 or 1400.00")
+   and the shape fmtPKR uses everywhere else. `payCashBare()` keeps the
+   figure alone for the places a currency word would be a second one — inside
+   the hover card, whose own heading names it once. */
 function payCash(n) {
+  return 'Rs. ' + payCashBare(n);
+}
+function payCashBare(n) {
   return Number(n || 0).toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
@@ -692,6 +824,10 @@ function renderPayments() {
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7"/><path d="M10 4H3"/><path d="M21 12h-9"/><path d="M8 12H3"/><path d="M21 20h-5"/><path d="M12 20H3"/><path d="M14 2v4"/><path d="M8 10v4"/><path d="M16 18v4"/></svg>
           <span class="pay-lbl-x">More </span>Filters${activeFilters ? `<span class="ui-chip ui-chip--accent ui-chip--count">${activeFilters}</span>` : ''}
         </button>
+        ${''/* The same one-click reset as the students register (owner,
+               2026-09-21). A sibling, never a child — see the note there. */}
+        ${activeFilters?`<button type="button" class="flt-reset" onclick="payResetFilters()"
+                title="Clear all filters" aria-label="Clear all filters"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>`:''}
         <div class="ui-menu pay-pop" id="pay-pop" role="menu" hidden>
           <div class="ui-menu__t">Scope</div>
           <label class="pay-pop__row"><input type="checkbox" ${payFilter.showAll ? 'checked' : ''}
@@ -711,8 +847,6 @@ function renderPayments() {
       </div>
 
       <div class="pay-tools__end">
-        ${tbExport({ id: 'pay-export', cls: 'ui-btn ui-btn--secondary ui-btn--sm',
-                     excel: 'exportPaymentsExcel()', pdf: 'exportPaymentsPDF()' })}
         <button class="ui-btn ui-btn--secondary ui-btn--sm" onclick="generateMonthlyRents()" title="Create this month's rent records for every active student">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
           Generate<span class="pay-lbl-x"> Month</span>
@@ -723,6 +857,14 @@ function renderPayments() {
                  at the 1366 floor (owner, 2026-09-10: all options in one row). */}
           <span class="pay-lbl-x">Send </span>Reminders
         </button>
+        ${''/* EXPORT LAST, AS IT IS ON EVERY OTHER REGISTER (owner, 2026-09-20:
+               "move the export button in payment page to right"). It stood first
+               in this group, so the one control that is the same on all seven
+               list screens was the one that moved when you came from Students or
+               Expenses. Generate Month and Reminders act ON this month; Export
+               takes away what is on screen, and reads last. */}
+        ${tbExport({ id: 'pay-export', cls: 'ui-btn ui-btn--secondary ui-btn--sm',
+                     excel: 'exportPaymentsExcel()', pdf: 'exportPaymentsPDF()' })}
       </div>
     </div>
 
@@ -746,21 +888,41 @@ function renderPayments() {
           ${th('student', 'Student')}
           ${th('room', 'Room', 'pay-col-room')}
           ${th('month', 'Month', 'pay-col-mo')}
-          ${th('rent', 'Charge / Month<br>(Rs.)', 'pay-col-num')}
-          ${th('paid', 'Amt. Paid<br>(Rs.)', 'pay-col-num')}
-          ${th('unpaid', 'Unpaid<br>(Rs.)', 'pay-col-num')}
-          ${''/* The three secondary money columns keep .pay-col-x — they are
-                 always visible (payments spec §23, §46) — and now sit with the
-                 other figures, where the reference draws them. */}
-          ${th('adm', 'Adm. Fee<br>(Rs.)', 'pay-col-num pay-col-x')}
-          ${th('extra', 'Extra<br>(Rs.)', 'pay-col-num pay-col-x')}
-          ${th('conc', 'Concession<br>(Rs.)', 'pay-col-num pay-col-x')}
+          ${''/* NO "(Rs.)" ON A HEADING. Every figure in these three columns
+                 now carries its own currency; the heading said the word three
+                 times and spent a second line of header height doing it. */}
+          ${th('rent', 'Charge / Month', 'pay-col-num')}
+          ${th('paid', 'Amount Paid', 'pay-col-num')}
+          ${th('unpaid', 'Unpaid', 'pay-col-num')}
+          ${''/* ══ ADMISSION FEE, EXTRA CHARGES, CONCESSION AND REFUNDS ARE A
+                 HOVER CARD NOW (owner, 2026-09-23: "these columns are taking
+                 much of our page viewport and almost empty most of the time").
+
+                 They were three fixed columns — four facts, counting refunds,
+                 which had no column at all — and on a normal month every one
+                 of them reads 0.00 for nearly every row. That is roughly a
+                 quarter of the table's width spent on the exception.
+
+                 They are not dropped: they hang off AMOUNT PAID, which is the
+                 figure they explain. Hovering a payment says what the money
+                 was made of — the fee, each extra with its own label, the
+                 concession with its reason, and anything refunded — and a row
+                 with none of them says so in one line rather than in three
+                 zeroes.
+
+                 The EXPORTS keep their columns. A spreadsheet is where a
+                 warden totals a month's admission fees, and a hover card
+                 cannot be summed. */}
           ${th('method', 'Method')}
           ${th('status', 'Status')}
+          ${''/* Status before Date, as `pay.png` draws it: the state is what a
+                 reader scans for and the date is what they check once they
+                 have found it. */}
+          ${th('paidon', 'Date', 'pay-col-date')}
           <th class="pay-col-act">Actions</th>
         </tr></thead>
         <tbody>
-        ${_pg.slice.length === 0 ? `<tr><td colspan="14"><div class="ui-empty"><div class="ui-empty__t">No payment records match these filters.</div></div></td></tr>` :
+        ${_pg.slice.length === 0 ? `<tr><td colspan="12"><div class="ui-empty"><div class="ui-empty__t">No payment records match these filters.</div></div></td></tr>` :
         _pg.slice.map((p, i) => {
           const st     = DB.students.find(s => s.id === p.studentId);
           const room   = DB.rooms.find(r => String(r.number) === String(p.roomNumber));
@@ -800,31 +962,70 @@ function renderPayments() {
             ${''/* No room type under the box here (owner, 2026-09-15: "remove the
                    seater from under the room number in payment page") — it moved
                    inside the room label on the Students register instead. */}
-            <td class="pay-col-room">${roomLabel(p.roomNumber, room && room.floor)}</td>
+            ${''/* THE STUDENTS REGISTER'S ROOM LABEL (owner, 2026-09-23:
+                   "redesign the room label just like the students page room
+                   label"). `roomLabel()` draws listkit's stacked pill; this is
+                   `.ui-room--wide` — the number in its own box with the floor
+                   beside it, the shape the cancellations register drew first
+                   and the students register took on 2026-09-22. The number
+                   hugs its digits and never shrinks; the floor gives way. */}
+            <td class="pay-col-room">
+              <div class="ui-room ui-room--wide">
+                <span class="ui-room__n" data-tip="${p.roomNumber?'Room '+escHtml(String(p.roomNumber)):'No room recorded'}" data-tip-label="Room">${p.roomNumber?escHtml(String(p.roomNumber)):'—'}</span>
+                ${room && room.floor ? `<span class="ui-room__m"><span class="ui-room__t" data-tip="${escHtml(String(room.floor))} Floor" data-tip-label="Floor">${escHtml(floorShort(room.floor))}</span></span>` : ''}
+              </div>
+            </td>
             <td class="pay-col-mo">
-              <span title="${escHtml(monthLabel(p.month) || '')}">${escHtml(payMonthTick(p))}</span>
+              <span data-tip="${escHtml(monthLabel(p.month) || '')}" data-tip-label="Month" data-tip-always>${escHtml(payMonthTick(p))}</span>
               ${arrear ? '<div><span class="ui-chip ui-chip--warning" title="Unpaid balance carried over from an earlier month — collect it here">Arrears</span></div>' : ''}
             </td>
-            <td class="pay-col-num"><span class="pay-num pay-num--strong" title="${escHtml(payChargeTitle(chg))}">${payCash(chg.monthly || p.amount)}</span></td>
-            <td class="pay-col-num"><span class="pay-num${paid > 0 ? ' pay-num--in' : ''}">${payCash(paid)}</span></td>
-            <td class="pay-col-num"><span class="pay-num ${unpaid > 0 ? 'pay-num--due' : 'pay-num--strong'}">${payCash(unpaid)}</span></td>
-            <td class="pay-col-num pay-col-x"><span class="pay-num">${payCash(admFee)}</span></td>
-            ${''/* WHAT THE MONEY WAS FOR, UNDER THE FIGURE (owner, 2026-09-16:
-                   "if a warden collects an extra charge it should show its
-                   reason"). Both reasons were already on the record and both
-                   were only reachable by hovering — which is no use on a
-                   printed page, on a touch screen, or to anyone scanning the
-                   column to find out why one student was charged 2,300 more
-                   than the rest. The full text stays on the title for the
-                   cases the column is too narrow to hold. */}
-            <td class="pay-col-num pay-col-x"><span class="pay-num"${extras.length ? ` title="${escHtml(extras.map(c => (c.label ? c.label + ': ' : '') + fmtPKR(c.amount)).join(' · '))}"` : ''}>${payCash(extraT)}</span>${
-              extraT > 0 && extras.length
-                ? `<span class="pay-why">${escHtml(extras.map(c => c.label).filter(Boolean).join(', ') || 'Extra charge')}</span>`
-                : ''}</td>
-            <td class="pay-col-num pay-col-x"><span class="pay-num"${conc > 0 && concD ? ` title="${escHtml(concD)}"` : ''}>${payCash(conc)}</span>${
-              conc > 0 ? `<span class="pay-why">${escHtml(concD || 'No reason recorded')}</span>` : ''}</td>
+            ${''/* THE CHARGE IS THE REFERENCE, NOT THE EVENT. It used to be
+                   .pay-num--strong — 700, full-strength ink, the same weight
+                   the collected and outstanding figures carry. Three 700s in a
+                   row is no hierarchy at all: the eye has nowhere to land, and
+                   the one figure that changes month to month (what was
+                   actually collected) looked exactly like the one that does
+                   not. `--ref` steps it back to the secondary ink; it is still
+                   a figure, still tabular, still aligned with the two beside
+                   it — it has simply stopped shouting. */}
+            <td class="pay-col-num"><span class="pay-num pay-num--ref" data-tip="${escHtml(payChargeTitle(chg))}" data-tip-label="Monthly charge" data-tip-always>${payCash(chg.monthly || p.amount)}</span></td>
+            ${''/* WHAT THE MONEY WAS MADE OF, ON THE FIGURE IT EXPLAINS. The
+                   admission fee, each extra with its own label, the concession
+                   with its reason and anything refunded used to be three
+                   always-empty columns; they are this card now. */}
+            ${''/* A ZERO IS THE LEAST INTERESTING FACT ON THE ROW, so it takes
+                   the quietest ink in both of these columns. Nothing collected
+                   yet reads `--nil`; nothing outstanding reads `--nil` too —
+                   it used to be `--strong`, which drew the eye to a settled
+                   row and away from the one still owing. What is left is that
+                   exactly two inks appear in a payments row's figures: green
+                   for money in, red for money still out, and neither can
+                   appear without meaning it. */}
+            <td class="pay-col-num"><span class="pay-num ${paid > 0 ? 'pay-num--in' : 'pay-num--nil'}"${payPaidTip(p, chg, paid)}>${payCash(paid)}</span></td>
+            <td class="pay-col-num"><span class="pay-num ${unpaid > 0 ? 'pay-num--due' : 'pay-num--nil'}">${payCash(unpaid)}</span></td>
             <td>${paid > 0 ? pmBadge(p.method) : '<span class="pay-dash">—</span>'}</td>
             <td><span class="ui-chip ${sCls}">${payStatusIcon(sLabel)}${escHtml(sLabel)}</span></td>
+            ${''/* THE DATE, AND WHO PUT IT THERE (owner, 2026-09-23: "below the
+                   payment date ... we should use the user name who added it or
+                   who edited it as Added by Hostyllo or Edited by Hostyllo in
+                   small italics").
+
+                   `Edited by` WINS WHEN BOTH ARE KNOWN, because the question a
+                   byline answers is "who do I ask about this figure", and after
+                   an edit that is the editor. The record keeps both.
+
+                   Italic, for the same reason the complaints register's is: it
+                   is an attribution, not a fact about the payment, and the
+                   slant is what stops three stacked lines reading as one
+                   block. */}
+            ${(() => { const d = payLastCollectedOn(p);
+               const by = payByline(p);
+               /* fmtDateShort, not fmtDate: it drops the year when it IS this
+                  year, which is the same width decision the students register
+                  made for its status column. The full date stays on the hover. */
+               return d
+                 ? `<td class="pay-col-date"><div class="pay-when" data-tip="${escHtml(fmtDate(d))}" data-tip-label="Paid on" data-tip-always>${escHtml(fmtDateShort(d))}</div>${by}</td>`
+                 : `<td class="pay-col-date"><span class="pay-dash">—</span>${by}</td>`; })()}
             <td class="pay-col-act">
               <button class="ui-btn ui-btn--secondary ui-btn--sm ui-btn--icon" onclick="event.stopPropagation();payRowMenu('${p.id}',this)"
                       aria-haspopup="menu" aria-label="Actions for ${escHtml(nm)}" title="Actions">
@@ -918,6 +1119,8 @@ function payToggleAll(on) {
 // the partialPayments installment log, so a bulk settle is indistinguishable
 // from settling each row by hand.
 async function payBulkMarkPaid() {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('Marking payments paid')) return;
   const ids = [...paySelected];
   const targets = DB.payments.filter(p => ids.includes(p.id) && p.status !== 'Paid');
   if (!targets.length) { toast('Nothing to settle — every selected row is already paid', 'info'); return; }
@@ -931,10 +1134,13 @@ async function payBulkMarkPaid() {
       // legacy record and used to mark a real debtor Paid having collected
       // nothing at all.
       let collected = 0;
+      // One press settling N rows is one act, so one posting id for the lot
+      // (audit G5) — that is what makes it reviewable afterwards as a batch.
+      const _rcpBulk = newReceiptId();
       targets.forEach(p => {
         const due = calculateOutstanding(p);
         if (due <= 0) { p.status = 'Paid'; p.paidDate = p.paidDate || today(); return; }
-        collected += applyPayment(p, { amount: due, date: today(),
+        collected += applyPayment(p, { amount: due, date: today(), receiptId: _rcpBulk,
                                        note: 'Pending cleared (bulk)' }).applied;
       });
       if (collected > 0) logActivity('Payment Collected',
@@ -1177,15 +1383,13 @@ function payBulkExport() {
 /* THE WHOLE REGISTER, FROM THE REPORTS BAR (owner, 2026-09-10) — every payment
    the app holds, newest first, not the month the payments page happens to be
    showing. The page's own Export is the scoped one. */
-function exportAllPaymentsPDF() {
-  const list = (DB.payments || []).slice()
-    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
-  if (!list.length) { toast('No payment records to export', 'error'); return; }
-  EXPORT.pdf(_payExportDef(list, {
-    title: 'Hostel Payment Register',
-    scope: 'Complete record — all payments',
-  }));
-}
+/* `exportAllPaymentsPDF()` stood here: every payment ever recorded, under a
+   scope line reading "Complete record — all payments". Its only caller was the
+   Reports bar, and the owner asked on 2026-09-22 for that document to follow a
+   month instead. It is rptPaymentsMonthPDF() in reports.js now, built from the
+   same _rptTotals() list every money figure on that page is summed from.
+
+   `_payExportDef(list, opts)` is unchanged and still takes any list. */
 
 function exportPaymentsPDF() {
   const list = payFiltered();
@@ -1206,6 +1410,8 @@ function exportPaymentsExcel() {
 function exportPaymentsCSV() { exportPaymentsExcel(); }
 
 async function generateMonthlyRents() {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('Generating rent records')) return;
   // FIX: use thisMonthLabel() — locale-safe, matches how all payment records store month strings.
   // Previously used toLocaleString('default',…) which can return different formats per device locale,
   // breaking the duplicate-guard check and generating duplicate entries on non-en-US systems.
@@ -1232,6 +1438,8 @@ async function generateMonthlyRents() {
       if (!c.configured || due <= 0) { skipped++; return; }
       const _rec = {id:'p_'+uid(),collectedBy:CUR_USER?CUR_USER.name:'Auto',studentId:t.id,studentName:t.name,roomId:t.roomId,roomNumber:room?.number||'',amount:0,monthlyRent:c.rent,totalRent:c.rent,messCharge:mess,messIncluded:messOn,unpaid:due,admissionFee:0,extraCharges:[],extraTotal:0,concession:0,concessionDesc:'',discount:0,method:t.paymentMethod||'Cash',month:mo,date:today(),dueDate:'',status:'Pending',notes:'Auto-generated',paidDate:''};
       DB.payments.push(_rec);
+      // The bill as raised, frozen before anything can change it (Phase 6).
+      billFreeze(_rec, 'monthly-generate');
       ledgerTrack(_rec);   // the month's charge, into the student ledger
       // Standing concessions covering this month (warden ledger step 8).
       if (typeof cnApplyToRecord === 'function') cnApplyToRecord(_rec);
@@ -1261,6 +1469,8 @@ async function generateMonthlyRents() {
    recorded balance from the charge authority. That is the entire point of there
    being one answer. */
 async function markPaymentPaid(id) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('Marking a payment paid')) return;
   const p = DB.payments.find(x => x.id === id); if (!p) return;
   const due = calculateOutstanding(p);
   if (due <= 0) {
@@ -1271,7 +1481,8 @@ async function markPaymentPaid(id) {
   }
   // Step 10: an account that confirms money with a PIN does so here (pin.js).
   if (pinNeeded() && !(await pinConfirm({ what: 'collecting ' + fmtPKR(due) }))) return;
-  const r = applyPayment(p, { amount: due, date: today(), note: 'Pending cleared' });
+  const r = applyPayment(p, { amount: due, date: today(), note: 'Pending cleared',
+                             receiptId: newReceiptId() });
   p.discount = p.discount || 0;
   const collectionNote = `Remaining ${fmtPKR(r.applied)} collected on ${today()}`;
   p.notes = p.notes ? p.notes + ' | ' + collectionNote : collectionNote;
@@ -1298,7 +1509,8 @@ async function markPaymentPaidFromStudentView(payId, studentId) {
     return;
   }
   if (pinNeeded() && !(await pinConfirm({ what: 'collecting ' + fmtPKR(due) }))) return;   // step 10
-  const r = applyPayment(p, { amount: due, date: today(), note: 'Pending cleared' });
+  const r = applyPayment(p, { amount: due, date: today(), note: 'Pending cleared',
+                             receiptId: newReceiptId() });
   p.discount = p.discount || 0;
   const collectionNote = `Remaining ${fmtPKR(r.applied)} collected on ${today()}`;
   p.notes = p.notes ? p.notes + ' | ' + collectionNote : collectionNote;
@@ -1311,6 +1523,8 @@ async function markPaymentPaidFromStudentView(payId, studentId) {
   if (!refreshStudentView(studentId)) showStudentPanel(studentId);
 }
 async function deletePayment(id) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('Deleting a payment')) return;
   if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   const _dp = DB.payments.find(x => x.id === id);
   // Step 6: a record holding money is reversed first, never deleted in one go.
@@ -1711,6 +1925,13 @@ function pfExistingForMonth(studentId, monthLabel) {
    figures the warden typed themselves, so only a fill is ever reversed. */
 let _pfFilledFrom = '';
 
+/* WHAT THE SELECTED MONTH HAS ALREADY COLLECTED. The amount box is "money
+   received now" (finance spec Rule 3), so the form's live balance has to know
+   what came in BEFORE today to price what is still owing. It used to know it
+   the wrong way round: the box itself held the cumulative figure, which is the
+   model that let a second collection overwrite the first. */
+let _pfAlready = 0;
+
 function pfLoadMonthContext() {
   const box = document.getElementById('pf-month-state');
   if (!box) return;                          // older forms carry no banner
@@ -1725,6 +1946,7 @@ function pfLoadMonthContext() {
   const list   = document.getElementById('extra-charges-list');
 
   if (!rec) {
+    _pfAlready = 0;
     box.style.display = 'none'; box.innerHTML = '';
     if (_pfFilledFrom) {                       // undo the previous month's fill
       _pfFilledFrom = '';
@@ -1741,6 +1963,7 @@ function pfLoadMonthContext() {
   _pfFilledFrom = rec.id || '';
 
   const already = Number(rec.amount || 0);
+  _pfAlready = money(already);
   const owing   = outstandingOf(rec);
   const settled = rec.status === 'Paid' || owing <= 0;
 
@@ -1754,10 +1977,13 @@ function pfLoadMonthContext() {
     list.innerHTML = '';
     (rec.extraCharges || []).forEach(c => addExtraChargeRow(c.description || c.label || '', c.amount || 0));
   }
-  // The box is the running total for the month, not today's instalment. Seeding
-  // it with what has already been taken means the warden edits a figure they
-  // can see instead of overwriting one they cannot.
-  if (paidEl) paidEl.value = already || '';
+  /* THE BOX STARTS EMPTY (spec §5: "The input must start empty").
+     It used to be seeded with `already` — the month's collected total — because
+     the box WAS that total. That seeding is what made the cumulative model
+     usable, and what made it dangerous: the warden was editing a historical
+     figure, and lowering it destroyed a collection. The box now asks only how
+     much is being handed over now, so there is nothing to seed it with. */
+  if (paidEl) paidEl.value = '';
   // A month charged by days opens as By days, with the figures it was charged on.
   pfProSet(!!rec.prorate, rec.prorate || null);
 
@@ -1770,9 +1996,9 @@ function pfLoadMonthContext() {
     ? `<div><b>${escHtml(month)} is already settled.</b> ${fmtPKR(already)} was collected${
         rec.paidDate ? ' on ' + escHtml(rec.paidDate) : ''}. Nothing more is owed for this month — use
        <b>Receive Outstanding</b> below to take money for an earlier month.</div>`
-    : `<div><b>${escHtml(month)} is part paid.</b> ${fmtPKR(already)} collected so far,
-       <b>${fmtPKR(owing)}</b> still owing.<br>Amount Paid below is the <b>total for this
-       month</b> and already holds what was taken — raise it by whatever is being handed over now.</div>`);
+    : `<div><b>${escHtml(month)} is part paid.</b> Received to date <b>${fmtPKR(already)}</b>,
+       outstanding <b>${fmtPKR(owing)}</b>.<br>Enter only what is being handed over
+       <b>now</b> — it is added to what was received before, never instead of it.</div>`);
   recalcUnpaid();
 }
 
@@ -1840,10 +2066,13 @@ function pfOutstandingAllocations() {
    Through applyPayment() (§14), so an arrear collected here is written exactly
    the way one collected from the row action is: same balance, same trail entry,
    same status and paidDate rules. It used to compute its own. */
-function pfApplyOutstandings(allocations, method, date) {
+/* `receiptId` is the CALLER'S — one hand-over that clears two earlier months
+   and pays this one is a single posting, and all of it carries one id (audit
+   G5). Generating one here would give each arrear its own. */
+function pfApplyOutstandings(allocations, method, date, receiptId) {
   const done = [];
   allocations.forEach(({ payment: p, amount }) => {
-    const r = applyPayment(p, { amount, method, date, note: 'Arrears collected' });
+    const r = applyPayment(p, { amount, method, date, note: 'Arrears collected', receiptId });
     if (!r.ok) return;
     done.push((p.month || '—') + ' ' + fmtPKR(r.applied));
   });
@@ -1987,7 +2216,11 @@ function recalcUnpaid() {
      still capped and still says so. */
   const paidEl  = document.getElementById('f-ppaid');
   let pa = money(parseFloat(paidEl?.value)||0);
-  const implausible = total > 0 && pa > total * 2;
+  /* Measured against what is STILL OWING, not the whole bill: on a month that
+     has already taken most of its rent, the whole bill is no longer a
+     plausible amount to be handed over. */
+  const owingNow    = Math.max(0, total - money(_pfAlready));
+  const implausible = owingNow > 0 && pa > owingNow * 2;
   const note = (text, tone) => {
     let w = document.getElementById('f-ppaid-cap-warn');
     if (!text) { if (w) w.remove(); return; }
@@ -2001,21 +2234,25 @@ function recalcUnpaid() {
     w.textContent = text;
   };
   if (implausible) {
-    pa = total;
-    if(paidEl) { paidEl.value = total; paidEl.style.border = '2px solid var(--amber)'; paidEl.title = 'Capped to total due: ' + total; }
-    note('⚠️ Amount capped to total due (' + Number(total).toLocaleString('en-PK') + ' PKR). Check for typos.', 'amber');
-  } else if (pa > total && total > 0) {
+    pa = owingNow;
+    if(paidEl) { paidEl.value = owingNow; paidEl.style.border = '2px solid var(--amber)'; paidEl.title = 'Capped to what is outstanding: ' + owingNow; }
+    note('⚠️ Amount capped to what is outstanding (' + Number(owingNow).toLocaleString('en-PK') + ' PKR). Check for typos.', 'amber');
+  } else if (pa > owingNow && owingNow >= 0 && total > 0) {
     if(paidEl) { paidEl.style.border = ''; paidEl.title = ''; }
-    note(fmtPKR(pa - total) + ' over the bill — recorded as a credit, refundable at checkout.', 'text2');
+    note(fmtPKR(pa - owingNow) + ' over what is outstanding — recorded as a credit, refundable at checkout.', 'text2');
   } else {
     if(paidEl) { paidEl.style.border = ''; paidEl.title = ''; }
     note('');
   }
-  const u = Math.max(0, total - pa);
+  /* WHAT IS STILL OWING AFTER TODAY. `pa` is today's money only, so what the
+     month already holds has to be added back in — otherwise a part-paid month
+     shows its whole bill as outstanding the moment the box is cleared. */
+  const takenBefore = money(_pfAlready);
+  const u = Math.max(0, total - takenBefore - pa);
   const el = document.getElementById('f-punpaid');
   if(el){ el.value=u; el.style.color=u>0?'var(--red)':u===0?'var(--green)':'var(--amber)'; }
   const st = document.getElementById('f-pstat');
-  if(st) st.value = (pa >= total && total > 0) ? 'Paid' : 'Pending';
+  if(st) st.value = (takenBefore + pa >= total && total > 0) ? 'Paid' : 'Pending';
   const etEl = document.getElementById('extra-charges-total');
   if(etEl) etEl.textContent = 'Rs. ' + Number(extra).toLocaleString('en-PK');
 
@@ -2046,7 +2283,7 @@ function recalcUnpaid() {
   wsLine('03', extra,  1);
   wsLine('04', pa,    -1);
   const qf = document.getElementById('ws-q-full');
-  if (qf) qf.textContent = fmtNum(total);
+  if (qf) qf.textContent = fmtNum(Math.max(0, total - money(_pfAlready)));
   pfPostLine();
 
   // The Add Payment page's right-hand summary is the same arithmetic, itemised.
@@ -2216,7 +2453,7 @@ function showAddPaymentForStudent(studentId) {
         </label>`}
       </div>`}
       <div class="field"><label>Admission Fee (PKR)</label><input class="form-control" id="f-ps-admfee" type="number" placeholder="0" min="0" value="0" oninput="recalcUnpaidPS()"></div>
-      <div class="field"><label>Amount Paid (PKR)</label><input class="form-control" id="f-ps-paid" type="number" placeholder="Enter amount paid" value="" oninput="recalcUnpaidPS()"></div>
+      <div class="field"><label>Money Received Now (PKR)</label><input class="form-control" id="f-ps-paid" type="number" placeholder="0" value="" oninput="recalcUnpaidPS()"></div>
       <!-- Concession + Extra Charges -->
       <div class="field col-full" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
         <div style="display:flex;flex-direction:column;gap:8px">
@@ -2340,7 +2577,11 @@ function recalcUnpaidPS() {
   if(unpaidEl) { unpaidEl.value = unpaid; unpaidEl.style.color = unpaid > 0 ? 'var(--red)' : 'var(--green)'; }
 }
 async function submitPaymentForStudent() {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('A payment')) return;
   if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
+  // One visit, one posting (audit G5) — see submitAddPayment().
+  const _rcp = newReceiptId();
   const studentId   = document.getElementById('f-ps-studentId')?.value || '';
   const t           = DB.students.find(s => s.id === studentId);
   if (!t) { toast('Student not found', 'error'); return; }
@@ -2372,13 +2613,24 @@ async function submitPaymentForStudent() {
       '⚠️ Pending Record Already Exists',
       `${escHtml(t.name)} already has a <strong>Pending</strong> payment for <strong>${escHtml(enteredMonth)}</strong>.<br>`
       + `<div style="margin:10px 0;background:var(--bg3);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.8">`
-      + `Existing → Paid: <strong>${fmtPKR(existingPaidAmt)}</strong> &nbsp;|&nbsp; Unpaid: <strong style="color:var(--red)">${fmtPKR(existingUnpaid)}</strong></div>`
+      + `Received to date: <strong>${fmtPKR(existingPaidAmt)}</strong> &nbsp;|&nbsp; Outstanding: <strong style="color:var(--red)">${fmtPKR(existingUnpaid)}</strong></div>`
+      + `<div style="margin:-4px 0 10px;font-size:11.5px;color:var(--text3)">Money received now is <strong>added</strong> to what is already received — it does not replace it.</div>`
       + `<strong>Update the existing record</strong> instead of creating a duplicate?<br><small style="color:var(--text3)">Click <em>OK</em> to update · <em>Cancel</em> to abort</small>`,
       async function() {
         // ── UPDATE existing pending record in-place ──────────────────
         if (pinNeeded() && !(await pinConfirm({ what: 'posting a payment' }))) { window._updatePendingPS = false; return; }   // step 10
         const newMonthlyRent = parseFloat(document.getElementById('f-ps-amt')?.value)  || alreadyPending.monthlyRent || 0;
-        const newPaid        = parseFloat(document.getElementById('f-ps-paid')?.value) || 0;
+        /* MONEY RECEIVED NOW, NOT A RUNNING TOTAL (finance spec Rule 3, §19).
+           This read the box as the month's CUMULATIVE paid figure and wrote it
+           straight over `alreadyPending.amount`. A student who had already paid
+           Rs.5,000 and handed over Rs.5,000 more had to be entered as 10,000,
+           and entering 5,000 — the amount actually received — silently erased
+           the first collection. This path did not even write an instalment
+           entry, so the erased money left no trace at all.
+           The box is now "Money received now" and the collection goes through
+           applyPayment(), which is the one place money is added to a record. */
+        const received       = money(parseFloat(document.getElementById('f-ps-paid')?.value) || 0);
+        const prevPaid       = money(alreadyPending.amount);
         /* THE BUG. This computed `newMonthlyRent - newPaid` and dropped the mess
            charge, the extras, the admission fee and the concession outright — so
            at a bundled hostel, merging a payment into an existing pending record
@@ -2402,11 +2654,14 @@ async function submitPaymentForStudent() {
           rent: newMonthlyRent, messCharge: newMess, messIncluded: true,
           extraTotal: newExtraTotal, admissionFee: newAdmFee, concession: newConcession,
         });
-        const newUnpaid      = Math.max(0, newTotalDue - money(newPaid));
-        const newStatus      = document.getElementById('f-ps-stat')?.value  || 'Pending';
+        /* The balance is priced against what has ALREADY been received. Money
+           arriving now is applied by applyPayment() below, after the charges
+           are settled — pricing it in here would count it twice. */
+        const newUnpaid      = Math.max(0, newTotalDue - prevPaid);
         const newMethod      = document.getElementById('f-ps-method')?.value || alreadyPending.method || 'Cash';
         const newDate        = document.getElementById('f-ps-date')?.value   || today();
         const newNotes       = document.getElementById('f-ps-notes')?.value  || '';
+        const newRef         = (document.getElementById('f-ps-ref')?.value || '').trim();
 
         // A different charge turns a by-days month back into an ordinary one (step 9).
         if (alreadyPending.prorate && (money(newMonthlyRent) !== money(alreadyPending.monthlyRent)
@@ -2422,20 +2677,38 @@ async function submitPaymentForStudent() {
         alreadyPending.concession   = newConcession;
         alreadyPending.concessionDesc = newConcDesc;
         alreadyPending.discount     = newConcession;
-        alreadyPending.amount       = money(newPaid);
+        /* `amount` IS NOT WRITTEN HERE. It is the record's collected total and
+           only applyPayment() may move it (Rule 1: never overwrite money that
+           has been received). Same for the payment date, the method and the
+           collector on a record that already holds money — those are facts
+           about a collection that already happened. */
         alreadyPending.unpaid       = newUnpaid;
-        alreadyPending.overpaid     = Math.max(0, money(newPaid) - newTotalDue);   // §14
-        alreadyPending.method       = newMethod;
-        alreadyPending.status       = newStatus;
-        alreadyPending.date         = newDate;
-        alreadyPending.paidDate     = newStatus === 'Paid' ? newDate : (alreadyPending.paidDate || '');
-        alreadyPending.collectedBy = CUR_USER?.name || alreadyPending.collectedBy || '';
+        alreadyPending.overpaid     = Math.max(0, prevPaid - newTotalDue);   // §14
+        alreadyPending.status       = newUnpaid > 0 ? 'Pending' : 'Paid';
+        if (!ownHeld(alreadyPending)) {
+          alreadyPending.method     = newMethod;
+          alreadyPending.date       = newDate;
+          alreadyPending.collectedBy = CUR_USER?.name || alreadyPending.collectedBy || '';
+        }
+        alreadyPending.paidDate     = alreadyPending.status === 'Paid'
+          ? (alreadyPending.paidDate || newDate) : '';
         if (newNotes) alreadyPending.notes = newNotes;
         ledgerTrack(alreadyPending, { why: 'Updated on the payment form' });
 
+        // The one collection path (§6): every entry point posts money here.
+        const gotA = received > 0
+          ? applyPayment(alreadyPending, { amount: received, method: newMethod, date: newDate,
+                                           note: 'Collected', reference: newRef, receiptId: _rcp })
+          : null;
+
         logActivity('Payment Updated', `${t.name} — ${enteredMonth} (existing record updated, no duplicate created)`, 'Finance');
+        if (gotA && gotA.ok) logActivity('Payment Collected',
+          `${t.name} — ${enteredMonth} · ${fmtPKR(received)} received${newRef ? ' · Ref ' + newRef : ''}`, 'Finance');
         await saveDB(); closeModal(); renderPage(currentPage);
-        toast(`Payment updated for ${t.name} — no duplicate created`, 'success');
+        toast(gotA && gotA.ok
+          ? fmtPKR(received) + ' received — ' + (money(alreadyPending.unpaid) > 0
+              ? fmtPKR(alreadyPending.unpaid) + ' still outstanding' : 'this month is fully paid')
+          : `Payment updated for ${t.name} — no duplicate created`, 'success');
         window._updatePendingPS = false;
       },
       function() { window._updatePendingPS = false; }
@@ -2462,7 +2735,6 @@ async function submitPaymentForStudent() {
     rent: monthlyRent, messCharge: messChargePS, messIncluded: true,
     extraTotal: extraTotalPS, admissionFee: admissionFeePS, concession: concessionPS,
   });
-  const unpaid      = Math.max(0, totalDuePS - money(paidAmount));
   const status      = document.getElementById('f-ps-stat')?.value || 'Pending';
   // Collecting a payment does NOT change what the student is charged. Price is
   // set in Settings → Rent & Mess; this form only records what was taken. It
@@ -2476,12 +2748,16 @@ async function submitPaymentForStudent() {
     studentName: t.name || '',
     roomId: t.roomId || '',
     roomNumber: room?.number || '',
-    amount: paidAmount,
-    monthlyRent, unpaid,
-    // §14 overpayment: money handed over above the bill is recorded, not
-    // swallowed by the Math.max that computes `unpaid`. Written even when 0, so
-    // calculateRefund() answers from the record instead of deriving.
-    overpaid: Math.max(0, money(paidAmount) - totalDuePS),
+    /* OPENS EMPTY, AND applyPayment() PUTS THE MONEY IN (§6: one collection
+       service). The record used to be created with the cash already inside it
+       and no instalment entry at all, so a first collection had no date, no
+       method and no collector of its own — _cashEvents() had to attribute it
+       to the record's own date, and ownOwner() to a loose `collectedBy` field.
+       Every collection is an event now, including the first. */
+    amount: 0,
+    monthlyRent,
+    unpaid: totalDuePS,
+    overpaid: 0,
     messCharge: messChargePS, messIncluded: messIncludedPS,
     admissionFee: admissionFeePS,
     extraCharges: extraChargesPS, extraTotal: extraTotalPS,
@@ -2496,7 +2772,19 @@ async function submitPaymentForStudent() {
     paidDate: status === 'Paid' ? document.getElementById('f-ps-date')?.value || today() : '',
     notes: document.getElementById('f-ps-notes')?.value || '',
   });
-  ledgerTrack(DB.payments.find(x => x.id === _newPayIdPS));
+  const _recPS = DB.payments.find(x => x.id === _newPayIdPS);
+  billFreeze(_recPS, 'student-panel');   // Phase 6 — before any collection
+  if (money(paidAmount) > 0) {
+    applyPayment(_recPS, {
+      receiptId: _rcp,
+      amount: money(paidAmount),
+      method: document.getElementById('f-ps-method')?.value || 'Cash',
+      date:   document.getElementById('f-ps-date')?.value || today(),
+      note:   'Collected',
+    });
+  } else {
+    ledgerTrack(_recPS);          // a bill with no money still posts its charge
+  }
   await saveDB(); closeModal();
   renderPage(currentPage);
   toast(`Payment recorded for ${t.name}`, 'success');
@@ -2710,17 +2998,19 @@ function renderAddPayment() {
             </div>
           </div>
 
-          <!-- 04 — AMOUNT PAID. The running total for the month, not today's
-               instalment; pfLoadMonthContext() seeds it with what is already in. -->
+          <!-- 04 — MONEY RECEIVED NOW. Not the month's running total: this box
+               was that total until 2026-09-18, which is how a second collection
+               could overwrite the first (finance spec Rule 3, §19). It starts
+               empty and every entry is a new applyPayment() event. -->
           <div class="ws__row">
             <div class="ws__n">04</div>
             <div class="ws__p">
-              <b>Amount paid &mdash; this month<span class="req">*</span></b>
-              <i>The month's running total, not today's instalment alone</i>
+              <b>Money received now<span class="req">*</span></b>
+              <i>Only what is being handed over today &mdash; it is added to what was received before</i>
             </div>
             <div class="ws__d">
               <label class="ws__mini ws__mini--wide"><span>Rs.</span>
-                <input class="pf-in" id="f-ppaid" type="number" placeholder="Amount collected" value="" oninput="recalcUnpaid()"></label>
+                <input class="pf-in" id="f-ppaid" type="number" placeholder="0" value="" oninput="recalcUnpaid()"></label>
               <div class="ws__chips">
                 <button type="button" class="ws__chip" onclick="pfPayQuick('full')">Full <b id="ws-q-full">0</b></button>
                 <button type="button" class="ws__chip" onclick="pfPayQuick('half')">Half</button>
@@ -2905,13 +3195,18 @@ function pfRenderMonthRail() {
 /* ── LINE 04 SHORTCUTS ───────────────────────────────────────────────────────
    Each is a figure the form already knows, so none of them can disagree with
    the stub: full is the payable total, rent is the room half of the charge. */
+/* The chips offer AMOUNTS TO RECEIVE NOW, so Full is what is still outstanding
+   on the month, not the month's whole bill — on a part-paid month those are
+   different numbers, and the bill would over-collect by whatever came in
+   earlier. */
 function pfPayQuick(which) {
   const el = document.getElementById('f-ppaid');
   if (!el) return;
   const total = pfPayableTotal();
-  el.value = which === 'rent' ? pfRentAmount()
-           : which === 'half' ? Math.round(total / 2)
-           : total;
+  const owing = Math.max(0, total - money(_pfAlready));
+  el.value = which === 'rent' ? Math.min(pfRentAmount(), owing || pfRentAmount())
+           : which === 'half' ? Math.round(owing / 2)
+           : owing;
   recalcUnpaid();
 }
 
@@ -3120,6 +3415,13 @@ function pfCount() {
   if (ta && el) el.textContent = ta.value.length + '/250';
 }
 async function submitAddPayment() {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('A payment')) return;
+  /* ONE VISIT, ONE POSTING (audit G5). This form can write the selected month
+     AND any number of earlier months in one press. They are one hand-over —
+     the student is given one slip — so every collection it makes carries this
+     id, whichever of the branches below actually runs. */
+  const _rcp = newReceiptId();
   // Try to auto-select if only one student matches the search text
   const searchEl = document.getElementById('f-pstudent-search');
   const hiddenEl = document.getElementById('f-pstudent');
@@ -3176,7 +3478,7 @@ async function submitAddPayment() {
         if (pinNeeded() && !(await pinConfirm({ what: 'collecting arrears' }))) return;   // step 10
         const aMethod = document.getElementById('f-pmethod')?.value || 'Cash';
         const aDate   = document.getElementById('f-pdate')?.value   || today();
-        const aDesc   = pfApplyOutstandings(arrearsOnly, aMethod, aDate);
+        const aDesc   = pfApplyOutstandings(arrearsOnly, aMethod, aDate, _rcp);
         logActivity('Arrears Collected', `${tName} — ${aDesc}`, 'Finance');
         await saveDB(); closeModal(); renderPage('payments');
         toast(`Arrears posted to ${arrearsOnly.length} earlier month(s) for ${tName} · `
@@ -3208,7 +3510,8 @@ async function submitAddPayment() {
         '⚠️ Pending Record Already Exists',
         `${escHtml(tName)} already has a <strong>Pending</strong> payment for <strong>${escHtml(enteredMonth2)}</strong>.<br>`
         + `<div style="margin:10px 0;background:var(--bg3);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.8">`
-        + `Existing → Paid: <strong>${fmtPKR(existingPaidAmt)}</strong> &nbsp;|&nbsp; Unpaid: <strong style="color:var(--red)">${fmtPKR(existingUnpaid)}</strong></div>`
+        + `Received to date: <strong>${fmtPKR(existingPaidAmt)}</strong> &nbsp;|&nbsp; Outstanding: <strong style="color:var(--red)">${fmtPKR(existingUnpaid)}</strong></div>`
+      + `<div style="margin:-4px 0 10px;font-size:11.5px;color:var(--text3)">Money received now is <strong>added</strong> to what is already received — it does not replace it.</div>`
         + `<strong>Update the existing record</strong> instead of creating a duplicate?<br><small style="color:var(--text3)">Click <em>OK</em> to update · <em>Cancel</em> to abort</small>`,
         async function() {
           // ── UPDATE existing pending record in-place ──────────────────
@@ -3218,7 +3521,15 @@ async function submitAddPayment() {
           const newMonthlyRent = _pro ? _pro.days * _pro.rate : (pfRentAmount() || alreadyPending2.monthlyRent || 0);
           const newMessOn      = _pro ? false : document.getElementById('f-pmess-on')?.checked !== false;
           const newMess        = pfMessAmount();
-          const newPaid        = parseFloat(document.getElementById('f-ppaid')?.value) || 0;
+          /* MONEY RECEIVED NOW, NOT A RUNNING TOTAL (finance spec Rule 3, §19).
+             The comment that stood here said it outright — "Amount Paid is the
+             running total for the month, so today's cash is the difference" —
+             and that is the model the spec rules out. A second Rs.5,000 had to
+             be typed as the cumulative 10,000; typing the 5,000 actually
+             received rewrote the collected total DOWNWARDS and the instalment
+             came out negative, so no trail entry was written and the first
+             collection was gone. */
+          const received       = money(parseFloat(document.getElementById('f-ppaid')?.value) || 0);
           const newExtraCharges= getExtraChargesData();
           const newExtraTotal  = newExtraCharges.reduce((s,c)=>s+c.amount,0);
           // Admission fee and concession were missing here too, so merging into
@@ -3230,8 +3541,9 @@ async function submitAddPayment() {
             rent: newMonthlyRent, messCharge: newMess, messIncluded: true,
             extraTotal: newExtraTotal, admissionFee: newAdmFee, concession: newConcession,
           });
-          const newUnpaid      = Math.max(0, newTotalDue - money(newPaid));
-          const newStatus      = document.getElementById('f-pstat')?.value || 'Pending';
+          /* Priced against what was ALREADY received; money arriving now is
+             applied below, after the charges are settled. */
+          const newUnpaid      = Math.max(0, newTotalDue - money(prevPaid));
           const newMethod      = document.getElementById('f-pmethod')?.value || alreadyPending2.method || 'Cash';
           const newDate        = document.getElementById('f-pdate')?.value  || today();
           const newNotes       = document.getElementById('f-pnotes-main')?.value || document.getElementById('f-pnotes')?.value || '';
@@ -3246,33 +3558,35 @@ async function submitAddPayment() {
           alreadyPending2.messIncluded = newMessOn;
           if (_pro) alreadyPending2.prorate = { days: _pro.days, rate: _pro.rate };
           else delete alreadyPending2.prorate;
-          alreadyPending2.amount       = newPaid;
+          /* `amount` IS NOT WRITTEN HERE — only applyPayment() moves a record's
+             collected total (Rule 1). The hand-rolled trail push that used to
+             sit here is gone with it: one collection path, one trail writer. */
           alreadyPending2.unpaid       = newUnpaid;
-          alreadyPending2.overpaid     = Math.max(0, money(newPaid) - newTotalDue);   // §14
-          // Amount Paid is the running total for the month, so today's cash is
-          // the difference. Recording it leaves a per-instalment trail instead
-          // of one figure that quietly changes shape between visits.
-          const instalment = newPaid - prevPaid;
-          if (instalment > 0) {
-            if (!alreadyPending2.partialPayments) alreadyPending2.partialPayments = [];
-            alreadyPending2.partialPayments.push({
-              date: newDate, amount: instalment, method: newMethod,
-              collectedBy: (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden',
-              note: 'Instalment'
-            });
-          }
+          alreadyPending2.overpaid     = Math.max(0, money(prevPaid) - newTotalDue);   // §14
           alreadyPending2.extraCharges = newExtraCharges;
           alreadyPending2.extraTotal   = newExtraTotal;
           alreadyPending2.admissionFee = newAdmFee;
           alreadyPending2.concession   = newConcession;
           alreadyPending2.discount     = newConcession;
-          alreadyPending2.method       = newMethod;
-          alreadyPending2.status       = newStatus;
-          alreadyPending2.date         = newDate;
-          alreadyPending2.paidDate     = newStatus === 'Paid' ? newDate : (alreadyPending2.paidDate || '');
-          alreadyPending2.collectedBy  = CUR_USER?.name || alreadyPending2.collectedBy || '';
+          /* A record holding money keeps its date, method and collector: they
+             are facts about a collection that already happened (Rule 1). */
+          alreadyPending2.status       = newUnpaid > 0 ? 'Pending' : 'Paid';
+          if (!ownHeld(alreadyPending2)) {
+            alreadyPending2.method     = newMethod;
+            alreadyPending2.date       = newDate;
+            alreadyPending2.collectedBy = CUR_USER?.name || alreadyPending2.collectedBy || '';
+          }
+          alreadyPending2.paidDate     = alreadyPending2.status === 'Paid'
+            ? (alreadyPending2.paidDate || newDate) : '';
           if (newNotes) alreadyPending2.notes = newNotes;
           ledgerTrack(alreadyPending2, { why: 'Updated on the payment form' });
+
+          // The one collection path (§6).
+          const gotB = received > 0
+            ? applyPayment(alreadyPending2, { amount: received, method: newMethod, date: newDate,
+                                              note: 'Collected', receiptId: _rcp,
+                                              reference: (document.getElementById('f-pref')?.value || '').trim() })
+            : null;
 
           // Arrears entered alongside this update still post to their own months.
           const arrearsU = pfOutstandingAllocations();
@@ -3282,7 +3596,7 @@ async function submitAddPayment() {
             alreadyPending2.arrearsCollected = (alreadyPending2.arrearsCollected || []).concat(
               arrearsU.map(a => ({ month: a.payment.month || '—', amount: a.amount, date: newDate })));
           }
-          const arrearsUDesc = arrearsU.length ? pfApplyOutstandings(arrearsU, newMethod, newDate) : '';
+          const arrearsUDesc = arrearsU.length ? pfApplyOutstandings(arrearsU, newMethod, newDate, _rcp) : '';
 
           logActivity('Payment Updated', `${tName} — ${enteredMonth2} (existing record updated, no duplicate created)`, 'Finance');
           if (arrearsUDesc) logActivity('Arrears Collected', `${tName} — ${arrearsUDesc}`, 'Finance');
@@ -3316,7 +3630,6 @@ async function submitAddPayment() {
     extraTotal, admissionFee, concession,
   });
   const totalRent   = monthlyRent;                // display rent = base only
-  const unpaid      = Math.max(0, totalDue - money(paidAmount));
   const status      = document.getElementById('f-pstat')?.value || 'Pending';
   const t    = isManual ? null : DB.students.find(x=>x.id===studentIdRaw);
   const room = t ? DB.rooms.find(r=>r.id===t?.roomId) : null;
@@ -3333,10 +3646,11 @@ async function submitAddPayment() {
     studentName: finalName,
     roomId: t?.roomId||'',
     roomNumber: room?.number||'',
-    amount: paidAmount,
-    monthlyRent, unpaid,
-    // §14 overpayment — see submitPaymentForStudent() for the reasoning.
-    overpaid: Math.max(0, money(paidAmount) - totalDue),
+    // Opens empty; applyPayment() below puts the money in (§6).
+    amount: 0,
+    monthlyRent,
+    unpaid: totalDue,
+    overpaid: 0,
     messCharge, messIncluded,
     // What a by-days month was charged on (step 9): the ledger, the receipt and
     // the Edit form all read it.
@@ -3358,14 +3672,29 @@ async function submitAddPayment() {
       date: document.getElementById('f-pdate')?.value || today(),
     })),
   });
-  // A manual-name payment has no student and stays out of the ledger.
-  ledgerTrack(DB.payments.find(x => x.id === _newPayId));
+  const _recAP = DB.payments.find(x => x.id === _newPayId);
+  /* Phase 6 — BEFORE applyPayment() below. The snapshot is what the month was
+     billed, so it has to be taken while the record still holds nothing. */
+  billFreeze(_recAP, 'add-payment');
+  if (money(paidAmount) > 0) {
+    applyPayment(_recAP, {
+      amount: money(paidAmount),
+      method: document.getElementById('f-pmethod')?.value || 'Cash',
+      date:   document.getElementById('f-pdate')?.value || today(),
+      note:   'Collected',
+      receiptId: _rcp,
+      reference: (document.getElementById('f-pref')?.value || '').trim(),
+    });
+  } else {
+    // A manual-name payment has no student and stays out of the ledger.
+    ledgerTrack(_recAP);
+  }
   // Arrears collected on this visit are posted to the months they belong to,
   // never folded into the record just created for the selected month.
   const arrearsDesc = arrears.length
     ? pfApplyOutstandings(arrears,
         document.getElementById('f-pmethod')?.value || 'Cash',
-        document.getElementById('f-pdate')?.value || today())
+        document.getElementById('f-pdate')?.value || today(), _rcp)
     : '';
 
   logActivity('Payment Added', `${finalName||'student'} — ${document.getElementById('f-pmonth')?.value||''}`, 'Finance');
@@ -3421,6 +3750,17 @@ function printAndSubmitPaymentForStudent() {
 function showEditPaymentModal(id) {
   if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
   const p = DB.payments.find(x=>x.id===id); if(!p) return;
+  /* THIS FORM CARRIES ITS OWN "ALREADY COLLECTED" (owner, 2026-09-19: "no
+     pending amount is showing as the student has paid 4000 and more").
+     The edit form puts what the record has taken into the hidden `f-ppaid`,
+     which recalcUnpaid() reads as `pa`. `_pfAlready` is the ADD form's copy of
+     that same figure, and it is module state that outlives whichever form set
+     it — this form never wrote it, so it arrived holding the last Add Payment's
+     number. The collection was then subtracted TWICE: Rs. 8,000 billed with
+     Rs. 4,000 taken showed Pending Rs. 0, disabled "Full pending" (it keys off
+     pending > 0) and printed a nonsense "over what is outstanding" note.
+     Zeroed here so the collection is subtracted once, by `f-ppaid`. */
+  _pfAlready = 0;
   const t = DB.students.find(s=>s.id===p.studentId);
   const room = t ? DB.rooms.find(r=>r.id===t.roomId) : null;
   const rtype = room ? DB.settings.roomTypes.find(x=>x.id===room.typeId) : null;
@@ -3435,6 +3775,12 @@ function showEditPaymentModal(id) {
      student's current price. */
   const held  = ownHeld(p);
   const canEd = ownCanEdit(p);
+  /* A record another account collected on is not editable here, but its
+     PENDING balance is still collectable by anyone who may take payments
+     (ownership.js, owner 2026-09-23). The form is built for both.
+     `canRcvOnly` is the case that did not exist before today. */
+  const canRcv = typeof ownCanReceive === 'function' ? ownCanReceive(p) : { ok: false, reason: '' };
+  const canRcvOnly = !canEd.ok && canRcv.ok;
   const _bundled = serviceModel() === 'rent_mess_bundled';
   /* A month charged by days (step 9) shows its own figures too: the student's
      current price is a whole month, and saving that unchanged would un-prorate it. */
@@ -3463,19 +3809,33 @@ function showEditPaymentModal(id) {
       <span class="pef-sec__t">${escHtml(title)}</span></div>
     ${hint ? `<div class="pef-sec__hint">${escHtml(hint)}</div>` : ''}`;
 
-  const typeCtl = optional
+  /* THE TYPE IS LOCKED ONCE THE RECORD HOLDS MONEY (owner, 2026-09-19, and his
+     ruling on it: "lock it once money is held"). Rent-only against Rent + Mess
+     is a difference of the whole mess charge, so flipping it after a collection
+     silently re-prices a month somebody has already paid against — the student
+     handed over 4,000 of an 8,000 bill and the form could turn the bill into
+     6,000. It is the same rule the month and the collected amount already
+     follow (ledger step 6). The charge itself stays correctable through rent,
+     mess, extras and the concession, with a reason, which is where a genuine
+     re-pricing belongs and where it reaches the ledger. */
+  const typeLocked = held || !optional;
+  const typeCtl = !typeLocked
     ? `<select class="form-control" id="f-ptype" onchange="pefTypeChange(this.value)">
          <option value="both"${messIncluded ? ' selected' : ''}>Rent + Mess</option>
          <option value="rent"${messIncluded ? '' : ' selected'}>Rent only</option>
        </select>`
     : `<select class="form-control" id="f-ptype" disabled>
-         <option>${!serves ? 'Rent' : (messIncluded ? 'Rent + Mess' : 'Rent only — mess exempt')}</option>
+         <option>${!serves ? 'Rent'
+                  : messIncluded ? 'Rent + Mess'
+                  : optional ? 'Rent only'
+                  : 'Rent only — mess exempt'}</option>
        </select>`;
 
   // The student card and the month's recent collections, off the ledger.
   const fact = (k, v) => `<div class="pef-sum__row"><span>${escHtml(k)}</span><b>${v ? escHtml(v) : '<span class="lk-dash">—</span>'}</b></div>`;
-  const recent = (t && typeof ledgerEntriesFor === 'function' ? ledgerEntriesFor(t.id) : [])
-    .filter(e => e.type === 'payment').slice(-5).reverse();
+  // Every collection this student has made, newest first — see _pefCollections().
+  _pefRecent = _pefCollections(t);
+  _pefRecentAll = false;
   const initial = String(p.studentName || '?').trim().charAt(0).toUpperCase() || '?';
 
   showModal('modal-lg pef-modal', `
@@ -3488,7 +3848,9 @@ function showEditPaymentModal(id) {
     </div>`, `
     ${!held ? '' : `<div class="pef-lock${canEd.ok ? '' : ' is-view'}" id="pef-lock">${icon('lock','sm')}<span>${canEd.ok
         ? `<b>${fmtPKR(money(p.amount))} has been collected on this record.</b> You can change the charges, add extras or receive the pending amount below. What was collected and the month stay as recorded; to take money back use Reverse a collection. Changing a charge needs a reason.`
-        : `<b>${escHtml(canEd.reason)}</b> This record is view-only for you.`}</span></div>`}
+        : canRcvOnly
+          ? `<b>${escHtml(canEd.reason)}</b> You can still receive the ${fmtPKR(calculateOutstanding(p))} pending below — it is recorded as collected by you. Their collection and this month's charges stay as they are.`
+          : `<b>${escHtml(canEd.reason)}</b> This record is view-only for you.`}</span></div>`}
     <div class="pef-layout">
       <div class="pef-main">
 
@@ -3497,7 +3859,8 @@ function showEditPaymentModal(id) {
           <div class="hf-g3">
             ${F('Month', held ? 'lock' : 'calendar', `<select class="form-control" id="f-pmonth"${held ? ' disabled' : ''}>${payMonthPickerOptions(p.month || '', p.studentId || '')}</select>`,
                { req: true, for: 'f-pmonth', cls: held ? 'is-readonly' : '' })}
-            ${F('Payment type', 'layers', typeCtl, { req: true, for: 'f-ptype' })}
+            ${F('Payment type', typeLocked ? 'lock' : 'layers', typeCtl,
+               { req: true, for: 'f-ptype', cls: typeLocked ? 'is-readonly' : '' })}
             ${F('Amount (PKR)', 'home',
                `<input class="form-control" id="f-pcombo" type="number" min="0" step="1" value="${monthlyRent + (messIncluded ? messCharge : 0)}" oninput="pfComboInput()">
                 <input type="hidden" id="f-prent" value="${monthlyRent}">
@@ -3513,16 +3876,54 @@ function showEditPaymentModal(id) {
             <div class="pef-rcv__c"><span>Expected amount</span><b id="pef-exp">-</b></div>
             <div class="pef-rcv__c"><span>Already paid</span><b class="is-paid" id="pef-already">${fmtPKR(money(p.amount))}</b></div>
             <div class="pef-rcv__c"><span>Pending amount</span><b class="is-due" id="pef-pend">-</b></div>
+            ${''/* THE BOX GETS THE WHOLE CELL (owner, 2026-09-19: "the receiving
+                   money field is very small"). It used to share one row with the
+                   Full pending button, and a wallet icon inside it: of a 266px
+                   cell the input got 103px — narrower than any of the three
+                   read-only figures beside it, for the one number a warden
+                   actually types on this form. The button moves up beside the
+                   label, where it reads as what it is, a shortcut for filling
+                   this field, and the input takes the full width underneath. */}
             <div class="pef-rcv__in">
-              <label for="f-precv">Receive pending (Rs.)</label>
+              <div class="pef-rcv__lab">
+                <label for="f-precv">Receive pending (Rs.)</label>
+                <button type="button" class="pef-rcv__full" id="pef-full" onclick="pefReceiveFull()">Full pending</button>
+              </div>
               <div class="pef-rcv__row">
                 <div class="hf-in"><span class="hf-in__i">${icon('wallet', 'sm')}</span>
                   <input class="form-control" id="f-precv" type="number" min="0" step="1" placeholder="0" oninput="recalcUnpaid()"></div>
-                <button type="button" class="pef-rcv__full" id="pef-full" onclick="pefReceiveFull()">Full pending</button>
               </div>
             </div>
           </div>
           <div class="pef-rcv__tip">${icon('info', 'xs')}<span>Enter the amount received now, or leave it empty to collect nothing. It is recorded as a new payment in your name and reduces the pending amount.</span></div>
+          ${''/* MONEY GOING BACK OUT HAS A DOOR NOW (owner, 2026-09-19: "no refund
+                 strategy there"). The path itself was never missing —
+                 reversePayment() in finance.js is the §14 authority for it, with
+                 the ownership limit, the PIN, the required reason, the ledger
+                 entry and the activity log all already built. What was missing
+                 was any way to REACH it from here: the banner at the top of this
+                 form says "to take money back use Reverse a collection" and then
+                 offers nothing to press, so the warden had to cancel the form,
+                 find the row again and open its ⋯ menu.
+
+                 Deliberately NOT a second refund engine. This is the same call
+                 the row menu makes, with the same limit — what this account
+                 collected and still holds, or the whole collection for an admin —
+                 and the same reason shown when it may not. */}
+          ${!held ? '' : (() => {
+            const rv = ownReversible(p);
+            const why = rv.waiting > 0 ? 'In a handover waiting for approval'
+                      : rv.approved > 0 ? 'Approved in a handover — admin only'
+                      : (rv.reason || 'Not available on this record');
+            return `<div class="pef-back">
+              <span class="pef-back__t">Money going back out</span>
+              ${rv.max > 0
+                ? `<button type="button" class="pef-back__b" onclick="pefReverseFromEdit('${escHtml(id)}')">Refund or reverse a collection…</button>
+                   <span class="pef-back__m">up to ${fmtPKR(rv.max)}</span>`
+                : `<button type="button" class="pef-back__b" disabled>Refund or reverse a collection…</button>
+                   <span class="pef-back__m">${escHtml(why)}</span>`}
+            </div>`;
+          })()}
           <input type="hidden" id="f-ppaid" value="${money(p.amount)}">
         </div>
 
@@ -3573,6 +3974,15 @@ function showEditPaymentModal(id) {
           </div>
         </div>
 
+        ${''/* THE LAST TWO SECTIONS SHARE A ROW (owner, 2026-09-19: "the form is
+               very much crowded and looking as a slop"). Measured on this sheet:
+               1,066px of form in a 661px body — a warden could see barely half
+               of it at once, and scrolled past the figures to reach the fields.
+               Notes and the reason for a change are both one short input; side
+               by side they cost one row instead of two. Auto-fit, so when there
+               is no reason field — a record holding no money — Notes still takes
+               the full width, and both drop back to stacked on a narrow window. */}
+        <div class="pef-pair">
         <div class="pef-sec">
           ${secHead(5, 'Notes (optional)', '')}
           <div class="hf-in hf-in--top">
@@ -3589,6 +3999,7 @@ function showEditPaymentModal(id) {
             <input class="form-control" id="f-pedit-reason" maxlength="120" placeholder="e.g. Cooler charge added">
           </div>
         </div>` : ''}
+        </div>
       </div>
 
       <aside class="pef-side">
@@ -3608,6 +4019,26 @@ function showEditPaymentModal(id) {
 
         <div class="pef-card">
           <div class="pef-card__h">${icon('fileText','sm')} Payment summary</div>
+          ${''/* WHAT THIS MONTH WAS FIRST BILLED, when it is no longer that
+                 (finance Phase 6, audit G6). The charge fields are written in
+                 place, so before the snapshot the opening figure was gone and
+                 answering "what did you charge me in August?" meant replaying
+                 the ledger. It shows ONLY when the bill has actually moved —
+                 on the ordinary record the row would be the same number twice.
+                 Absent on records raised before the snapshot existed: billDrift()
+                 returns null and nothing is invented for them. */}
+          ${(() => {
+            const d = typeof billDrift === 'function' ? billDrift(p) : null;
+            if (!d) return '';
+            const names = { monthlyRent: 'rent', messCharge: 'mess', admissionFee: 'admission fee',
+                            concession: 'concession', extraTotal: 'extras', messIncluded: 'mess included' };
+            const what = d.parts.map(x => names[x.key] || x.key).join(', ') || 'the charge';
+            const tip = 'Raised ' + fmtDate(d.at) + (d.by ? ' by ' + d.by : '')
+                      + ' at ' + fmtPKR(d.was) + '. Changed since: ' + what
+                      + '. See the student ledger for each change and its reason.';
+            return `<div class="pef-sum__row pef-sum__was" title="${escHtml(tip)}">
+              <span>Billed when raised</span><b>${fmtPKR(d.was)}</b></div>`;
+          })()}
           <div class="pef-sum__row"><span>Total due (this month)</span><b id="pef-due">-</b></div>
           <div class="pef-sum__row is-paid"><span>Total paid</span><b id="pef-paid">-</b></div>
           <div class="pef-sum__row" id="pef-rem-row"><span>Pending amount</span><b id="pef-rem">-</b></div>
@@ -3626,26 +4057,33 @@ function showEditPaymentModal(id) {
         </div>
 
         <div class="pef-card">
-          <div class="pef-card__h">${icon('clock','sm')} Recent payments${t
-            ? `<button type="button" class="pef-card__lnk" onclick="closeModal();stuAllPayments('${escHtml(t.id)}')">View all</button>` : ''}</div>
-          ${recent.length ? `<table class="pef-recent">
-            <thead><tr><th>Date</th><th>Amount</th><th>Method</th></tr></thead>
-            <tbody>${recent.map(e => `<tr>
-              <td>${escHtml(fmtDate(String(e.createdAt || '').slice(0, 10)))}</td>
-              <td><b>${fmtPKR(money(e.amount))}</b></td>
-              <td>${escHtml(e.method || '—')}</td></tr>`).join('')}</tbody>
-          </table>` : '<div class="pef-none">No payments recorded yet</div>'}
+          <div class="pef-card__h">${icon('clock','sm')} Recent payments${_pefRecent.length > PEF_RECENT_N
+            ? `<button type="button" class="pef-card__lnk" id="pef-recent-x" onclick="pefRecentToggle()">View all (${_pefRecent.length})</button>` : ''}</div>
+          ${_pefRecent.length ? `<div class="pef-recent__w" id="pef-recent-w"><table class="pef-recent">
+            <thead><tr><th>Date</th><th>Month</th><th class="num">Amount</th><th>Method</th></tr></thead>
+            <tbody id="pef-recent-b">${_pefRecentRows()}</tbody>
+          </table></div>` : '<div class="pef-none">Nothing has been collected from this student yet</div>'}
         </div>
       </aside>
     </div>`,
   !canEd.ok
-    ? `<button class="btn btn-secondary" onclick="closeModal()">Close</button>`
+    ? (canRcvOnly
+        ? `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+           <button class="btn btn-primary" onclick="submitEditPayment('${id}')">${icon('save','sm')} Receive payment</button>`
+        : `<button class="btn btn-secondary" onclick="closeModal()">Close</button>`)
     : `${held
          ? `<button class="btn btn-danger btn-sm pef-foot-del" disabled title="${escHtml(ownCanDelete(p).reason)}">${icon('trash','sm')} Delete Payment</button>`
          : `<button class="btn btn-danger btn-sm pef-foot-del" onclick="deletePayment('${id}')">${icon('trash','sm')} Delete Payment</button>`}
        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
        <button class="btn btn-primary" onclick="submitEditPayment('${id}')">${icon('save','sm')} Save Changes</button>`);
-  setTimeout(function() {
+  /* PAINTED BEFORE THE SHEET IS SEEN, NOT 50ms INTO ITS ANIMATION (owner,
+     2026-09-19: "it opens very awkward"). showModal() writes the markup with
+     innerHTML, so every node below exists the instant it returns — there was
+     nothing to wait for. The delay meant the sheet animated in showing "-" in
+     all four figures, an empty extras list and a blank Remaining, and then
+     snapped to the real numbers a frame or three later, while it was still
+     moving. Run it now: the first frame the warden sees is the finished form. */
+  (function () {
     const ecl = document.getElementById('extra-charges-list');
     if(ecl && p.extraCharges && p.extraCharges.length) {
       ecl.innerHTML = '';
@@ -3655,15 +4093,108 @@ function showEditPaymentModal(id) {
     pefNoteCount();
     // View-only for an account that may not change this record's money.
     if (!canEd.ok) {
+      /* THE CHARGES LOCK; THE COLLECTION DOES NOT. On a record this account
+         may not edit but may still collect against, the four fields that
+         describe the NEW money — how much, how, when, and its reference —
+         stay live, and everything that describes the month or somebody
+         else's collection is locked. Notes are locked with them: the field
+         is one shared line on the record, and saving it would overwrite
+         what its collector wrote. */
+      const _live = canRcvOnly ? ['f-precv','f-pmethod','f-pdate','f-pref'] : [];
       ['f-pcombo','f-ptype','f-precv','pef-full','f-padmfee','f-pconcession','f-pconcession-desc',
-       'f-pmethod','f-pmonth','f-pdate','f-pref','f-pnotes'].forEach(fid => {
+       'f-pmethod','f-pmonth','f-pdate','f-pref','f-pnotes'].filter(fid => _live.indexOf(fid) === -1).forEach(fid => {
         const el = document.getElementById(fid);
         if (el) { el.setAttribute('disabled', ''); el.removeAttribute('onclick'); }
       });
       document.querySelectorAll('#extra-charges-list input, #extra-charges-list button, .pef-extra__add')
         .forEach(el => el.setAttribute('disabled', ''));
     }
-  }, 50);
+  })();
+}
+
+/* ── RECENT PAYMENTS = THE INSTALMENTS, NOT THE MONTH RECORDS ────────────────
+   Owner, 2026-09-19: "clicking recent payments does not show any history of
+   recent full or partial instalments".
+
+   Two faults. The card listed only ledger entries of `type === 'payment'`, so
+   a student whose history predates the ledger — every imported record, and
+   anything collected by a form that wrote `p.amount` directly — showed "No
+   payments recorded yet" beside a record plainly holding money. And "View all"
+   closed the form and sent the warden to the payments REGISTER, which lists one
+   row per MONTH: the instalments he went looking for are exactly what that page
+   cannot show, and his half-filled form was thrown away to get there.
+
+   It now lists money movements: each instalment, and each reversal as money
+   going back out, newest first, naming the month each was collected against.
+   Where the ledger has nothing it reads the records' own `partialPayments` and
+   `reversals`, which is where that history has always been. "View all" expands
+   the card in place — no navigation, and nothing typed into the form is lost. */
+const PEF_RECENT_N = 4;
+let _pefRecent = [];
+let _pefRecentAll = false;
+
+function _pefCollections(t) {
+  if (!t) return [];
+  const out = [];
+  /* ONE SOURCE: THE RECORDS' OWN TRAIL. This first read the student ledger and
+     fell back to the records only when the ledger held nothing for the student
+     at all — which was all-or-nothing, and wrong in both directions. The moment
+     one new collection posted a ledger entry, an imported history vanished from
+     the card. And a live ledger entry is stamped with the time it was POSTED,
+     not the day the money came in, so a collection taken on the 6th and posted
+     on the 20th was listed as the 20th.
+
+     `partialPayments` and `reversals` are written by applyPayment() and
+     reversePayment() in finance.js — the §14 authorities — and each entry
+     carries the date and method the money actually moved on. The ledger mirrors
+     them; for a card that answers "when did money move", the trail is the
+     shorter and truer read, and it needs no fallback. */
+  (DB.payments || []).filter(p => p && p.studentId === t.id).forEach(p => {
+    const parts = (p.partialPayments || []).filter(x => x && money(x.amount) > 0);
+    parts.forEach(x => out.push({
+      day: String(x.date || p.paidDate || p.date || '').slice(0, 10),
+      month: p.month || '', amount: money(x.amount),
+      method: x.method || p.method || '', reference: x.reference || '', back: false }));
+    /* A record holding money with no instalment behind it still collected it —
+       every record written before the collection path was one (Phase 1). The
+       reversed total is added back because `p.amount` is net of reversals, and
+       the reversals are listed separately below; without it, reversing money on
+       a legacy record would quietly shrink the collection it is reversing. */
+    if (!parts.length) {
+      const revd = (p.reversals || []).reduce((s, r) => s + money(r && r.amount), 0);
+      const ever = money(p.amount) + revd;
+      if (ever > 0) out.push({
+        day: String(p.paidDate || p.date || '').slice(0, 10), month: p.month || '',
+        amount: ever, method: p.method || '', reference: '', back: false });
+    }
+    (p.reversals || []).forEach(r => {
+      if (!r || !(money(r.amount) > 0)) return;
+      out.push({ day: String(r.date || '').slice(0, 10), month: p.month || '',
+                 amount: money(r.amount), method: r.method || '', reference: '', back: true });
+    });
+  });
+  // Newest first. A blank date sorts last rather than to 1970.
+  return out.sort((a, c) => String(c.day || '').localeCompare(String(a.day || '')));
+}
+
+function _pefRecentRows() {
+  const list = _pefRecentAll ? _pefRecent : _pefRecent.slice(0, PEF_RECENT_N);
+  return list.map(e => `<tr${e.back ? ' class="is-back"' : ''}>
+      <td>${escHtml(e.day ? fmtDate(e.day) : '—')}</td>
+      <td>${escHtml(e.month ? payMonthShort(e.month) : '—')}</td>
+      <td class="num"><b>${e.back ? '−' : ''}${fmtPKR(e.amount)}</b></td>
+      <td>${escHtml(e.method || '—')}</td>
+    </tr>`).join('');
+}
+
+function pefRecentToggle() {
+  _pefRecentAll = !_pefRecentAll;
+  const body = document.getElementById('pef-recent-b');
+  if (body) body.innerHTML = _pefRecentRows();
+  const btn = document.getElementById('pef-recent-x');
+  if (btn) btn.textContent = _pefRecentAll ? 'Show less' : 'View all (' + _pefRecent.length + ')';
+  const wrap = document.getElementById('pef-recent-w');
+  if (wrap) wrap.classList.toggle('is-all', _pefRecentAll);
 }
 
 /* The Payment type select moves the hidden plan tick. The rent half stays what
@@ -3676,6 +4207,26 @@ function pefTypeChange(v) {
   recalcUnpaid();
 }
 
+/* Leaving the Edit form for the reverse dialog. They share one modal container,
+   so this sheet is replaced — anything typed into it and not saved goes with it,
+   and the warden is told so rather than finding out. Nothing typed, nothing to
+   ask: the dialog opens straight away. */
+function pefReverseFromEdit(id) {
+  const typed = () => {
+    const rcv = document.getElementById('f-precv');
+    if (rcv && String(rcv.value).trim() !== '') return true;
+    const note = document.getElementById('f-pnotes');
+    const p = DB.payments.find(x => x.id === id);
+    if (note && p && String(note.value || '') !== String(p.notes || '')) return true;
+    const why = document.getElementById('f-pedit-reason');
+    return !!(why && String(why.value).trim() !== '');
+  };
+  if (!typed()) { showReversePaymentModal(id); return; }
+  showConfirm('Leave this form?',
+    'The reverse dialog opens in place of this one, so what you have entered here and not saved will be lost.',
+    () => showReversePaymentModal(id));
+}
+
 /* Full pending: the whole balance this form now shows, into the receive box. */
 function pefReceiveFull() {
   const box = document.getElementById('f-precv');
@@ -3686,12 +4237,65 @@ function pefReceiveFull() {
 }
 
 async function submitEditPayment(id) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('A change to a payment')) return;
   if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
   const p = DB.payments.find(x=>x.id===id); if(!p) return;
   /* Step 6, refused here as well as on the form (ownership.js). */
   const held  = ownHeld(p);
   const canEd = ownCanEdit(p);
-  if (!canEd.ok) { toast(canEd.reason, 'error'); return; }
+  /* ══ RECEIVE-ONLY (owner, 2026-09-23) ════════════════════════════
+     An account that may not edit this record may still collect what is
+     pending on it. That path takes NONE of the form's charge fields — they
+     were disabled on screen, and a disabled field is a UI fact, not a
+     guarantee. Reading them here and writing them back would let a crafted
+     DOM rewrite a month somebody else is answerable for, so this branch
+     never touches the bill at all: it reads the four collection fields,
+     applies the money, and returns.
+
+     It is deliberately a separate exit rather than a flag threaded through
+     the long path below. The rule is 'this account writes no charge', and a
+     branch that cannot reach the charge-writing code proves it. */
+  if (!canEd.ok) {
+    const rcv = typeof ownCanReceive === 'function' ? ownCanReceive(p) : { ok: false, reason: '' };
+    if (!rcv.ok) { toast(canEd.reason, 'error'); return; }
+
+    const dueNow = calculateOutstanding(p);
+    const el     = document.getElementById('f-precv');
+    const raw    = String(el ? el.value : '').trim();
+    if (!raw) { toast('Enter what you are receiving.', 'error'); if (el) el.focus(); return; }
+    if (!/^[0-9]+$/.test(raw)) {
+      toast('Receive pending takes a whole number of rupees.', 'error'); if (el) el.focus(); return;
+    }
+    const amt = money(Number(raw));
+    if (amt <= 0) { toast('Enter what you are receiving.', 'error'); if (el) el.focus(); return; }
+    if (amt > dueNow) {
+      toast('You can receive up to ' + fmtPKR(dueNow) + ' — what is pending on this month.', 'error');
+      if (el) el.focus(); return;
+    }
+    const mth = document.getElementById('f-pmethod')?.value || p.method || 'Cash';
+    const dte = document.getElementById('f-pdate')?.value   || today();
+    const ref = (document.getElementById('f-pref')?.value || '').trim();
+    // Step 10, the same confirmation any other collection needs.
+    if (pinNeeded() && !(await pinConfirm({ what: 'receiving ' + fmtPKR(amt) }))) return;
+
+    const got = applyPayment(p, { amount: amt, method: mth, date: dte,
+                                  note: 'Pending received', reference: ref,
+                                  receiptId: newReceiptId() });
+    if (!got || !got.ok) { toast('That payment could not be recorded.', 'error'); return; }
+    if (!p.date) p.date = dte;
+    ledgerTrack(p, { why: 'Pending received' });
+    logActivity('Payment Collected',
+      `${p.studentName || ''} — ${p.month || ''} · ${fmtPKR(amt)} received`, 'Finance');
+    await saveDB();
+    closeModal();
+    renderPage(currentPage === 'payments' ? 'payments' : currentPage);
+    const left = calculateOutstanding(p);
+    toast(fmtPKR(amt) + ' received — '
+        + (left > 0 ? fmtPKR(left) + ' still owed on this month' : 'this month is settled'),
+        'success', 'Payment received');
+    return;
+  }
   // pfRentAmount(): the hidden rent half of the combined Amount box.
   const monthlyRent  = pfRentAmount();
   const messIncluded = document.getElementById('f-pmess-on')?.checked !== false;
@@ -3789,9 +4393,18 @@ async function submitEditPayment(id) {
   let got = null;
   if (receive > 0) {
     got = applyPayment(p, { amount: receive, method: rcvMethod, date: rcvDate,
-                            note: 'Pending received', reference: rcvRef });
+                            note: 'Pending received', reference: rcvRef,
+                            receiptId: newReceiptId() });
     if (!p.date) p.date = rcvDate;
   }
+  /* WHO EDITED IT (owner, 2026-09-23). `collectedBy` names the account that
+     RECORDED the collection and is never rewritten; this names whoever last
+     changed the record, which is who the date cell's byline then credits.
+     Both are kept, because "who took the money" and "who last touched the
+     figure" are different questions and a register is asked both. */
+  p.editedBy     = (typeof CUR_ROLE !== 'undefined' && CUR_ROLE) || null;
+  p.editedByName = (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) || '';
+  p.editedOn     = today();
   // Editing one month's record does NOT re-price the student.
   logActivity('Payment Updated', `${p.studentName||''} — ${p.month||''}`, 'Finance');
   if (got && got.ok) logActivity('Payment Collected',
@@ -3862,10 +4475,41 @@ function showReversePaymentModal(id) {
        </div>
        ${past.length ? `<div class="pay-rev__past">Already reversed: ${
           past.map(r => fmtPKR(money(r.amount)) + ' on ' + escHtml(r.date || '—')).join(' · ')}</div>` : ''}
+       ${''/* WHICH OF THE TWO EVENTS THIS IS (owner, 2026-09-23: "there is an
+              issue with the refunded amount and reverse amount, that it still
+              goes back to the unpaid amount").
+
+              Nothing on the record can tell a mis-key apart from money handed
+              back — the reason is free text — and the two leave opposite
+              balances behind. So it is asked, once, here.
+
+              CORRECTION IS PRESELECTED because it is what this button has
+              always done: a warden who does not read this box gets exactly the
+              behaviour they had yesterday, and the consequence line below
+              spells out either choice in words before they commit. */}
+       <div class="field">
+         <label>What is this?</label>
+         <div class="pay-rev__kind">
+           <label class="pay-rev__opt">
+             <input type="radio" name="prev-kind" value="correction" checked onchange="pfReverseHint()">
+             <span class="pay-rev__opt__b">
+               <span class="pay-rev__opt__t">Correction</span>
+               <span class="pay-rev__opt__s">The money never came in — a mis-key, a double entry, the wrong month.</span>
+             </span>
+           </label>
+           <label class="pay-rev__opt">
+             <input type="radio" name="prev-kind" value="refund" onchange="pfReverseHint()">
+             <span class="pay-rev__opt__b">
+               <span class="pay-rev__opt__t">Refund</span>
+               <span class="pay-rev__opt__s">Money handed back to the student — an overcharge, a duplicate payment.</span>
+             </span>
+           </label>
+         </div>
+       </div>
        <div class="field">
          <label>Amount to reverse</label>
          <input class="form-control" id="f-prev-amt" type="number" min="1" max="${rv.max}"
-                data-collected="${collected}" value="${rv.max}" oninput="pfReverseHint()">
+                data-collected="${collected}" data-due="${due}" value="${rv.max}" oninput="pfReverseHint()">
          <div class="pay-rev__hint" id="f-prev-hint"></div>
        </div>
        <div class="field">
@@ -3902,11 +4546,29 @@ function pfReverseHint() {
   const collected = money(parseFloat(inp.dataset.collected) || max);
   if (amt <= 0)   { el.textContent = 'Enter an amount to reverse.'; el.className = 'pay-rev__hint is-red'; return; }
   if (amt > max)  { el.textContent = 'More than you can reverse here (' + fmtPKR(max) + ').'; el.className = 'pay-rev__hint is-red'; return; }
-  el.textContent = 'Leaves ' + fmtPKR(collected - amt) + ' collected on this record.';
+
+  /* AND WHAT IT LEAVES THE STUDENT OWING, which is the whole reason the choice
+     above exists. Saying it in the same breath as the amount is what stops a
+     warden discovering the difference on the register afterwards. */
+  const due  = money(parseFloat(inp.dataset.due) || 0);
+  const kind = pfReverseKind();
+  const owed = kind === 'refund' ? due : due + amt;
+  el.textContent = 'Leaves ' + fmtPKR(collected - amt) + ' collected, and '
+    + (owed > 0 ? fmtPKR(owed) + ' still owed on this month.'
+                : 'nothing owed on this month.');
   el.className = 'pay-rev__hint';
 }
 
+/** Which of the two events the form is set to. Correction unless told otherwise
+    — the same default reversePayment() applies, stated in one place. */
+function pfReverseKind() {
+  const on = document.querySelector('input[name="prev-kind"]:checked');
+  return on && on.value === 'refund' ? 'refund' : 'correction';
+}
+
 async function submitReversePayment(id) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('Reversing a collection')) return;
   if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
   const p = DB.payments.find(x => x.id === id); if (!p) return;
 
@@ -3925,7 +4587,10 @@ async function submitReversePayment(id) {
   if (!reason) { toast('Give a reason — it goes on the student ledger', 'error'); return; }
   if (pinNeeded() && !(await pinConfirm({ what: 'reversing ' + fmtPKR(amount) }))) return;   // step 10
 
-  const r = reversePayment(p, { amount, reason, date });
+  const kind = pfReverseKind();
+
+  // Money handed back is one act as well (audit G5).
+  const r = reversePayment(p, { amount, reason, date, kind, receiptId: newReceiptId() });
   if (!r.ok) {
     toast(r.reason === 'exceeds-collected'
         ? 'That is more than was collected on this record (' + fmtPKR(r.max) + ')'
@@ -3935,15 +4600,23 @@ async function submitReversePayment(id) {
 
   /* Logged like every other money action, and with the reason — a reversal with
      no stated cause is the one entry a later reader cannot make sense of. */
-  logActivity('Payment Reversed',
-    `${p.studentName || '—'} — ${p.month || '—'} · ${fmtPKR(r.reversed)} reversed`
+  /* The kind is in the activity line because it is the fact that decides
+     whether a debt exists, and "reversed" alone never said which happened. */
+  logActivity(kind === 'refund' ? 'Payment Refunded' : 'Payment Reversed',
+    `${p.studentName || '—'} — ${p.month || '—'} · ${fmtPKR(r.reversed)} `
+    + (kind === 'refund' ? 'refunded' : 'reversed')
     + (reason ? ' · ' + reason : ' · no reason given'), 'Finance');
 
   await saveDB();
   closeModal();
   renderPage(currentPage === 'payments' ? 'payments' : currentPage);
-  toast(fmtPKR(r.reversed) + ' reversed — ' + fmtPKR(money(p.amount)) + ' still collected on this record',
-        'success', 'Collection reversed');
+  /* The toast names the consequence, not just the act. A warden who picked
+     the wrong one finds out here rather than on the register. */
+  const owed = calculateOutstanding(p);
+  toast(fmtPKR(r.reversed) + (kind === 'refund' ? ' refunded — ' : ' reversed — ')
+      + (owed > 0 ? fmtPKR(owed) + ' now owed on this month'
+                  : 'nothing owed on this month'),
+        'success', kind === 'refund' ? 'Refund recorded' : 'Collection reversed');
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -4035,8 +4708,13 @@ function payRowMenu(id, btn) {
   /* Step 6 (ownership.js): everyone sees every action; the ones this account
      may not use are disabled with the reason under them. */
   const ed = ownCanEdit(p), dl = ownCanDelete(p);
+  /* The verb has to be the truth, or a warden reads 'View payment' and
+     walks away from a student who is standing there with the rent
+     (owner, 2026-09-23). */
+  const rc = typeof ownCanReceive === 'function' ? ownCanReceive(p) : { ok: false };
   const items = [
-    { label: ed.ok ? 'Edit payment' : 'View payment', svg: S.edit, on: "showEditPaymentModal('" + id + "')" },
+    { label: ed.ok ? 'Edit payment' : (rc.ok ? 'Receive payment' : 'View payment'),
+      svg: S.edit, on: "showEditPaymentModal('" + id + "')" },
     { label: 'Print receipt', svg: S.receipt, on: "printReceipt('" + id + "')" },
   ];
   if (money(p.amount) > 0) {

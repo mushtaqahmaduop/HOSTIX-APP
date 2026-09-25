@@ -46,9 +46,12 @@
     { label: 'Full Screen', acc: 'F11',   action: 'fullScreen' }
   );
 
+  /* No License Settings here (owner, 2026-09-24). Help is the one menu the
+     licence screen also shows (data-titlebar="minimal"), and that window prints
+     the licence key with a Copy button — a revoked hostel could copy its own
+     key and re-activate with it. Admins reach it from Settings → License. */
   var helpMenu = { label: 'Help', items: [
     { label: 'About Hostyllo',    action: 'about' },
-    { label: 'License Settings',  action: 'licenseSettings' },
     { label: 'Check for Updates', action: 'checkUpdates' },
     { label: 'License Info',      action: 'licenseInfo' }
   ]};
@@ -107,6 +110,15 @@
 
   document.body.insertAdjacentElement('afterbegin', bar);
   document.body.classList.add('has-titlebar');
+
+  /* The bar mounts asynchronously (it awaits api.isDev()), so it can arrive
+     AFTER a restored session has already applied this account's permissions.
+     Re-applying them here is what keeps License Settings and Import Backup out
+     of a warden's menu on that path (owner, 2026-09-23); applyPermissionsToChrome()
+     is idempotent and no-ops before anyone has signed in. */
+  if (typeof applyPermissionsToChrome === 'function') {
+    try { applyPermissionsToChrome(); } catch (e) { console.error('[titlebar perms]', e); }
+  }
   if (typeof window.setTitlebarHostel === 'function') window.setTitlebarHostel();
 
   // ── Menu open/close, and the keyboard access frame:false took away ───────
@@ -117,8 +129,14 @@
   var menuEls  = Array.prototype.slice.call(bar.querySelectorAll('.hz-menu'));
   var openMenu = null;
 
+  /* Only the items that are SHOWN. applyPermissionsToChrome() hides the
+     admin-only items (Import/Export Backup, License Settings) with
+     display:none since 2026-09-23, and focus() on a hidden button does
+     nothing — so Alt+F opened File with nothing focused, and the arrow keys
+     walked through items nobody could see. Audit, 2026-09-24. */
   function itemsOf(menuEl) {
-    return Array.prototype.slice.call(menuEl.querySelectorAll('.hz-drop button[data-action]'));
+    return Array.prototype.slice.call(menuEl.querySelectorAll('.hz-drop button[data-action]'))
+      .filter(function (b) { return b.getClientRects().length > 0; });
   }
   function btnOf(menuEl) { return menuEl.querySelector('.hz-menu-btn'); }
 
@@ -188,9 +206,17 @@
 
     // Inside the panel: the standard menu keys. Enter and Space already fire a
     // <button>'s click, which the handler below turns into the action.
-    var list = itemsOf(menuEl);
-    list.forEach(function (item, idx) {
+    //
+    // EVERY item gets the handler, and the list is read at the KEYPRESS. The
+    // bar mounts on the login screen, where the admin-only items are hidden;
+    // a list taken then either held invisible items or left the later-shown
+    // ones with no handler at all. What is shown changes at sign-in, so the
+    // walk asks what is shown now.
+    Array.prototype.slice.call(menuEl.querySelectorAll('.hz-drop button[data-action]')).forEach(function (item) {
       item.addEventListener('keydown', function (e) {
+        var list = itemsOf(menuEl);
+        var idx = list.indexOf(item);
+        if (!list.length || idx < 0) return;
         if (e.key === 'ArrowDown')       { e.preventDefault(); list[(idx + 1) % list.length].focus(); }
         else if (e.key === 'ArrowUp')    { e.preventDefault(); list[(idx - 1 + list.length) % list.length].focus(); }
         else if (e.key === 'Home')       { e.preventDefault(); list[0].focus(); }
@@ -261,15 +287,25 @@
     document.addEventListener('mousemove', function (e) {
       var shown = document.body.classList.contains('hz-tb-show');
       var h = bar.offsetHeight || 40;
-      if (e.clientY <= 4) {
+      // 2px, not 4: the bar slides down OVER the page, and at 4 it was coming
+      // down on the way to the header's own primary action rather than on the
+      // way to the window buttons (owner, 2026-09-17).
+      if (e.clientY <= 2) {
         clearTimeout(hideTimer);
         document.body.classList.add('hz-tb-show');
-      } else if (shown && e.clientY > h + 8) {
+      } else if (shown && e.clientY > h) {
+        // `h`, not `h + 8`. The 8px band below the bar used to fall through to
+        // the branch under this one, which CANCELS the hide — and the header's
+        // Add Student button sits at y 8-48, inside it. Hovering the button
+        // therefore pinned the bar open for as long as the cursor stayed
+        // there, which is what read as "it does not go back".
         clearTimeout(hideTimer);
         hideTimer = setTimeout(function () {
           if (!openMenu) document.body.classList.remove('hz-tb-show');
-        }, 300);
+        }, 120);
       } else if (shown) {
+        // Genuinely on the bar. Hiding it out from under the pointer would be
+        // worse than holding it.
         clearTimeout(hideTimer);
       }
     }, { passive: true });

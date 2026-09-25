@@ -41,7 +41,7 @@ async function launch() {
   await win.waitForSelector('#login-input', { state: 'visible', timeout: 60000 });
   await win.waitForFunction(() => typeof WARDENS !== 'undefined' && Object.keys(WARDENS).length > 0,
     null, { timeout: 60000 });
-  await win.fill('#login-user', 'warden1');
+  await win.selectOption('#login-user', 'warden1');
   await win.fill('#login-input', 'admin123');
   await win.click('#login-btn');
   await win.waitForFunction(
@@ -221,17 +221,40 @@ test('the export carries both columns, and leaves them blank rather than guessin
     const col = l => d.columns.find(c => c.label === l);
     return { labels,
              oldMethod: col('Method').value(row),
-             oldWho:    col('Paid To').value(row) };
+             oldWho:    col('Vendor').value(row),
+             oldAdded:  col('Added By').value(row),
+             // The one definition both this page and the Reports expense
+             // section now read — see expExportColumns() in expenses.js.
+             shared: typeof expExportColumns === 'function',
+             grouped: expExportColumns({ grouped: true }).find(c => c.label === 'Category').pdf };
   });
 
   expect(def.labels).toContain('Method');
-  /* "Paid To" since 2026-09-16. The column has always held `handedTo`, the
-     RECEIVER; the heading said "Added By", which names whoever entered the
-     record — a different person, and one this column has never held. The
-     export heading moved with the on-screen one. */
-  expect(def.labels).toContain('Paid To');
+  /* VENDOR AND ADDED BY ARE TWO COLUMNS, because they are two people (owner,
+     2026-09-23). `handedTo` has always held the RECEIVER: the heading said
+     "Added By" until 2026-09-16, which named whoever entered the record and
+     invited a warden to type their own name into it; it became "Paid To" then
+     and "Vendor" now — the word a ledger uses, and unambiguous beside a column
+     that really is the entering account. */
+  expect(def.labels).toContain('Vendor');
+  expect(def.labels).toContain('Added By');
+  expect(def.labels, 'the old heading came back').not.toContain('Paid To');
+
+  /* BLANK, NOT GUESSED, on a record written before either field was captured —
+     §21's dash rather than a guess at who was on shift. */
   expect(def.oldMethod).toBe('');
   expect(def.oldWho).toBe('');
+  expect(def.oldAdded).toBe('');
+
+  /* ONE DEFINITION, BOTH EXPORTS. The Reports page printed its own three-column
+     expense table — Date, Description, Amount — so the same category exported
+     from two screens gave two different documents (owner, 2026-09-23: "there
+     is also a difference between the expense page pdf and reports page expense
+     pdf"). Both read this now. */
+  expect(def.shared, 'the shared column definition is gone').toBe(true);
+  /* Grouped by category on the printed page, so the Category column would
+     repeat each table's own heading on every row. */
+  expect(def.grouped).toBe(false);
 
   await app.close();
 });

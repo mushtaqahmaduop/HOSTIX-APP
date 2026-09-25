@@ -22,8 +22,11 @@
   gap: var(--space-3); margin-bottom: var(--space-4);
 }
 /* The rooms page's card height, like every other strip (owner, 2026-09-16). */
+/* The glyph sits at the TOP of the card, not centred against it (owner,
+   2026-09-17: "move the svgs above to top left"). align-items:flex-start is
+   the whole change — the icon keeps its box, the text block keeps its stack. */
 .exp-stat {
-  display: flex; align-items: center; gap: var(--space-3); overflow: hidden;
+  display: flex; align-items: flex-start; gap: var(--space-3); overflow: hidden;
   box-sizing: border-box; min-height: 94px;
 }
 .ui-card.exp-stat { padding-top: 13px; padding-bottom: 13px; }
@@ -95,10 +98,108 @@
    today alignment across the registers. */
 .exp-table thead th:nth-child(3),
 .exp-table tbody td.exp-desc { width: 100%; }
-.exp-desc { white-space: normal; line-height: var(--leading-normal); }
+/* ── NINE COLUMNS THAT FIT THE VIEWPORT ──────────────────────────────────────
+   Owner, 2026-09-23: "resize other columns so to have full columns view on the
+   viewport".
 
-.exp-date { color: var(--text-secondary); white-space: nowrap; }
-.exp-amt  { font-weight: var(--weight-strong); white-space: nowrap; }
+   MEASURED, NOT ESTIMATED. At the 1366 floor the table wanted 1262px inside a
+   1104px wrapper — 158px of it behind a horizontal scrollbar nobody uses,
+   with Actions the column that fell off the end. Adding Receipt back would
+   have made it 1326.
+
+   EVERY COLUMN IS FIXED EXCEPT DESCRIPTION, which keeps `width:100%` and
+   absorbs whatever is left, so the table is exactly as wide as its wrapper at
+   any window size and there is nothing to scroll. The fixed eight sum to
+   ~866px, which leaves the description ~238 at 1366 and more on a bigger
+   screen — the one column that genuinely benefits from a wider window.
+
+   THE WIDTHS COME FROM WHAT EACH CELL HOLDS, at the table's own 12px:
+   a date is "17-Sept-2026"; Category and Payment method are chips with an
+   icon; Amount is "Rs. 281,300.00"; Vendor is a name; Added by is a first
+   name; Receipt is one 28px button; Actions is two.
+
+   The `max-width:30ch` cap that used to sit on the description is GONE with
+   this: a cap and `width:100%` were fighting each other — the cap won, the
+   table stopped filling its wrapper, and the slack went to whichever column
+   the browser felt like. The ellipsis on `.exp-desc__t` is what truncates now,
+   which is where truncation belonged all along. */
+.exp-table { table-layout: fixed; width: 100%; }
+/* Each width was then MEASURED against its own longest real value and raised
+   where the cell was clipping — a date and an amount are values that must
+   never shorten, and a category chip that ellipsises says the wrong category.
+   The 70px they took came out of Description, which is the one cell that reads
+   correctly truncated because it carries the hover card. */
+.exp-table thead th:nth-child(1), .exp-table tbody td:nth-child(1) { width: 128px; }
+.exp-table thead th:nth-child(2), .exp-table tbody td:nth-child(2) { width: 154px; }
+.exp-table thead th:nth-child(4), .exp-table tbody td:nth-child(4) { width: 130px; }
+.exp-table thead th:nth-child(5), .exp-table tbody td:nth-child(5) { width: 128px; }
+.exp-table thead th:nth-child(6), .exp-table tbody td:nth-child(6) { width: 150px; }
+.exp-table thead th:nth-child(7), .exp-table tbody td:nth-child(7) { width: 92px; }
+.exp-table thead th:nth-child(8), .exp-table tbody td:nth-child(8) { width: 70px; }
+/* ACTIONS HOLDS BOTH BUTTONS WHOLE (owner, 2026-09-23: "the delete button
+   should look fully in the viewport which is currently half hidden").
+
+   ARITHMETIC, not taste: `--h-sm` is 32px, two of them plus the 4px gap is 68,
+   and the cell's own 12px padding each side makes 92. The column had 84, and
+   `table-layout:fixed` with `overflow:hidden` on the cell clips rather than
+   widening — so Delete, the last thing in the row, lost its right edge. 100
+   leaves 8px of air so the two never touch the column rule.
+
+   It comes out of Description, the one cell that reads correctly truncated
+   because it carries the hover card. */
+.exp-table thead th:nth-child(9), .exp-table tbody td:nth-child(9) { width: 100px; }
+/* The vendor is the one fixed column allowed to shorten — see expWhoChip(). */
+/* `max-width:100%` is what actually lets it shrink: an inline-flex box sizes
+   to its content, so `min-width:0` alone left the chip wider than its cell and
+   the ellipsis never engaged. The avatar keeps its size; the NAME gives way. */
+.exp-who    { max-width: 100%; }
+.exp-who .ui-avatar { flex: 0 0 auto; }
+.exp-who__t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* `table-layout:fixed` clips rather than widening, so every cell that can hold
+   a long value says so with an ellipsis and carries the hover card. */
+.exp-table tbody td { overflow: hidden; }
+.exp-desc { white-space: nowrap; line-height: var(--leading-normal); }
+.exp-desc__t { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Who entered the record, beside who it was paid to. Quiet: it is an
+   attribution, not a figure. */
+.exp-by { color: var(--text-secondary); white-space: nowrap; }
+
+/* The receipt eye, now first in the Actions group rather than a column of its
+   own. Quieter than Edit at rest — it is the one action that changes nothing —
+   and it takes the accent on hover. */
+.exp-rcpt-btn { color: var(--text-tertiary); }
+.exp-rcpt-btn:hover { color: var(--accent); }
+
+/* ── HIERARCHY IN THE ROW (owner, 2026-09-23: "there is no hierarchy in
+   typography, mean the amount or any other column data should have contrast")
+   ───────────────────────────────────────────────────────────────────────────
+   Every cell was the same 12px in the same ink, so a row of nine columns had
+   no first thing to read. The reference sets one value above the rest, and on
+   an expense register that value is obvious: the AMOUNT is what the page is
+   for. Three ranks, and only three:
+
+     THE FIGURE   — amount: the card's ink at weight 600, tabular.
+     THE FACTS    — vendor, category, method: secondary ink, regular weight.
+     THE CONTEXT  — date, description, added by: tertiary.
+
+   Nothing is made bigger. The rank is carried by INK and WEIGHT, because a
+   register that fixes its row height cannot afford a second type size, and
+   because contrast is what the eye sorts by before it reads. */
+/* STATED AT (0,2,2), because the cells are <td>s and `.ui-table tbody td` in
+   components/table.css sets both `font-weight` and `color` at that weight. A
+   single-class rule here is (0,1,0) and loses silently — the amount kept
+   rendering at 400 and looked exactly like a rule that had been applied. The
+   screen file may set a cell's MEASURE and RANK; the component still owns the
+   type scale, which is why nothing here changes a size. */
+.exp-table tbody td.exp-date { color: var(--text-tertiary); white-space: nowrap; }
+.exp-table tbody td.exp-amt  {
+    font-weight: var(--weight-strong); white-space: nowrap;
+    color: var(--text-primary); font-variant-numeric: tabular-nums;
+}
+.exp-desc__t { color: var(--text-tertiary); }
+.exp-by      { color: var(--text-tertiary); }
+.exp-who__t  { color: var(--text-secondary); font-weight: var(--weight-medium); }
 .exp-dash { color: var(--text-tertiary); }
 
 .exp-who  { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; white-space: nowrap; }
@@ -172,3 +273,51 @@
   background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
 .exf-rcpt__view img { max-width: 100%; border-radius: var(--radius-sm); }
+
+/* ══ WIDTH BACK TO THE ONE COLUMN THAT READS (owner, 2026-09-23) ══════════
+   "compact the receipt column because it only shows eye icon and takes much
+   space ... compact a little added by and vendor so that the description have
+   some space and wrap to 2nd line if the description is too much large".
+
+   Four columns were sized for their HEADINGS rather than their contents:
+
+     Receipt   70 → 64   the cell holds one 32px icon button and a dash.
+     Paid via 128 → 128   renamed from "Payment method" — the heading shrank,
+                          the column could not: Bank Transfer is the widest
+                          chip and it needs every pixel of the original 128.
+     Vendor   150 → 118   a name that gives way — .exp-who__t ellipsises and
+                          the hover card carries the whole of it.
+     Added by  92 →  86   an avatar plus a first name; the name ellipsises,
+                          the avatar does not, and 86 is the two together.
+
+   EVERY ONE OF THOSE WAS MEASURED AGAINST ITS OWN LONGEST REAL VALUE, not
+   guessed. The first pass took them to 108 / 78 / 56 and clipped all three:
+   the Bank Transfer chip lost 20px, the Added by avatar 8 and the receipt
+   button 8. A clipped method chip says the wrong method, so these are floors,
+   not preferences.
+
+   That is 44px, and every pixel goes to Description, which is the only free
+   text on the row and the only cell that was losing real information.
+
+   AND IT WRAPS NOW, to two lines. Truncating at one line was right while the
+   column was 152px and there was nothing to give it; with the width it reads
+   a whole sentence, and the second line costs nothing on the rows that do not
+   need it. Past two lines it still ellipsises — a register is a list of rows,
+   not a list of paragraphs — and the hover card still has the rest. */
+.exp-table thead th:nth-child(5), .exp-table tbody td:nth-child(5) { width: 128px; }
+.exp-table thead th:nth-child(6), .exp-table tbody td:nth-child(6) { width: 118px; }
+.exp-table thead th:nth-child(7), .exp-table tbody td:nth-child(7) { width: 86px; }
+.exp-table thead th:nth-child(8), .exp-table tbody td:nth-child(8) { width: 64px; }
+/* The eye centres in its own column now that the column is the button's size. */
+.exp-table th.exp-col-rcpt, .exp-table tbody td.exp-rcptc { text-align: center; }
+
+/* TWO LINES, THEN AN ELLIPSIS. -webkit-line-clamp is the only thing that gives
+   an ellipsis at the end of the SECOND line; `overflow:hidden` alone would cut
+   mid-word with no mark that anything is missing. The row grows to fit, which
+   is why .exp-table tbody td keeps its own vertical padding rather than a
+   fixed height. */
+.exp-table tbody td.exp-desc { white-space: normal; }
+.exp-table tbody .exp-desc__t {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    white-space: normal; overflow: hidden; text-overflow: ellipsis;
+}

@@ -52,7 +52,7 @@ function launchOpts() {
 async function login(win) {
   await win.waitForSelector('#login-input', { state: 'visible', timeout: 30000 });
   await win.waitForTimeout(1500);
-  await win.fill('#login-user', 'warden1');
+  await win.selectOption('#login-user', 'warden1');
   await win.fill('#login-input', 'admin123');
   await win.press('#login-input', 'Enter');
   await win.waitForFunction(() => typeof CUR_USER !== 'undefined' && !!CUR_USER, null,
@@ -108,7 +108,10 @@ test('fund transfer hidden, expenses grouped by category, no month mixing', asyn
       labels,
       hasTransferCard: labels.some(l => /Funds ?Transfer/i.test(l)),
       // The pill must count the transfer too, since the value beside it does.
-      expPill: expCard?.querySelector('.dash-pill')?.textContent.trim(),
+      // `.ui-chip`, not `.dash-pill`: the KPI row moved onto the shared chip
+      // component in spec stage 5 (2026-09-17). What is asserted here is the
+      // COUNT, which is the same either way.
+      expPill: expCard?.querySelector('.ui-chip')?.textContent.trim(),
       expValue: expCard?.querySelector('.dash-kpi__value')?.textContent.trim(),
       // The standalone feature is gone — no way left to create a transfer
       // outside Add Expense → Fund Transfer.
@@ -179,7 +182,9 @@ test('fund transfer hidden, expenses grouped by category, no month mixing', asyn
   expect(expPage.totalShown).toBe('Rs. 16,700.00');
 
   // ── 4. Reports: no Transfers stat, expenses grouped by category ──────────
-  await win.evaluate(() => { reportPeriod = 'month'; reportDetail = null; navigate('reports'); });
+  // `reportPeriod = 'month'` stood here. A month is the only window Reports
+  // has since 2026-09-22, so there is nothing to set.
+  await win.evaluate(() => { reportDetail = null; navigate('reports'); });
   await win.waitForTimeout(1000);
   const rptStats = await win.evaluate(() => ({
     renderError: document.body.innerText.includes('Render Error'),

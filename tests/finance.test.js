@@ -45,7 +45,8 @@ const F = vm.runInContext(`({
   calculateCharges, calculateOutstanding, calculateBill,
   applyPayment, reversePayment, calculateRefund,
   calculateSettlement, calculateReportTotals,
-  refundPolicy, calculateMidMonthRefund, refundPolicyLabel
+  refundPolicy, calculateMidMonthRefund, refundPolicyLabel,
+  billSnapshot, billFreeze, billDrift, newReceiptId
 })`, sandbox);
 const { DB } = F;
 
@@ -443,6 +444,105 @@ ok('CASE reversal — the instalment trail is not rewritten', () => {
     'trail minus reversals must equal what is held');
 });
 
+/* ══ A REFUND IS NOT A CORRECTION (owner, 2026-09-23) ════════════════════
+   Every case above reverses without a kind, which is a correction — money that
+   never really arrived, so the debt re-opens. These are the other event: money
+   the hostel handed BACK, where the obligation went with it.
+
+   The owner's report was that the two were indistinguishable: "the refunded
+   amount and reverse amount, that it still goes back to the unpaid amount". */
+
+ok('CASE refund — handing money back does not re-open the debt', () => {
+  setup();
+  const p = bill();
+  F.applyPayment(p, { amount: 14500, date: '2026-08-05' });
+  const r = F.reversePayment(p, { amount: 1000, kind: 'refund',
+                                  reason: 'Overcharged mess', date: '2026-08-06' });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.kind, 'refund');
+  assert.strictEqual(p.amount, 13500, 'the money did leave');
+  assert.strictEqual(p.unpaid, 0, 'but the student does not owe it again');
+  assert.strictEqual(p.status, 'Paid');
+  assert.strictEqual(F.calculateOutstanding(p), 0);
+});
+
+ok('CASE refund — the month still bills what the hostel charged', () => {
+  setup();
+  const p = bill();
+  F.applyPayment(p, { amount: 14500, date: '2026-08-05' });
+  F.reversePayment(p, { amount: 1000, kind: 'refund', date: '2026-08-06' });
+  /* The owner's ruling: the bill does not move, so a report can say
+     "billed 14,500 · collected 14,500 · refunded 1,000" instead of quietly
+     pretending only 13,500 was ever charged. */
+  assert.strictEqual(F.calculateBill(p), 14500);
+});
+
+ok('CASE refund — a derived balance agrees with the stored one', () => {
+  setup();
+  const p = bill();
+  F.applyPayment(p, { amount: 14500, date: '2026-08-05' });
+  F.reversePayment(p, { amount: 1000, kind: 'refund', date: '2026-08-06' });
+  /* Legacy records carry no `unpaid` and outstandingOf() derives one from the
+     fields. Without refundRelief() that path re-opens the debt the stored path
+     no longer does — two answers to what is owed, which is the one thing this
+     layer exists to prevent. */
+  const derived = Object.assign({}, p); delete derived.unpaid;
+  assert.strictEqual(F.calculateOutstanding(derived), 0);
+});
+
+ok('CASE refund — the split is recorded, so it cannot be guessed at later', () => {
+  setup();
+  const p = bill();
+  F.applyPayment(p, { amount: 15000, date: '2026-08-05' });   // 500 credit
+  const r = F.reversePayment(p, { amount: 800, kind: 'refund', date: '2026-08-06' });
+  assert.strictEqual(r.fromCredit, 500);
+  assert.strictEqual(r.fromApplied, 300);
+  assert.strictEqual(p.reversals[0].kind, 'refund');
+  assert.strictEqual(p.reversals[0].fromCredit, 500);
+  assert.strictEqual(p.reversals[0].fromApplied, 300);
+  /* Only the applied part can settle a debt. The credit half never re-opened
+     anything, so relieving it too would cancel 500 the student really owes. */
+  assert.strictEqual(p.unpaid, 0);
+  assert.strictEqual(p.overpaid, 0);
+});
+
+ok('CASE refund — an unmarked reversal is still a correction', () => {
+  setup();
+  const p = bill();
+  F.applyPayment(p, { amount: 14500, date: '2026-08-05' });
+  // What every reversal already on disk looks like. Nothing may move.
+  F.reversePayment(p, { amount: 1000, date: '2026-08-06' });
+  assert.strictEqual(p.reversals[0].kind, 'correction');
+  assert.strictEqual(p.unpaid, 1000);
+  assert.strictEqual(p.status, 'Pending');
+});
+
+ok('CASE refund — a misspelt kind is a correction, not a silent refund', () => {
+  setup();
+  const p = bill();
+  F.applyPayment(p, { amount: 14500, date: '2026-08-05' });
+  F.reversePayment(p, { amount: 1000, kind: 'Refund ', date: '2026-08-06' });
+  /* Wrongly re-opening a settled month is visible on the next screen a warden
+     looks at; wrongly cancelling a real debt is not. The default fails safe. */
+  assert.strictEqual(p.reversals[0].kind, 'correction');
+  assert.strictEqual(p.unpaid, 1000);
+});
+
+ok('CASE refund — report totals name the refunds apart from the corrections', () => {
+  setup();
+  const a = bill(); F.applyPayment(a, { amount: 14500, date: '2026-08-05' });
+  F.reversePayment(a, { amount: 1000, kind: 'refund', date: '2026-08-06' });
+  const b = bill(); b.id = 'p2'; F.applyPayment(b, { amount: 14500, date: '2026-08-05' });
+  F.reversePayment(b, { amount: 1000, date: '2026-08-06' });
+  const t = F.calculateReportTotals([a, b]);
+  assert.strictEqual(t.billed, 29000, 'both months still bill what they charged');
+  assert.strictEqual(t.collected, 27000);
+  assert.strictEqual(t.reversed, 2000, 'both left the drawer');
+  assert.strictEqual(t.refunded, 1000, 'one of them was given back');
+  assert.strictEqual(t.outstanding, 1000, 'and only the correction re-opened a debt');
+  assert.strictEqual(t.safe, true);
+});
+
 ok('reverse then re-collect lands exactly where it started', () => {
   setup();
   const p = bill();
@@ -741,6 +841,179 @@ ok('an unpaid month reduces the bill but returns no cash', () => {
   const r = F.calculateMidMonthRefund(unpaid, '2026-09-10', { policy: { mode: 'both', cutoff: 0 } });
   assert.strictEqual(r.amount, 14000);   // the charge drops by this much…
   assert.strictEqual(r.cash, 0);         // …but there is no money to hand back
+});
+
+/* -- PHASE 6 . THE BILL AS IT WAS FIRST RAISED (audit G6) ----------------- */
+
+const raised = () => ({ id: 'g1', studentId: 's1', month: '2026-08', amount: 0,
+  monthlyRent: 8000, totalRent: 8000, messCharge: 6500, messIncluded: true,
+  admissionFee: 0, concession: 0, extraCharges: [], extraTotal: 0, unpaid: 14500,
+  date: '2026-08-01' });
+
+ok('the snapshot is the bill, from the one authority that prices one', () => {
+  setup();
+  const p = raised();
+  const g = F.billFreeze(p, 'monthly-generate');
+  assert.strictEqual(g.total, F.calculateBill(p));
+  assert.strictEqual(g.total, 14500);
+  assert.strictEqual(g.monthlyRent, 8000);
+  assert.strictEqual(g.messCharge, 6500);
+  assert.strictEqual(g.source, 'monthly-generate');
+  assert.strictEqual(g.at, '2026-08-01');
+});
+
+ok('it is written ONCE - a later call never rewrites it', () => {
+  setup();
+  const p = raised();
+  F.billFreeze(p, 'monthly-generate');
+  p.monthlyRent = 9000;                    // the rent is corrected afterwards
+  F.billFreeze(p, 'add-payment');          // and something calls it again
+  assert.strictEqual(p.generated.monthlyRent, 8000, 'the original figure was overwritten');
+  assert.strictEqual(p.generated.total, 14500);
+  assert.strictEqual(p.generated.source, 'monthly-generate');
+});
+
+ok('a bill that has not moved reports no drift', () => {
+  setup();
+  const p = raised();
+  F.billFreeze(p, 'monthly-generate');
+  assert.strictEqual(F.billDrift(p), null);
+});
+
+ok('drift names what changed, and by how much', () => {
+  setup();
+  const p = raised();
+  F.billFreeze(p, 'monthly-generate');
+  p.monthlyRent = 9000;
+  p.extraCharges = [{ label: 'Cooler', amount: 500 }];
+  p.extraTotal = 500;
+  const d = F.billDrift(p);
+  assert.strictEqual(d.was, 14500);
+  assert.strictEqual(d.now, 16000);
+  assert.strictEqual(d.delta, 1500);
+  // join()/JSON, not deepStrictEqual: these come from inside the vm sandbox, so
+  // their prototypes are the sandbox's and a structural compare is never equal.
+  assert.strictEqual(d.parts.map(x => x.key).sort().join(','), 'extraTotal,monthlyRent');
+  assert.strictEqual(JSON.stringify(d.parts.find(x => x.key === 'monthlyRent')),
+                     JSON.stringify({ key: 'monthlyRent', was: 8000, now: 9000 }));
+});
+
+ok('the mess switched off is drift, though messCharge never moves', () => {
+  setup();
+  const p = raised();
+  F.billFreeze(p, 'monthly-generate');
+  p.messIncluded = false;
+  const d = F.billDrift(p);
+  assert.strictEqual(d.now, 8000);
+  assert.strictEqual(d.delta, -6500);
+  assert.ok(d.parts.some(x => x.key === 'messIncluded'), 'the mess flag was not named');
+});
+
+ok('a concession granted later is drift, not a smaller original bill', () => {
+  setup();
+  const p = raised();
+  F.billFreeze(p, 'monthly-generate');
+  p.concession = 2000;
+  const d = F.billDrift(p);
+  assert.strictEqual(d.was, 14500, 'the original bill shrank with the concession');
+  assert.strictEqual(d.now, 12500);
+});
+
+ok('a record raised before this existed reports null, and nothing is invented', () => {
+  setup();
+  const legacy = raised();
+  delete legacy.generated;
+  assert.strictEqual(F.billDrift(legacy), null, 'a snapshot was invented for a legacy record');
+  assert.strictEqual(legacy.generated, undefined);
+});
+
+ok('the snapshot is not a second answer to what is owed', () => {
+  setup();
+  const p = raised();
+  F.billFreeze(p, 'monthly-generate');
+  // Both, as submitEditPayment() writes them - outstandingOf() reads totalRent.
+  p.monthlyRent = 9000; p.totalRent = 9000; p.unpaid = 15500;
+  // What the month bills NOW comes from calculateBill(), never from the
+  // snapshot - the two disagreeing is the whole point of keeping it.
+  assert.strictEqual(F.calculateBill(p), 15500);
+  assert.strictEqual(F.calculateOutstanding(p), 15500);
+  assert.strictEqual(p.generated.total, 14500);
+});
+
+ok('collecting money does not disturb the snapshot', () => {
+  setup();
+  const p = raised();
+  F.billFreeze(p, 'monthly-generate');
+  F.applyPayment(p, { amount: 5000, method: 'Cash', date: '2026-08-06' });
+  assert.strictEqual(p.generated.total, 14500);
+  assert.strictEqual(F.billDrift(p), null, 'taking money read as a change to the bill');
+});
+
+/* -- G5 . ONE HAND-OVER, ONE IDENTITY ------------------------------------- */
+
+const rec = (id, month, rent) => ({ id, studentId: 's1', month, amount: 0,
+  monthlyRent: rent, totalRent: rent, messCharge: 0, messIncluded: false,
+  admissionFee: 0, concession: 0, extraCharges: [], extraTotal: 0, unpaid: rent,
+  status: 'Pending', date: '2026-08-01', partialPayments: [] });
+
+ok('a posting id is only stamped when the caller names one', () => {
+  setup();
+  const p = rec('r1', '2026-08', 5000);
+  F.applyPayment(p, { amount: 1000, method: 'Cash', date: '2026-08-02' });
+  assert.strictEqual(p.partialPayments[0].receiptId, undefined,
+    'an id was invented for a caller that named none');
+  F.applyPayment(p, { amount: 1000, method: 'Cash', date: '2026-08-03', receiptId: 'rcp_x' });
+  assert.strictEqual(p.partialPayments[1].receiptId, 'rcp_x');
+});
+
+ok('one hand-over across two months carries one id', () => {
+  setup();
+  const july = rec('rJ', '2026-07', 5000);
+  const aug  = rec('rA', '2026-08', 5000);
+  // The shape of a real visit: the arrear, then the month on the form.
+  const id = F.newReceiptId();
+  F.applyPayment(july, { amount: 5000, method: 'Cash', date: '2026-08-05', receiptId: id });
+  F.applyPayment(aug,  { amount: 3000, method: 'Cash', date: '2026-08-05', receiptId: id });
+  assert.strictEqual(july.partialPayments[0].receiptId, id);
+  assert.strictEqual(aug.partialPayments[0].receiptId, id);
+  assert.strictEqual(july.partialPayments[0].receiptId, aug.partialPayments[0].receiptId,
+    'the two halves of one hand-over are not tied together');
+});
+
+ok('two separate visits are two postings', () => {
+  setup();
+  const p = rec('r2', '2026-08', 9000);
+  F.applyPayment(p, { amount: 2000, method: 'Cash', date: '2026-08-02', receiptId: F.newReceiptId() });
+  F.applyPayment(p, { amount: 3000, method: 'Cash', date: '2026-08-20', receiptId: F.newReceiptId() });
+  assert.notStrictEqual(p.partialPayments[0].receiptId, p.partialPayments[1].receiptId,
+    'two visits a fortnight apart were recorded as one hand-over');
+});
+
+ok('an id is unique per call', () => {
+  const seen = new Set();
+  for (let i = 0; i < 200; i++) seen.add(F.newReceiptId());
+  assert.strictEqual(seen.size, 200);
+});
+
+ok('money handed BACK belongs to a posting too', () => {
+  setup();
+  const p = rec('r3', '2026-08', 9000);
+  F.applyPayment(p, { amount: 9000, method: 'Cash', date: '2026-08-02' });
+  const r = F.reversePayment(p, { amount: 1000, reason: 'Keyed too much',
+                                  date: '2026-08-03', receiptId: 'rcp_back' });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(p.reversals[0].receiptId, 'rcp_back');
+});
+
+ok('the id never touches what is owed', () => {
+  setup();
+  const bare  = rec('r4', '2026-08', 7000);
+  const idful = rec('r5', '2026-08', 7000);
+  F.applyPayment(bare,  { amount: 2500, method: 'Cash', date: '2026-08-02' });
+  F.applyPayment(idful, { amount: 2500, method: 'Cash', date: '2026-08-02', receiptId: 'rcp_y' });
+  assert.strictEqual(bare.amount, idful.amount);
+  assert.strictEqual(bare.unpaid, idful.unpaid);
+  assert.strictEqual(F.calculateOutstanding(bare), F.calculateOutstanding(idful));
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');

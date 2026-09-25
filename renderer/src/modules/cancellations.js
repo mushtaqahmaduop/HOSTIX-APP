@@ -108,11 +108,6 @@ function _cancNextSeq() {
 
 /* Room types carry their own colour in settings — that is data, not styling, so
    the type chip uses it rather than a decorative hue. */
-function _cancTypeColor(name) {
-  const t = ((DB.settings && DB.settings.roomTypes) || []).find(x => x.name === name);
-  return t && t.color ? t.color : '';
-}
-
 function _cancInitials(name) {
   const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return '—';
@@ -232,7 +227,7 @@ function renderCancellations(filterStatus='All') {
             : '<span class="canc-dash">End of month</span>'}</td>
       <td><span class="ui-chip ${st.hue}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${st.svg}</svg>${escHtml(c.status)}</span></td>
       ${/* canc-reason keeps the reason flush left — a sentence, not a value. */''}
-      <td class="canc-reason">${c.reason?escHtml(c.reason):'<span class="canc-dash">—</span>'}</td>
+      <td class="canc-reason">${c.reason?`<span class="canc-reason__t" title="${escHtml(c.reason)}">${escHtml(c.reason)}</span>`:'<span class="canc-dash">—</span>'}</td>
       <td>
         <div class="canc-acts">
           ${_ic('', `showEditCancellationModal('${c.id}')`, 'Edit this record', P_EDIT)}
@@ -640,6 +635,8 @@ function _cancRoomNumberOf(student) {
 }
 
 async function submitEditCancellation(cancId) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('A change to a cancellation')) return;
   const c = (DB.cancellations||[]).find(x=>x.id===cancId);
   if(!c) return;
   const newStatus = document.getElementById('f-cstatus').value;
@@ -666,7 +663,8 @@ async function submitEditCancellation(cancId) {
       student.leftDate = c.vacateDate || today();
       student.lastRoom = _cancRoomNumberOf(student);
     }
-    else if(newStatus==='Restored') student.status='Active';
+    // An undone departure: the stay never ended, so its end date goes too.
+    else if(newStatus==='Restored') { student.status='Active'; student.leftDate=''; }
     else if(newStatus==='Pending') student.status='Cancelling';
   }
   await saveDB(); closeModal();
@@ -976,11 +974,9 @@ function cafCount() {
   if (box && out) out.textContent = box.value.length + '/500';
 }
 
-function prefillCancStudentInfo(studentId) {
-  selectCancStudent(studentId);
-}
-
 async function saveCancellation() {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('A cancellation')) return;
   const studentId = document.getElementById('canc-student').value;
   const vacateDate = document.getElementById('canc-vacate').value;
   const reason = document.getElementById('canc-reason').value.trim();
@@ -1018,8 +1014,31 @@ async function saveCancellation() {
   await saveDB();
   closeModal();
   toast(`${student.name} is on notice — bed held until ${vacateDate ? fmtDate(vacateDate) : 'the vacate date'}.`, 'success');
-  if(currentPage==='cancellations') renderPage('cancellations');
-  else if(currentPage==='dashboard') renderPage('dashboard');
+  /* THE PAGE THE WARDEN IS STANDING ON IS THE ONE THAT HAS TO CHANGE (owner,
+     2026-09-22: "when a student applies for cancellations, the student page
+     shows it active — it should be showing Cancelling or outgoing").
+
+     The status WAS written. `student.status = 'Cancelling'` is four lines up
+     and has always run, and every screen drawn AFTER it reads it correctly —
+     including the room's vacating count. What did not happen is the redraw:
+     this named two pages by hand, and the students register was not one of
+     them, so the row the warden had just acted on went on painting the stale
+     `Active` chip until they navigated away and back. A cancellation is
+     started from the cancellations page and the dashboard, which were named,
+     and from the students panel and the student's own modal (students.js:1297
+     and :3487), which were not — and those last two are the ones raised while
+     looking straight at the row that then failed to change.
+
+     `currentPage` is always a base page name — navigate() normalises
+     `cancellations_Pending` to `cancellations` — so re-rendering it is exactly
+     what the two branches did, for every page rather than for two of them.
+
+     THE SLIDE-OVER IS NOT INSIDE #content. showStudentPanel() appends its host
+     to document.body, so renderPage() cannot reach it and a panel left open
+     behind the modal would go on showing Active under a student who is now on
+     notice. It is redrawn by name, and only when it is open. */
+  renderPage(currentPage);
+  if (typeof stuPanelRefresh === 'function') stuPanelRefresh();
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1043,6 +1062,8 @@ async function saveCancellation() {
    cancellation itself, so the answer survives later edits to the records.
    ══════════════════════════════════════════════════════════════════════════ */
 async function confirmCancellation(cancId) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('A checkout')) return;
   const c = DB.cancellations.find(x=>x.id===cancId);
   if(!c) return;
 
@@ -1129,6 +1150,8 @@ async function confirmCancellation(cancId) {
 }
 
 async function submitCancellationSettlement(cancId) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('A checkout settlement')) return;
   const c = DB.cancellations.find(x => x.id === cancId);
   if (!c) return;
   // Step 10: collecting or handing back money at checkout is confirmed with the
@@ -1153,6 +1176,12 @@ async function submitCancellationSettlement(cancId) {
   const date   = document.getElementById('canc-set-date')?.value || c.vacateDate || today();
 
   let moved = 0;
+  /* A CHECKOUT IS ONE ACT (audit G5). Settling a leaver touches every month
+     that still owes, and refunding touches every month holding a credit — but
+     the student stands at the counter once and is handed one slip. All of it
+     carries a single posting id, so the whole settlement can be read back as
+     the one thing it was. */
+  const _rcpCheckout = newReceiptId();
   if (doIt && s.action === 'collect') {
     /* Settled month by month against the records that hold the debt, through
        applyPayment() — a lump written anywhere else would leave every month it
@@ -1161,7 +1190,8 @@ async function submitCancellationSettlement(cancId) {
       if (l.outstanding <= 0) return;
       const p = DB.payments.find(x => x.id === l.paymentId);
       if (!p) return;
-      const r = applyPayment(p, { amount: l.outstanding, method, date, note: 'Checkout settlement' });
+      const r = applyPayment(p, { amount: l.outstanding, method, date,
+                                  note: 'Checkout settlement', receiptId: _rcpCheckout });
       if (r.ok) moved += r.applied;
     });
     if (moved > 0) logActivity('Payment Collected',
@@ -1174,7 +1204,8 @@ async function submitCancellationSettlement(cancId) {
       if (l.credit <= 0) return;
       const p = DB.payments.find(x => x.id === l.paymentId);
       if (!p) return;
-      const r = reversePayment(p, { amount: l.credit, method, date, reason: 'Refunded at checkout' });
+      const r = reversePayment(p, { amount: l.credit, method, date,
+                                    reason: 'Refunded at checkout', receiptId: _rcpCheckout });
       if (r.ok) moved += r.reversed;
     });
     if (moved > 0) logActivity('Payment Reversed',
@@ -1228,7 +1259,8 @@ async function restoreFromCancellation(cancId) {
   showConfirm('Restore Student', `Restore ${escHtml(c.studentName)} to Active? Their seat will be re-occupied.`, (async ()=>{
     c.status = 'Restored';
     const student = DB.students.find(s=>s.id===c.studentId);
-    if(student){ student.status='Active'; }
+    // An undone departure: the stay never ended, so its end date goes too.
+    if(student){ student.status='Active'; student.leftDate=''; }
     await saveDB();
     toast(`${c.studentName} restored to Active. Seat is re-occupied.`, 'success');
     renderPage('cancellations');
@@ -1397,8 +1429,6 @@ function exportCancellationsExcel() {
 }
 
 /* The name the toolbar button has always called. */
-function downloadCancellationReport() { exportCancellationsPDF(); }
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 /* ── WHAT THE CHECKOUT DID WITH THE MONEY ───────────────────────────────────

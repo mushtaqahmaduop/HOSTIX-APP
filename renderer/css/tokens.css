@@ -44,6 +44,17 @@
   /* ---- Type ------------------------------------------------ */
   --font: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  /* SERIF FOR VOICE, SANS FOR CHROME — the teardown's defining split, taken
+     for DISPLAY ONLY (owner, 2026-09-17). Its own move is body copy in a serif
+     at 20px; this app's registers carry eleven columns at a 1366 floor, where
+     20px serif rows would cost roughly half the visible rows. So the serif
+     gets the page title, card and section titles, modal titles and the login
+     and sidebar hostel name — the places with room for a voice — and the sans
+     keeps every table, form, toolbar and figure.
+     Georgia, because `font-src 'self' data:` means a webfont can never be
+     fetched and Georgia is the one serif Settings already measured as present
+     on Windows (hiFontAvailable(), 2026-09-08). */
+  --font-display: Georgia, 'Times New Roman', 'Nimbus Roman', serif;
 
   /* Six steps. A seventh means the layout is wrong, not the scale. */
   --text-xs:   11px;  /* micro labels, badge counts — floor, never go below */
@@ -90,9 +101,14 @@
   --shadow-toast: 0 8px 24px rgba(15, 23, 42, 0.14);
 
   /* ---- Motion ---------------------------------------------- */
-  --dur-fast:  150ms;   /* hover, focus, colour, small state change */
-  --dur-panel: 250ms;   /* modal, drawer, panel entry */
-  --ease: cubic-bezier(0.2, 0, 0, 1);
+  /* Three tiers, from the teardown. Motion here is restrained to the point of
+     being nearly invisible: a colour or opacity change, never a lift, never a
+     scale, never a shadow. */
+  --dur-fast:  120ms;   /* colour swap, focus ring */
+  --dur-base:  180ms;   /* hover fill, border change */
+  --dur-panel: 280ms;   /* modal, drawer, theme cross-fade */
+  --ease:       cubic-bezier(.22, .61, .36, 1);  /* ease-out — the default */
+  --ease-inout: cubic-bezier(.4, 0, .2, 1);      /* theme switch, disclosure */
 
   /* ---- z-index — six layers, nothing between --------------- */
   --z-sticky:  10;   /* sticky table headers, sticky toolbars */
@@ -109,28 +125,82 @@
 body.light-theme {
   color-scheme: light;
 
-  --surface-page:   #F5F6F9;
-  --surface-1:      #FFFFFF;   /* cards, panels, table body */
-  --surface-2:      #FAFBFD;   /* sunken, table header, striped rows */
-  --surface-hover:  #F2F4F8;
+  /* WARM, NEVER COOL, NEVER PURE WHITE (owner, 2026-09-17, from the Anthropic
+     teardown). PARTLY AMENDED 2026-09-21 — the two FILL rungs are neutral grey
+     now, the paper rungs are still ivory; the note below says why. The rest of
+     this paragraph still governs, and NEVER PURE WHITE is untouched.
 
-  --border:         #E4E7EE;
-  --border-strong:  #D3D8E2;
+     Four flat rungs a few percent apart: depth is read from
+     the tone step plus a 1px hairline, which is what this system uses instead
+     of a shadow or a gradient. Measured span 10.1 L*, so CLAUDE.md rule 6
+     (>8 points) holds on the light side too. (Was 10.5 while all four rungs
+     were ivory; see the grey note below.)
+        canvas -> card -> sunken -> hover fill */
 
-  --text-primary:   #17233A;
-  --text-secondary: #4A5568;   /* was #677187 — failed AA on every tint */
-  --text-tertiary:  #5B647A;   /* on --surface-1 only */
+  /* THE FILLS ARE NEUTRAL GREY, THE PAPER STAYS IVORY (owner, 2026-09-21).
+     The two rungs the ground DRAWS ON — the sunken/header fill and the hover
+     fill — are pure neutrals now; canvas and card keep the warm ivory. The
+     oat hover was the warm note in the system: its channel spread was 23,
+     more than double any other rung (page 10, sunken 13, card 5), which is
+     why it, not the canvas, was what read as beige.
+
+     Both are LIGHTNESS-MATCHED to the ivory they replace, within 0.4 L* —
+     a hue change, not a contrast change, so nothing that depended on surface
+     separation regresses. Every ink pair holds or improves, and the tightest
+     one (--text-tertiary on the hover fill, tuned to exactly 5.00 on oat)
+     comes out at 5.04. Span is 10.1 L*, so CLAUDE.md rule 6 (>8) still holds.
+
+     Both changed together on purpose: --surface-2 is the table header and
+     --surface-hover is the row hover directly beneath it. A warm header over
+     a neutral hover reads as a mistake, so one without the other is worse
+     than neither. #F5F5F5 was the reference grey; it measures L* 96.5, which
+     leaves the sunken rung 1.4 points off the card and stops it reading as
+     sunken at all. #F0F0F0 keeps the step the ivory had. */
+  --surface-page:   #F0EEE6;   /* canvas — ivory */
+  --surface-1:      #FAF9F5;   /* cards, panels, table body — ivory, not #FFF */
+  --surface-2:      #F0F0F0;   /* sunken, table header, striped rows — grey */
+  --surface-hover:  #DCDCDC;   /* row hover, grouped fills — grey */
+
+  --border:         #E6DFD8;   /* hairline */
+  --border-strong:  #CCCBC8;   /* stone — section rules */
+
+  --text-primary:   #141413;   /* ink. Not pure black, on purpose */
+  --text-secondary: #3D3D3A;
+  /* #6C6A64 is the teardown's muted and it measures 3.91 on the oat hover
+     fill — under AA. Stepped down until it clears every rung: 5.00 on oat,
+     6.56 on a card. */
+  --text-tertiary:  #5C5A51;
 
   --accent:         #2451D6;
   --accent-hover:   #1B3FAE;
-  --accent-bg:      #EAF0FE;
+  --accent-bg:      #E7EDFA;
   --accent-fg:      #1B3FAE;   /* accent text on --accent-bg */
-  --on-accent:      #FFFFFF;
+  --on-accent:      #FAF9F5;   /* ivory, not #FFF — the paper metaphor holds */
 
-  --success-bg: #E3F2E9;  --success-fg: #14663F;
-  --warning-bg: #FBF0DC;  --warning-fg: #7A5309;
-  --danger-bg:  #FBEAE7;  --danger-fg:  #9E2F20;
-  --neutral-bg: #EDEFF3;  --neutral-fg: #4A5568;
+  /* The tints are warmed onto the ivory ground; the inks are unchanged, so
+     every pair keeps the contrast it was measured at (5.8-9.1 on its own
+     tint). Dark mode's are rgba overlays and composite themselves. */
+  --success-bg: #E4EFE0;  --success-fg: #14663F;
+  --warning-bg: #F7EBD4;  --warning-fg: #7A5309;
+  --danger-bg:  #F7E5DE;  --danger-fg:  #9E2F20;
+  --neutral-bg: #EFEAE1;  --neutral-fg: #3D3D3A;
+
+  /* ── THE SOLIDS: A ROLE'S COLOUR AS A FILL, NOT AS INK ────────────────────
+     Owner, 2026-09-23. `--warning-fg` is #7A5309 here — an ink, chosen to
+     clear contrast as TEXT on `--warning-bg`. Painted as an area it reads as
+     dark olive, which is what the Reports expense bars looked like and why
+     they did not match the design's gold.
+
+     A solid is the same role at the weight a FILL wants: saturated enough to
+     name the role at a glance, dark enough to carry white on it, and the same
+     hue in both themes so a chart does not change meaning when the lights go
+     out. They are for areas a reader looks AT — a bar, an arc, a chart series
+     — never for text, which keeps using the `-fg` ink it was measured on.
+
+     Only warning has one today, because only warning was wrong. The other
+     three roles' inks already sit at fill weight; add a solid here when one
+     of them is measured to need it, not before. */
+  --warning-solid: #D9931F;
 
   /* Addition 1 — the spec's light shadows, restated so the dark block below
      cannot leak into light mode. */
@@ -145,28 +215,37 @@ body.light-theme {
 :root {
   color-scheme: dark;
 
-  --surface-page:   #0F1115;
-  --surface-1:      #171A1F;
-  --surface-2:      #1E2228;
-  --surface-hover:  #232830;
+  /* The warm ground, restored. This ladder is what tokens.css carried before
+     the 2026-09-16 spec turned it cool, and the file's own note at the time
+     recorded why it went warm: a neutral grey went muddy against the chrome.
+     Span 10.4 L*, clearing rule 6. Never pure black. */
+  --surface-page:   #181715;
+  --surface-1:      #1F1E1B;
+  --surface-2:      #252320;
+  --surface-hover:  #2F2C28;
 
-  --border:         #2A2F37;
-  --border-strong:  #3A404A;
+  --border:         #35322D;
+  --border-strong:  #4A463F;
 
-  --text-primary:   #E6E8EB;
-  --text-secondary: #A2AAB6;
-  --text-tertiary:  #7C8593;
+  --text-primary:   #FAF9F5;
+  --text-secondary: #D8D5CD;
+  --text-tertiary:  #A09D96;
 
   --accent:         #7BA0FF;
   --accent-hover:   #9DB8FF;
   --accent-bg:      rgba(123, 160, 255, 0.16);
   --accent-fg:      #9DB8FF;
-  --on-accent:      #0F1115;
+  --on-accent:      #181715;
 
   --success-bg: rgba(95, 215, 155, 0.16);  --success-fg: #5FD79B;
   --warning-bg: rgba(232, 184, 75, 0.16);  --warning-fg: #E8B84B;
   --danger-bg:  rgba(240, 138, 122, 0.16); --danger-fg:  #F08A7A;
   --neutral-bg: rgba(162, 170, 182, 0.14); --neutral-fg: #A2AAB6;
+
+  /* The fill weight of the warning role — see the light block for what a
+     solid is for. Lifted off the dark ground rather than reusing light's
+     #D9931F, which goes muddy against #1A1917; the hue is the same. */
+  --warning-solid: #E8A93B;
 
   --shadow-menu:  0 4px 12px rgba(0, 0, 0, 0.40);
   --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.55);
@@ -181,7 +260,6 @@ option {
   color: var(--text-primary);
 }
 
-
 /* ════════════════════════════════════════════════════════════════════════════
    LEGACY BRIDGE — delete after the last screen is rebuilt (spec Part 6)
 
@@ -195,7 +273,6 @@ option {
    rebuilt. */
 :root {
   --font-sans:       var(--font);
-  --font-display:    var(--font);          /* Outfit is deleted (spec Part 6) */
   --ant-num-font:    var(--font);          /* Inter carries tabular figures */
   --ant-num-track:   0;
   --ant-unit-track:  0.1em;
@@ -413,15 +490,13 @@ body.light-theme {
   --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.4);
 
-  --kpi-1a: #3F7FE8;  --kpi-1b: #2B55B8;   /* Total Revenue    */
-  --kpi-2a: #C07D14;  --kpi-2b: #8A540B;   /* Pending          */
-  --kpi-3a: #1E9350;  --kpi-3b: #15703A;   /* Available Fund   */
-  --kpi-4a: #D2591A;  --kpi-4b: #A63F0D;   /* Expenses         */
-  --kpi-5a: #7048D2;  --kpi-5b: #522BA0;   /* Advance/Arrears  */
-  --kpi-loss-a: #D8443C; --kpi-loss-b: #A5211E;  /* Fund, negative */
 }
 body.light-theme {
-  --teal:           #0E7D87;
+  /* #0E7D87 -> #09636B (2026-09-17). The warm canvas is a shade darker than
+     the cool one it replaced (#F0EEE6 against #F5F6F9), which took the old
+     teal to 4.20:1 there — under AA, and theme-parity caught it. This clears
+     every rung including the oat hover fill at 5.04. */
+  --teal:           #09636B;
   --teal-dim:       rgba(14, 125, 135, 0.08);
   --purple:         #5B4BC4;
   --purple-dim:     rgba(91, 75, 196, 0.09);
@@ -435,10 +510,4 @@ body.light-theme {
   --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
 
-  --kpi-1a: #3B82F6;  --kpi-1b: #1D4ED8;
-  --kpi-2a: #D97706;  --kpi-2b: #92400E;
-  --kpi-3a: #16A34A;  --kpi-3b: #15803D;
-  --kpi-4a: #EA580C;  --kpi-4b: #C2410C;
-  --kpi-5a: #7C3AED;  --kpi-5b: #5B21B6;
-  --kpi-loss-a: #EF4444; --kpi-loss-b: #B91C1C;
 }

@@ -32,6 +32,12 @@ const Database = require('better-sqlite3');
 const migration001 = require('./migrations/001-relational-schema');
 // The append-only student ledger (warden ledger spec §2.1) and its guards.
 const ledgerStore = require('./migrations/002-student-ledger');
+const migration003 = require('./migrations/003-issues-merge');
+
+/* The newest schema this build understands. It is 003's, not 001's: the
+   downgrade guard below compares against it, and a guard that still named 001
+   would wave through a v2 file this build could only half-read. */
+const SUPPORTED_SCHEMA = migration003.SCHEMA_VERSION;
 let db = null;
 // The live database file. Held at module scope because the restore path needs
 // to snapshot it before it mutates it, and initDatabase() is long finished by
@@ -45,7 +51,7 @@ let dbPath = null;
    silently dropped by the next restore, which is the kind of data loss nobody
    notices until they need the data. */
 const BACKUP_TABLES = ['rooms','students','payments','expenses','cancellations',
-  'maintenance','complaints','checkinlog','notices','fines',
+  'maintenance','complaints','issues','checkinlog','notices','fines',
   'activitylog','inspections','billsplits','transfers','archive'];
 
 /* THE HANDOVER TABLES (warden ledger spec §2.2–2.3, step 4). Backed up and
@@ -211,7 +217,7 @@ const appLogger = require('./services/logger');
 const enforcement = require('./services/enforcement');
 /* Shown to a customer who cannot use the app, so it must be somewhere they can
    actually reach. Matches the SUPPORT constant on the activation screen. */
-const SUPPORT_CONTACT = 'mushtaqahmadicp@gmail.com';
+const SUPPORT_CONTACT = 'hostyllo.info@gmail.com';
 let online = null;
 
 // Insert/replace a row, populating the promoted typed columns for the tables that
@@ -287,13 +293,13 @@ function initDatabase() {
        it is the app that is behind — so nothing is migrated, renamed or
        touched. */
     const found = _readSchemaVersion(handle);
-    if (found > migration001.SCHEMA_VERSION) {
+    if (found > SUPPORTED_SCHEMA) {
       try { handle.close(); } catch (_) {}
       db = null;
       _setDbHealth('UNSUPPORTED_SCHEMA',
         'This data was created by a newer version of Hostyllo (database format v' +
-        found + '; this version understands up to v' + migration001.SCHEMA_VERSION + ').',
-        'schema v' + found + ' > supported v' + migration001.SCHEMA_VERSION);
+        found + '; this version understands up to v' + SUPPORTED_SCHEMA + ').',
+        'schema v' + found + ' > supported v' + SUPPORTED_SCHEMA);
       return null;
     }
   }
@@ -325,6 +331,12 @@ function initDatabase() {
     CREATE TABLE IF NOT EXISTS cancellations (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS maintenance   (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS complaints    (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    /* One register (owner, 2026-09-21). The maintenance and complaints tables
+       above are kept and still created: migration 003 COPIES out of them rather
+       than moving, so they are the rollback path for one release, and a restore
+       of a backup taken before the merge still has somewhere to land.
+       (No backticks in here - this whole block is a template literal.) */
+    CREATE TABLE IF NOT EXISTS issues        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS checkinlog    (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS notices       (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS fines         (id TEXT PRIMARY KEY, data TEXT NOT NULL);
@@ -359,6 +371,28 @@ function initDatabase() {
     }
     const migRes = migration001.migrateDatabase(db);
     if (migRes.migrated) console.log('[HOSTYLLO] Schema migrated to v' + migRes.version);
+
+    /* ── 003 — maintenance + complaints become one `issues` table ──────────
+       Its own snapshot, and its own name. pre-v1.bak is written once, before
+       the FIRST migration this database ever saw; a hostel that has been on v1
+       for months has one that predates everything since, so it is not the file
+       anyone would want back after v2. A version gets the backup taken on its
+       own doorstep or it effectively has none.
+
+       Same `dbExisted` guard: a database this launch created is empty, and a
+       snapshot of nothing is noise in the customer's folder. */
+    if (dbExisted && migration003.currentVersion(db) < migration003.SCHEMA_VERSION) {
+      const bak2 = dbPath + '.pre-v2.bak';
+      if (!fs.existsSync(bak2)) {
+        db.exec(`VACUUM INTO '${bak2.replace(/'/g, "''")}'`);
+        console.log('[HOSTYLLO] Pre-migration backup written:', bak2);
+      }
+    }
+    const migRes3 = migration003.migrateDatabase(db);
+    if (migRes3.migrated) {
+      console.log('[HOSTYLLO] Schema migrated to v' + migRes3.version +
+                  ' (' + migRes3.copied + ' issues merged)');
+    }
   } catch (e) {
     console.error('[HOSTYLLO] Schema migration failed (continuing on existing schema):', e.message);
   }
@@ -673,7 +707,7 @@ function decryptLicense(encStr, machineId) {
 }
 
 // ── Key Validation ────────────────────────────────────────────────────────────
-const { validateKeyFormat, validateKeyChecksum, licenseKeyExpiry } = require('./renderer/src/utils');
+const { validateKeyFormat, validateKeyChecksum, resolveKeyVersion, licenseKeyExpiry } = require('./renderer/src/utils');
 
 function _validateKeyFormat(key) {
   return validateKeyFormat(key);
@@ -855,11 +889,62 @@ function refreshEnforcement() {
       if (!win.isDestroyed()) win.webContents.send('license:enforcementChanged', decision);
     }
   } catch (_) {}
+  try { _applyLockToWindow(decision); } catch (e) { console.error('[HOSTYLLO] lock apply failed:', e.message); }
   return decision;
 }
 
+/* A LOCK APPLIED FROM THE PORTAL TAKES THE SCREEN NOW, AND LIFTS NOW.
+ *
+ * Owner, 2026-09-24: "if the admin locks, it should lock instantly — and
+ * unlock again". The write gate already refused saves the moment a decision
+ * changed, but the warden kept looking at a working-looking app until they
+ * restarted it. So a blocking decision swaps the main window to the licence
+ * screen immediately, and a decision that lifts it brings the app straight
+ * back — but ONLY for a lock this function put there (`locked=1`), never for a
+ * licence screen the customer is on because they have not activated yet. */
+function _applyLockToWindow(decision) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  let url = '';
+  try { url = mainWindow.webContents.getURL() || ''; } catch (_) { return; }
+  const onApp = /\/renderer\/index\.html/.test(url);
+  const onLicence = /\/renderer\/license\.html/.test(url);
+  const byLock = /[?&]locked=1\b/.test(url);
+  const lockable = decision.state === enforcement.STATE.SUSPENDED || decision.state === enforcement.STATE.REVOKED;
+
+  if (decision.blocked && lockable && onApp) {
+    if (_settingsWin && !_settingsWin.isDestroyed()) _settingsWin.close();
+    mainWindow.loadFile(path.join(__dirname, 'renderer', 'license.html'), {
+      query: _lockQuery(decision)
+    });
+  } else if (!decision.blocked && onLicence && byLock) {
+    mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  }
+}
+
+/** The licence-screen query for a lock: what happened, in the owner's words. */
+function _lockQuery(decision) {
+  const revoked = decision.state === enforcement.STATE.REVOKED;
+  return {
+    reason: revoked ? 'revoked' : 'suspended',
+    message: (decision.banner && decision.banner.text) || (revoked
+      ? 'This licence has been revoked. Contact ' + SUPPORT_CONTACT + '.'
+      : 'This licence has been suspended. Contact ' + SUPPORT_CONTACT + '.'),
+    locked: '1'
+  };
+}
+
+/* THE OUTPUT GATE — printing and exporting, the way _assertWritable gates saves.
+ * In the main process because the renderer is the untrusted side. Returns the
+ * refusal text, or null when the output is allowed. */
+function _outputRefused(kind) {
+  const decision = currentEnforcement();
+  if (!enforcement.outputBlocked(decision, kind)) return null;
+  if (decision.blocked) return 'This licence is locked. Contact ' + SUPPORT_CONTACT + '.';
+  return enforcement.outputRefusal(decision, kind);
+}
+
 // ── Activate License ──────────────────────────────────────────────────────────
-function activateLicense(key) {
+async function activateLicense(key) {
   const k = key.toUpperCase().trim();
   if (!_validateKeyFormat(k))
     return { success: false, reason: 'Invalid key format. Expected: HOSTEL-XXXX-XXXX-XXXX-XXXX' };
@@ -870,6 +955,23 @@ function activateLicense(key) {
     const expStr = expiry.toLocaleDateString('en-PK', { day: '2-digit', month: 'long', year: 'numeric' });
     return { success: false, reason: `This key expired on ${expStr}. Contact support for a new key.` };
   }
+  /* A REVOKED LICENCE CANNOT BE RE-ACTIVATED WITH ITS OWN KEY.
+
+     license:loadApp would keep the app locked anyway, but only after telling
+     the customer "License activated successfully!" and bouncing them back.
+     Say the true thing instead. A DIFFERENT key is still accepted — that is
+     how a hostel is legitimately re-issued; the entitlement stays bound to the
+     machine, so loadApp keeps it locked until the next sync brings a verdict
+     for the new licence. */
+  const _before = currentEnforcement(true);
+  if (_before.state === enforcement.STATE.REVOKED || _before.state === enforcement.STATE.SUSPENDED) {
+    const cur = safe(() => _licenceSnapshot(), null);
+    if (cur && cur.key && cur.key.toUpperCase() === k) {
+      return { success: false, reason: (_before.banner && _before.banner.text)
+        || 'This licence is locked. Contact ' + SUPPORT_CONTACT + '.' };
+    }
+  }
+
   /* NEVER SEAL A LICENCE AGAINST A FINGERPRINT THIS MACHINE CANNOT REPRODUCE.
 
      The licence is AES-encrypted with a key derived from the machine id, and
@@ -905,6 +1007,19 @@ function activateLicense(key) {
     + 'license was NOT activated - activating now would stop the app '
     + 'opening later. Please close the app, wait a few seconds, open it '
     + 'again and enter the key. If it keeps failing, contact support.' };
+  }
+
+  /* A v5 KEY IS ACTIVATED ONLINE, ONCE — AND THAT IS WHAT BINDS IT TO ONE PC.
+   *
+   * Owner's decision D3 (2026-09-24). A v4 key's checksum secret ships inside
+   * the app, so any PC that never goes online accepts it. A v5 key is checked
+   * with the control plane BEFORE the licence file is written: the server
+   * holds it to one PC, refuses a key it never issued, and says whether the
+   * licence is locked. Only the FIRST activation needs internet; afterwards
+   * the app runs offline exactly as before. v3 and v4 keys are untouched. */
+  if (resolveKeyVersion(k, _SECRET) === 5) {
+    const refused = await _registerOnline(k);
+    if (refused) return { success: false, reason: refused };
   }
 
   try {
@@ -953,6 +1068,34 @@ function activateLicense(key) {
   }
 }
 
+/**
+ * Register a v5 key with the control plane before activating it. Returns the
+ * refusal to show the customer, or null when the key may be activated.
+ */
+async function _registerOnline(k) {
+  const needNet = 'This licence key must be activated online the first time. '
+    + 'Connect this PC to the internet and try again — after that, Hostyllo works offline.';
+  const device = online && online.device;
+  const configured = !!(online && online.config && online.config.isConfigured());
+  if (!device || !configured) return needNet;
+
+  const res = await device.registerKey(k);
+  if (res.ok) {
+    if (res.effectiveStatus === 'REVOKED') return 'This licence has been revoked. Contact ' + SUPPORT_CONTACT + '.';
+    if (res.effectiveStatus === 'SUSPENDED') return 'This licence is suspended. Contact ' + SUPPORT_CONTACT + '.';
+    return null;
+  }
+  if (res.status === 409 || res.code === 'DEVICE_LIMIT_REACHED') {
+    return 'This licence key is already activated on another computer. '
+      + 'Contact ' + SUPPORT_CONTACT + ' to move it to this one.';
+  }
+  if (res.code === 'KEY_NOT_ISSUED') return 'This licence key was not issued by Hostyllo. Check it and try again.';
+  if (res.code === 'INVALID_KEY' || res.code === 'INVALID_KEY_FORMAT') return 'Invalid license key. Check the key and try again.';
+  if (res.code === 'MACHINE_ID_UNAVAILABLE') return res.message || 'This computer could not be identified. Contact support.';
+  if (res.status === 429) return 'Too many activation attempts. Wait a few minutes and try again.';
+  return needNet;
+}
+
 function deactivateLicense() {
   try {
     if (fs.existsSync(LICENSE_PATH))  fs.unlinkSync(LICENSE_PATH);
@@ -970,6 +1113,10 @@ function deactivateLicense() {
 let _settingsWin = null;
 function openLicenseSettings() {
   if (!mainWindow) return;
+  // Never while the app is locked. The window shows the licence key with a
+  // Copy button, and a revoked hostel pasting its own key back into
+  // activation is exactly the bypass license:loadApp now refuses.
+  if (currentEnforcement(true).blocked) return;
   // Reuse existing window if already open
   if (_settingsWin && !_settingsWin.isDestroyed()) {
     _settingsWin.focus();
@@ -1005,6 +1152,8 @@ function openLicenseSettings() {
 // bar (IPC → titlebar:menu) run one implementation, never two that can drift.
 async function doExportBackup() {
   if (!mainWindow) return;
+  const refused = _outputRefused('exporting');
+  if (refused) { dialog.showErrorBox('Export not available', refused); return; }
   const { filePath } = await dialog.showSaveDialog(mainWindow, {
     title: 'Export Backup',
     defaultPath: `Hostyllo_Backup_${_ymdLocal()}.json`,
@@ -1015,6 +1164,15 @@ async function doExportBackup() {
 
 async function doImportBackup() {
   if (!mainWindow) return;
+  // Import is a write. The DB gate refuses it anyway; saying so here spares a
+  // locked or read-only hostel a file picker that can only end in an error.
+  const dec = currentEnforcement();
+  if (dec.blocked || dec.readOnly) {
+    dialog.showErrorBox('Import not available', dec.blocked
+      ? 'This licence is locked. Contact ' + SUPPORT_CONTACT + '.'
+      : 'Data entry is switched off for this licence, so a backup cannot be restored.');
+    return;
+  }
   const { filePaths } = await dialog.showOpenDialog(mainWindow, {
     title: 'Import Backup',
     filters: [{ name: 'JSON Backup', extensions: ['json'] }],
@@ -1149,7 +1307,9 @@ const TITLEBAR_ACTIONS = {
   importBackup:  doImportBackup,
   quit:          () => app.quit(),
   about:         doAbout,
-  licenseSettings: () => openLicenseSettings(),
+  // No licenseSettings: Help no longer offers it (see titlebar.js), and an
+  // action left in this table could still be sent over IPC from the licence
+  // screen. Settings → License reaches it through license:openSettings.
   checkUpdates:  doCheckUpdates,
   licenseInfo:   doLicenseInfo,
   resetZoom:     () => doZoom(0),
@@ -1215,6 +1375,34 @@ function createWindow() {
     show: false
   });
 
+  /* ══ A DOWNLOAD ALWAYS ASKS WHERE TO PUT IT (owner, 2026-09-23) ═══════════
+     The Excel export is written in the renderer and handed over as an <a
+     download> — the one path in this app that produces a file without going
+     through dialog.showSaveDialog() first. What Chromium then does with it is a
+     default, not a decision: depending on the build it either asks or drops the
+     workbook into the user's Downloads folder with no dialog at all, which is
+     the half of "not the pre filled save option" that is about Excel.
+
+     This makes it explicit. Every download this app starts shows a Save dialog
+     with the filename the exporter already chose, and lands where the user
+     says. Cancelling is a cancel: nothing is written and nothing is reported.
+
+     It hangs off the SESSION rather than the window so it covers the report
+     window too, and the filter is built from the extension the exporter chose —
+     an .xlsx offers Excel files, a .pdf offers PDFs. */
+  mainWindow.webContents.session.on('will-download', (_evt, item) => {
+    const name = item.getFilename() || 'download';
+    const ext  = (name.split('.').pop() || '').toLowerCase();
+    const NAMED = { xlsx: 'Excel Workbook', pdf: 'PDF File', csv: 'CSV File', json: 'JSON Backup' };
+    item.setSaveDialogOptions({
+      title: 'Save ' + (NAMED[ext] || 'file'),
+      defaultPath: name,
+      filters: NAMED[ext]
+        ? [{ name: NAMED[ext], extensions: [ext] }, { name: 'All Files', extensions: ['*'] }]
+        : [{ name: 'All Files', extensions: ['*'] }],
+    });
+  });
+
   // Tell the custom title bar when to swap its maximize/restore glyph.
   const _sendMaxState = () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1240,9 +1428,26 @@ function createWindow() {
   // this only decides which page loads.
   if (!decision.blocked) {
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  } else if (lic.valid && (decision.state === enforcement.STATE.SUSPENDED
+                           || decision.state === enforcement.STATE.REVOKED)) {
+    // Locked from the portal: the owner's reason, and locked=1 so an unlock
+    // returns the hostel to the app without a restart.
+    mainWindow.loadFile(path.join(__dirname, 'renderer', 'license.html'), { query: _lockQuery(decision) });
   } else {
+    /* The STATE is the fallback, not 'blocked' (owner, 2026-09-20). A licence
+       suspended by the control plane has no `lic.reason` — the file itself is
+       fine — so without this the screen fell through to the generic "License
+       verification failed", which tells a suspended customer nothing about why
+       or who to call. */
+    /* `locked` is set only for the two states the control plane chooses —
+       so lifting one brings the app back without a restart, while a machine
+       that has simply never been activated stays on this screen where it
+       belongs. See _applyLockToWindow(). */
+    const _byOwner = decision.state === 'SUSPENDED' || decision.state === 'REVOKED';
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'license.html'), {
-      query: { reason: lic.reason || decision.reason, message: lic.message }
+      query: { reason: lic.reason || decision.reason || decision.state || 'blocked',
+               message: lic.message || (decision.banner && decision.banner.text) || '',
+               ...(_byOwner ? { locked: '1' } : {}) }
     });
   }
 
@@ -1297,7 +1502,6 @@ function createWindow() {
       label: 'Help',
       submenu: [
         { label: 'About Hostyllo', click: doAbout },
-        { label: 'License Settings', click: () => openLicenseSettings() },
         { label: 'Check for Updates', click: doCheckUpdates },
         { label: 'License Info', click: doLicenseInfo }
       ]
@@ -1373,7 +1577,7 @@ ipcMain.handle('license:activate', (_e, key) => {
   if (typeof key !== 'string' || key.length > 50) {
     return { success: false, reason: 'Invalid key format.' };
   }
-  return activateLicense(key);
+  return activateLicense(key);   // a promise now — v5 keys go online first
 });
 
 ipcMain.handle('license:deactivate', () => deactivateLicense());
@@ -1477,14 +1681,29 @@ ipcMain.handle('license:openSettings', () => openLicenseSettings());
 ipcMain.handle('license:machineId', () => getMachineId());
 ipcMain.handle('app:version', () => app.getVersion());
 
+/* THE SECOND DOOR ASKS THE SAME QUESTION AS THE FIRST.
+
+   license.html calls this after a successful activation. It used to check the
+   licence FILE alone — and a revoked hostel's file is perfectly valid; the
+   revocation lives in the signed entitlement, which the file check never reads.
+   So re-activating with the same key walked straight back into the app.
+   createWindow() has always decided with the enforcement decision; so does
+   this now. */
 ipcMain.handle('license:loadApp', () => {
   if (!mainWindow) return;
   const lic = checkLicenseValidity();
-  if (lic.valid) {
+  const decision = refreshEnforcement();
+  if (!decision.blocked) {
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  } else if (decision.state === enforcement.STATE.SUSPENDED || decision.state === enforcement.STATE.REVOKED) {
+    // locked=1 so lifting the lock from the portal brings the app straight back.
+    mainWindow.loadFile(path.join(__dirname, 'renderer', 'license.html'), { query: _lockQuery(decision) });
   } else {
+    const _byOwner = decision.state === 'SUSPENDED' || decision.state === 'REVOKED';
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'license.html'), {
-      query: { reason: lic.reason, message: lic.message }
+      query: { reason: lic.reason || decision.reason || decision.state || 'blocked',
+               message: lic.message || (decision.banner && decision.banner.text) || '',
+               ...(_byOwner ? { locked: '1' } : {}) }
     });
   }
 });
@@ -1492,6 +1711,7 @@ ipcMain.handle('license:loadApp', () => {
 // [FIX-09] Receipt PDF — validate htmlContent before processing; supports landscape option
 ipcMain.handle('receipt:savePDF', async (_e, htmlContent, suggestedName, opts) => {
   if (!mainWindow) return { success: false, reason: 'No main window' };
+  { const refused = _outputRefused('printing'); if (refused) return { success: false, reason: refused, code: 'LICENCE_OUTPUT_BLOCKED' }; }
 
   if (typeof htmlContent !== 'string' || htmlContent.length > 2 * 1024 * 1024) {
     return { success: false, reason: 'Invalid receipt content.' };
@@ -1556,6 +1776,12 @@ ipcMain.handle('receipt:savePDF', async (_e, htmlContent, suggestedName, opts) =
 
 // Open PDF report in a separate BrowserWindow
 ipcMain.on('open-pdf-window', (_e, htmlContent, title) => {
+  // The report window exists to print and save PDFs, so printing gates it.
+  const refused = _outputRefused('printing');
+  if (refused) {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('pdf-window:failed', refused);
+    return;
+  }
   /* 32MB, AND IT NO LONGER RETURNS IN SILENCE (owner brief, 2026-09-10). At
      2MB a complete register was refused here with no window and no message,
      which is the "no response" the brief describes: the click did nothing at
@@ -1608,6 +1834,7 @@ ipcMain.on('open-pdf-window', (_e, htmlContent, title) => {
    URL cannot be opened in a frame — an attached PDF would be write-only. This
    decodes it and writes it wherever the warden says.                          */
 ipcMain.handle('file:saveDataUrl', async (event, dataUrl, suggestedName) => {
+  { const refused = _outputRefused('exporting'); if (refused) return { success: false, reason: refused, code: 'LICENCE_OUTPUT_BLOCKED' }; }
   const win = BrowserWindow.fromWebContents(event.sender);
   if (typeof dataUrl !== 'string' || !/^data:[^;,]*;base64,/.test(dataUrl)) {
     return { success: false, reason: 'Not a stored file.' };
@@ -1770,6 +1997,7 @@ function _hxOpenPdf(filePath, title) {
 
 
 ipcMain.handle('pdf-window:save', async (event, opts) => {
+  { const refused = _outputRefused('printing'); if (refused) return { success: false, reason: refused, code: 'LICENCE_OUTPUT_BLOCKED' }; }
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win || win.isDestroyed()) return { success: false, reason: 'No window' };
 
@@ -1850,6 +2078,8 @@ ipcMain.on('open-external', (_e, url) => {
 
 // [FIX-01] write-file — only allow writing to user-approved directories
 ipcMain.on('write-file', (_e, filePath, data) => {
+  { const refused = _outputRefused('exporting');
+    if (refused) { if (mainWindow) mainWindow.webContents.send('pdf-saved', { success: false, error: refused }); return; } }
   // Validate input types
   if (typeof filePath !== 'string' || typeof data !== 'string') {
     if (mainWindow) mainWindow.webContents.send('pdf-saved', { success: false, error: 'Invalid parameters.' });
@@ -1888,7 +2118,10 @@ ipcMain.on('write-file', (_e, filePath, data) => {
 // ════════════════════════════════════════════════════════════════════════════
 // AUTO UPDATER
 // ════════════════════════════════════════════════════════════════════════════
-const RELEASES_URL = 'https://github.com/mushtaqahmaduop/HOSTIX-APP/releases';
+// The public releases repository (owner, 2026-09-24): installers, latest.yml and
+// control-plane.json only, so the source repository can be private. Must match
+// package.json build.publish.
+const RELEASES_URL = 'https://github.com/mushtaqahmaduop/hostyllo-releases/releases';
 
 /* Which file "Download" should hand the browser.
 
@@ -2089,9 +2322,12 @@ ipcMain.handle('db:all', (_e, table, where) => {
 function _assertWritable(table) {
   const decision = currentEnforcement();
   if (enforcement.writeBlocked(decision, table)) {
-    const err = new Error(decision.state === 'SUSPENDED'
-      ? 'This licence is suspended — new entries are paused.'
-      : 'This licence has expired — new entries are paused until it is renewed.');
+    const err = new Error(decision.blocked
+      ? 'This licence is locked — nothing can be saved.'
+      : decision.state === 'EXPIRED'
+        ? 'This licence has expired — new entries are paused until it is renewed.'
+        : 'Data entry is switched off for this licence.'
+          + (decision.ownerReason ? ' Reason: ' + decision.ownerReason + '.' : ''));
     err.code = 'LICENCE_READ_ONLY';
     err.licenceState = decision.state;
     throw err;
@@ -2256,6 +2492,70 @@ ipcMain.handle('db:bulkReplace', (_e, table, records) => {
   } catch (e) { console.error('[DB] bulkReplace:', e.message); return _writeFailure(e); }
 });
 
+/* ── ONE SAVE, ONE TRANSACTION (finance Phase 7, audit G10) ──────────────────
+
+   saveDB() used to walk the tables and await an IPC call PER CHANGED ROW, then
+   the settings, then the ledger. Every one of those is its own implicit
+   transaction, so a crash, a power cut or a licence refusal partway through
+   left some of a save on disk and the rest of it gone — a payment row written
+   with its student's updated balance missing, or money recorded with no ledger
+   entry behind it. §29 asks for atomicity and this was the gap.
+
+   The renderer now sends the whole save as one changeset and it is applied
+   inside a single db.transaction(): all of it lands, or none of it does.
+
+   THE GATES RUN FIRST, FOR EVERY TABLE, BEFORE ANYTHING IS WRITTEN. A refusal
+   part-way through would otherwise roll back cleanly but still have to be
+   reported as a partial intent; checking up front means the answer is the same
+   whether the licence refuses the first table or the last.
+
+   The ledger travels in the same transaction rather than in a call after it.
+   ledgerStore.append() opens its own db.transaction(), which better-sqlite3
+   runs as a SAVEPOINT when nested — its append-only guard still applies, and a
+   refusal now takes the records down with it instead of leaving money on disk
+   with no entry explaining it.                                              */
+ipcMain.handle('db:applyChangeset', (_e, changeset) => {
+  try {
+    const cs     = changeset || {};
+    const tables = cs.tables || {};
+    _assertDbWritable();
+    for (const t of Object.keys(tables)) { _assertRendererTable(t); _assertWritable(t); }
+    if (cs.settings !== undefined) _assertWritable('settings');
+    const entries = Array.isArray(cs.ledger) ? cs.ledger : [];
+    if (entries.length) _assertWritable(ledgerStore.TABLE);
+
+    let upserts = 0, deletes = 0, ledgerInserted = 0;
+    const tx = db.transaction(() => {
+      for (const t of Object.keys(tables)) {
+        const ops = tables[t] || {};
+        for (const r of (ops.upsert || [])) { if (!r || r.id == null) continue; _dbInsert(t, r.id, r); upserts++; }
+        const del = db.prepare(`DELETE FROM ${t} WHERE id = ?`);
+        for (const id of (ops.remove || [])) { del.run(id); deletes++; }
+      }
+      if (cs.settings !== undefined) {
+        db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
+          .run('hostelSettings', JSON.stringify(cs.settings));
+      }
+      if (entries.length) {
+        // append() reports a refusal rather than throwing it. Inside this
+        // transaction it has to throw, or the records would commit around it.
+        const r = ledgerStore.append(db, entries);
+        if (!r || r.ok === false) {
+          const err = new Error((r && r.error) || 'The ledger could not be saved.');
+          err.code = (r && r.code) || 'LEDGER_REFUSED';
+          throw err;
+        }
+        ledgerInserted = r.inserted || 0;
+      }
+    });
+    tx();
+    return { ok: true, upserts, deletes, ledgerInserted };
+  } catch (e) {
+    console.error('[DB] applyChangeset:', e.message);
+    return _writeFailure(e);
+  }
+});
+
 /* THE STUDENT LEDGER'S OWN CHANNELS (warden ledger spec §2.1, schema Q4).
  *
  * Owner, 2026-09-14: the main process refuses any change or delete of a ledger
@@ -2346,6 +2646,7 @@ ipcMain.handle('recovery:restart', () => {
 });
 
 ipcMain.handle('db:exportFull', () => {
+  { const refused = _outputRefused('exporting'); if (refused) return { ok: false, error: refused, code: 'LICENCE_OUTPUT_BLOCKED' }; }
   try {
     const tables = BACKUP_TABLES.concat(HANDOVER_TABLES);
     const result = {};
@@ -2424,6 +2725,17 @@ ipcMain.handle('db:importFull', (_e, data) => {
 // ── App Lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
   const { session } = require('electron');
+
+  /* EVERY BROWSER-STYLE DOWNLOAD PASSES HERE — the Excel exports, CSVs and the
+   * JSON backup are all `<a download>` clicks on a blob URL, so this is the one
+   * main-process point where "exporting is switched off" can hold for all of
+   * them at once, including any the renderer has not been taught about. */
+  session.defaultSession.on('will-download', (event, _item, wc) => {
+    const refused = _outputRefused('exporting');
+    if (!refused) return;
+    event.preventDefault();
+    try { (wc || (mainWindow && mainWindow.webContents)).send('pdf-window:failed', refused); } catch (_) {}
+  });
 session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
   callback({
     responseHeaders: {
@@ -2490,6 +2802,29 @@ session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
   });
   session.defaultSession.setPermissionCheckHandler((_wc, permission, _origin, details) => {
     return _permitted(permission, details);
+  });
+
+  /* NAVIGATION GUARD (audit, 2026-09-24). Every window runs preload.js, so a
+     page loaded into one gets the whole electronAPI: the database, licence
+     activation, file writes. Nothing stopped a window navigating to a remote
+     page — a stray link, or markup that slipped past escHtml(), would have
+     handed that API to whatever site it loaded. Now a window may only show the
+     app's own files. A web link opens in the browser instead; the print and
+     report windows (window.open('') -> about:blank) are still allowed. */
+  app.on('web-contents-created', (_e, contents) => {
+    const external = (url) => {
+      if (/^(https?|mailto):/i.test(url)) shell.openExternal(url).catch(() => {});
+    };
+    contents.on('will-navigate', (ev, url) => {
+      if (/^file:/i.test(url)) return;
+      ev.preventDefault();
+      external(url);
+    });
+    contents.setWindowOpenHandler(({ url }) => {
+      if (!url || url === 'about:blank' || /^file:/i.test(url)) return { action: 'allow' };
+      external(url);
+      return { action: 'deny' };
+    });
   });
   initDatabase();
 

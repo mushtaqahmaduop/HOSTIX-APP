@@ -16,11 +16,10 @@
    spec schedules for stage 8, and is untouched.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Tabs ───────────────────────────────────────────────────────────────────
-   The three-up segmented box is gone: it is a `.ui-tabs` tablist now, marked
-   by the accent underline rather than by filling the active tab. A filled pill
-   reads as a primary action, and a tab is not one. Only the spacing is here. */
-.iss-tabs { margin-bottom: var(--space-3); }
+/* The `.iss-tabs` rule stood here and is deleted with the tab strip it
+   spaced (owner, 2026-09-21: one register). Nothing replaces it: `.ui-stats`
+   carries its own margin-bottom in the component layer, which is what every
+   other stat-strip screen with no tabs already relies on for that gap. */
 
 /* ── Toolbar and footer ─────────────────────────────────────────────────── */
 .iss-tools { display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; padding:var(--space-3) var(--space-4); }
@@ -72,6 +71,18 @@
 .iss-table thead th:nth-child(2)  { min-width: 140px; }
 .iss-table thead th:nth-child(4),
 .iss-table tbody td:nth-child(4)  { width: 84px; }
+/* ASSIGNED TO (column 9) HAS ROOM FOR A NAME (owner, 2026-09-23: "adjust the
+   column a little in complaints page so that to in the assigned look easily").
+
+   It took whatever the other nine left, which on a full row was enough for a
+   first name and an ellipsis — and the one thing this column is read for is
+   WHO is dealing with it. 128px holds "Azat Ullah" with its person glyph at
+   the table's own 12px; a longer name still ellipsises and carries the hover
+   card, which is the right failure for a name and the wrong one for a room
+   number. The width comes out of Issue, which is the only elastic column on
+   the row and is a sentence that wraps rather than a value that clips. */
+.iss-table thead th:nth-child(9),
+.iss-table tbody td:nth-child(9)  { width: 128px; }
 /* Actions. The action bar wrapped by default, and at 132px the four icon
    buttons wrapped into THREE rows — a 102px cell that then set the height of
    every row in the register: 127px against a 77px content maximum. The column
@@ -162,7 +173,12 @@
    column greedy in an overflowing auto-layout table (241px against its own
    floor). */
 .iss-c-title { max-width: none; width: auto; min-width: 140px; }
-.iss-t { font-weight: var(--weight-medium); color: var(--text-primary); }
+/* THE ISSUE IS WHAT THE ROW IS ABOUT (owner, 2026-09-23: "the issue content
+   should in bold typography"). It sat at 500 among a row of chips and names
+   also at 500, so the one cell a warden reads to know what happened had no
+   more weight than the room number beside it. 600 is the same rank the
+   student's name carries on the payments register, for the same reason. */
+.iss-t { font-weight: var(--weight-semibold); color: var(--text-primary); }
 .iss-d {
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     margin-top: var(--space-1); font-size: var(--text-sm);
@@ -174,6 +190,20 @@
 .iss-when { display:flex; align-items:center; gap:var(--space-2); white-space:nowrap; }
 .iss-when svg { flex-shrink:0; color:var(--text-tertiary); }
 .iss-sub  { margin-top:var(--space-1); font-size:var(--text-sm); color:var(--text-tertiary); }
+
+/* WHO ENTERED IT, UNDER THE DATE (owner, 2026-09-23: "below the reported date
+   show the user name in italics who added it").
+
+   Italic because it is an ATTRIBUTION — the one line in this row that names a
+   person rather than stating a fact about the complaint — and italic is how
+   this app has always marked a byline apart from a value. It sits between the
+   date and the age line, both of which are facts about the issue, so the
+   slant is what stops the three reading as one block. */
+.iss-by {
+    margin-top:2px; font-size:var(--text-xs); font-style:italic;
+    color:var(--text-tertiary); line-height:var(--leading-tight);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
 .iss-dash { color: var(--text-tertiary); }
 
 .iss-asg {

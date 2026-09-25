@@ -8,24 +8,83 @@
 
 /* ── Period bar ──────────────────────────────────────────────────────────── */
 .rpt-bar  { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
-.rpt-seg  { display:inline-flex; padding:4px; border-radius:12px; background:var(--dash-sunk); border:1px solid var(--border); }
-.rpt-seg button {
-    padding:8px 16px; border-radius:9px; border:none; cursor:pointer; white-space:nowrap;
-    background:none; color:var(--text2);
-    font-family:var(--font); font-size:13px; font-weight:600; transition:var(--transition);
-}
-.rpt-seg button:hover  { color:var(--text); }
-.rpt-seg button.is-on  { background:var(--accent); color:var(--text-on-accent); }
 .rpt-bar__end { margin-left:auto; display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
 
-.rpt-range { display:flex; align-items:center; gap:8px; height:40px; padding:0 12px; border-radius:11px;
-             background:var(--card); border:1px solid var(--border2); }
-.rpt-range input {
-    width:92px; background:none; border:none; outline:none; cursor:pointer;
-    color:var(--text); font-family:var(--ant-num-font); font-size:12.5px; letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums;
+/* ── THE MONTH PICKER ────────────────────────────────────────────────────────
+   `.rpt-seg` (Month / This Year / Custom Range) and `.rpt-range` (the pair of
+   month inputs) stood here until 2026-09-22. One control answers the one
+   question this page is asked: which month.
+
+   A BUTTON AND A PANEL, not a <select>. The list it replaced grew a row per
+   month from the hostel's first record, which is a 30-row scroll by the second
+   year and says nothing about a year as a shape. */
+.rpt-mp { position:relative; }
+.rpt-mp__btn {
+    display:inline-flex; align-items:center; gap:8px;
+    height:var(--h-md); padding:0 12px; border-radius:var(--radius-md); cursor:pointer;
+    background:var(--card); border:1px solid var(--border2); color:var(--text);
+    font-family:var(--font); font-size:13px; font-weight:600;
+    transition:var(--transition);
 }
-.rpt-range svg  { color:var(--text3); flex-shrink:0; }
-.rpt-range span { color:var(--text3); }
+.rpt-mp__btn:hover { border-color:var(--accent); }
+.rpt-mp__btn svg   { color:var(--text3); flex-shrink:0; }
+.rpt-mp__cv        { margin-left:2px; }
+/* A month that is NOT the current one is the state worth marking: the figures
+   on screen are history, and nothing else on the page says so. */
+.rpt-mp__btn.is-set              { border-color:var(--accent); }
+.rpt-mp__btn.is-set .rpt-mp__lbl { color:var(--accent); }
+
+.rpt-mp__pop {
+    position:absolute; top:calc(100% + 6px); left:0; z-index:60;
+    width:268px; padding:10px; border-radius:12px;
+    background:var(--card); border:1px solid var(--border2);
+    box-shadow:var(--shadow-menu);
+}
+.rpt-mp__pop[hidden] { display:none; }
+.rpt-mp__yr {
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid var(--border);
+}
+.rpt-mp__y   { font-size:13.5px; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; }
+.rpt-mp__nav {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:28px; height:28px; border-radius:8px; cursor:pointer;
+    background:none; border:1px solid transparent; color:var(--text2);
+}
+.rpt-mp__nav:hover { background:var(--dash-sunk); color:var(--text); }
+
+.rpt-mp__grid { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; }
+.rpt-mp__m {
+    height:34px; border-radius:9px; cursor:pointer;
+    background:none; border:1px solid transparent; color:var(--text);
+    font-family:var(--font); font-size:12.5px; font-weight:600;
+    transition:var(--transition);
+}
+.rpt-mp__m:hover    { background:var(--dash-sunk); }
+/* DIMMED, NEVER DISABLED. A month in which students lived but nothing was
+   billed is still a month to report on — who was here. */
+.rpt-mp__m.is-empty { color:var(--text3); font-weight:500; }
+/* The month this page is reporting. */
+.rpt-mp__m.is-on    { background:var(--accent); border-color:var(--accent); color:var(--text-on-accent); font-weight:700; }
+/* …and the month it actually is, when that is not the one being reported. */
+.rpt-mp__m.is-now:not(.is-on) { border-color:var(--border2); }
+/* The whole-year switch. A row, not a 13th cell: it changes what clicking a
+   month MEANS, so it is ruled off from the grid rather than sitting in it. */
+.rpt-mp__yrall {
+    display:flex; align-items:center; gap:8px; cursor:pointer;
+    margin-top:9px; padding-top:9px; border-top:1px solid var(--border);
+    font-size:12.5px; font-weight:600; color:var(--text);
+}
+.rpt-mp__yrall input { width:15px; height:15px; accent-color:var(--accent); cursor:pointer; flex-shrink:0; }
+.rpt-mp__yrall b     { font-variant-numeric:tabular-nums; }
+.rpt-mp__yrall:hover { color:var(--accent); }
+.rpt-mp__note { margin-top:8px; font-size:11px; line-height:1.45; color:var(--text3); }
+
+/* ── THE EXPORT MENU ─────────────────────────────────────────────────────── */
+.rpt-xp { position:relative; }
+.rpt-xp__cv { margin-left:2px; color:var(--text3); }
+.rpt-xp__m  { position:absolute; top:calc(100% + 6px); right:0; z-index:60; min-width:246px; }
+.rpt-xp__m[hidden] { display:none; }
 
 /* ── Stat strip ──────────────────────────────────────────────────────────── */
 /* One row, always — seven cards share it. grid-auto-flow:column forces the
@@ -97,6 +156,52 @@
 /* ── Cards ───────────────────────────────────────────────────────────────── */
 .rpt-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:14px; margin-bottom:14px; }
 
+/* ── THE TWO THREE-ACROSS ROWS (owner's design, 2026-09-22) ─────────────────
+   Row 3: Revenue Composition · Expense Breakdown · Collection Performance.
+   Row 4: Room Type Performance · Student Movement · Quick Reports.
+
+   `auto-fit` with a 340px floor rather than three fixed columns, so the row
+   folds to two and then one as the window narrows instead of overflowing. At
+   the 1366 floor the content area is ~1070px, which is 340+340+340 plus two
+   14px gaps with 18px to spare — three across is the shipped case and the
+   fold is the safety net, not the plan.
+
+   `align-items:stretch` and a column flex inside each card, so three cards of
+   different natural heights still share one baseline top and bottom. Row 3 in
+   particular pairs a ring, a scrolling list and a stat block. */
+.rpt-row3 {
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr));
+    gap:14px; margin-bottom:14px; align-items:stretch;
+}
+/* ROW 4 IS NOT THREE EQUAL COLUMNS. Room Type Performance holds a six-column
+   table — type, rooms, occupied, vacant, occupancy, revenue — and at an equal
+   third it clipped its last two columns behind a scrollbar. The design draws
+   it wider than the two beside it, which are a 2×2 of tiles and a list of
+   rows; both read fine narrow. `auto-fit` cannot express a ratio, so this is
+   an explicit three-track grid that collapses at the breakpoints below. */
+.rpt-row4 {
+    display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr);
+    gap:14px; margin-bottom:14px; align-items:stretch;
+}
+@media (max-width:1280px) { .rpt-row4 { grid-template-columns:minmax(0,1fr) minmax(0,1fr); } }
+@media (max-width:860px)  { .rpt-row4 { grid-template-columns:minmax(0,1fr); } }
+.rpt-row3 > .rpt-card, .rpt-row4 > .rpt-card { display:flex; flex-direction:column; }
+/* The body of each card takes the slack, so the card's own foot — a total, a
+   table's last row — sits at the bottom edge rather than halfway up. */
+.rpt-row3 > .rpt-card > .rpt-donut,
+.rpt-row3 > .rpt-card > .rpt-coll,
+.rpt-row4 > .rpt-card > .rpt-move,
+.rpt-row4 > .rpt-card > .rpt-quick__g,
+.rpt-row4 > .rpt-card > .rpt-tbl-wrap { flex:1 1 auto; min-height:0; }
+.rpt-row3 > .rpt-card > .rpt-none,
+.rpt-row4 > .rpt-card > .rpt-none { flex:1 1 auto; display:flex; align-items:center; justify-content:center; }
+
+/* Three-across is narrow for a ring beside a legend, so the ring stacks over
+   its legend here rather than shrinking both below legibility. */
+.rpt-row3 .rpt-donut { flex-direction:column; align-items:stretch; gap:14px; }
+.rpt-row3 .rpt-donut__c { align-self:center; }
+.rpt-row3 .rpt-legend { flex:0 0 auto; gap:10px; }
+
 /* Monthly Overview beside Payment Methods on one row. The trend chart takes the
    wider column, the donut the narrower; minmax(0,…) lets both shrink instead of
    forcing a horizontal overflow. Stacks below 1000px so neither gets crushed. */
@@ -125,20 +230,38 @@
    bottom edge, where a total belongs. */
 .rpt-toprow > .rpt-card > .rpt-donut,
 .rpt-toprow > .rpt-card > .rpt-bars { flex:1 1 auto; }
-.rpt-toprow > .rpt-card > .rpt-donut { align-items:stretch; }
+/* THE LEGEND IS A LIST, NOT A COLUMN TO FILL (owner's design, 2026-09-22).
+   `justify-content:space-evenly` distributed the donut's own height through
+   however many rows there were, so a hostel taking money two ways read as two
+   labels 160px apart in a mostly empty card — and four ways looked like a
+   different component from two. The rows sit at their own rhythm and the pair
+   is centred in the card instead. */
+.rpt-toprow > .rpt-card > .rpt-donut { align-items:center; }
 .rpt-toprow > .rpt-card > .rpt-donut > .rpt-donut__c { align-self:center; }
-.rpt-toprow > .rpt-card > .rpt-donut > .rpt-legend { justify-content:space-evenly; }
+.rpt-toprow > .rpt-card > .rpt-donut > .rpt-legend { flex:1 1 170px; justify-content:center; gap:14px; }
 .rpt-toprow > .rpt-card > .rpt-none {
     flex:1 1 auto; display:flex; align-items:center; justify-content:center;
 }
 @media (max-width:1000px) { .rpt-toprow { grid-template-columns:1fr; } }
 .rpt-card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:16px 18px; min-width:0; }
+/* A TITLE OVER A LINE OF DESCRIPTION (owner's design, 2026-09-22). Every card
+   on this page led with an accent glyph and a bare title; the design drops the
+   glyph — nine of them in a column is decoration, not navigation — and says in
+   one line what the card is for, which is the thing a warden new to the page
+   actually needs. The old single-line form still works for any header that
+   passes plain text, so nothing that was not rebuilt breaks. */
 .rpt-card__h {
-    display:flex; align-items:center; gap:9px; margin-bottom:15px;
+    display:flex; align-items:flex-start; gap:9px; margin-bottom:15px;
     font-size:14.5px; font-weight:700; color:var(--text);
 }
 .rpt-card__h svg  { color:var(--accent-strong); flex-shrink:0; }
-.rpt-card__h .rpt-card__a { margin-left:auto; }
+.rpt-card__h .rpt-card__a { margin-left:auto; flex-shrink:0; }
+.rpt-card__ht { min-width:0; }
+.rpt-card__t  { font-size:14.5px; font-weight:700; color:var(--text); line-height:1.25; }
+.rpt-card__s  {
+    margin-top:3px; font-size:11.5px; font-weight:500; color:var(--text3);
+    line-height:1.4; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
 .rpt-card__a {
     display:inline-flex; align-items:center; gap:6px; height:32px; padding:0 12px; border-radius:9px; cursor:pointer;
     background:var(--card); border:1px solid var(--border2); color:var(--text2);
@@ -146,7 +269,29 @@
 }
 .rpt-card__a:hover { background:var(--dash-sunk); color:var(--text); }
 
+/* ── FINANCIAL PERFORMANCE ────────────────────────────────────────────────── */
+.rpt-fin .rpt-card__h { flex-wrap:wrap; }
+.rpt-fin__legend { display:flex; align-items:center; gap:14px; margin-left:auto; }
+.rpt-k   { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; color:var(--text2); white-space:nowrap; }
+.rpt-k i { width:8px; height:8px; border-radius:50%; background:var(--k); flex-shrink:0; }
+.rpt-k--rev i { background:var(--accent); }
+/* The dot marks the bars, so it takes the bars' own colour: `--warning-solid`,
+   the warning role at fill weight (owner, 2026-09-23). `--amber` aliases
+   `--warning-fg`, an ink, and both the dot and the bars read olive under it. */
+.rpt-k--exp i { background:var(--warning-solid); }
+.rpt-k--net i { background:var(--green); }
+/* The grain is STATED, not offered — one option in a select is not a control.
+   See the chart's own note in reports.js. */
+.rpt-grain {
+    display:inline-flex; align-items:center; gap:6px; flex-shrink:0;
+    height:28px; padding:0 10px; border-radius:var(--radius-sm);
+    background:var(--dash-sunk); border:1px solid var(--border);
+    font-size:11.5px; font-weight:600; color:var(--text2);
+}
+.rpt-grain svg { color:var(--text3); }
+
 .rpt-canvas { position:relative; height:250px; }
+.rpt-canvas--fin { height:268px; }
 .rpt-canvas canvas { display:block; }
 
 .rpt-none { padding:34px 8px; text-align:center; font-size:12.5px; color:var(--text3); }
@@ -199,9 +344,123 @@
                 font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
 .rpt-legend__v{ font-size:12px; color:var(--text3); text-align:right; white-space:nowrap;
                 font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
+/* A CONCESSION IS A DEDUCTION, NOT A SLICE — see the note at its markup. It
+   sits under the parts it comes off, ruled away from them, and it is the one
+   row in a legend whose dot marks nothing on the ring beside it, so the dot is
+   hollow rather than a colour the ring does not use. */
+.rpt-legend__r--neg { margin-top:3px; padding-top:9px; border-top:1px dashed var(--border); }
+.rpt-legend__r--neg .rpt-legend__n,
+.rpt-legend__r--neg .rpt-legend__v,
+.rpt-legend__r--neg .rpt-legend__p { color:var(--red); }
+.rpt-legend__d--hollow { border:1.5px dashed var(--red); background:none !important; }
+
+/* ── COLLECTION PERFORMANCE ─────────────────────────────────────────────────
+   A ring stating one ratio, and the six figures it is made of beside it. */
+.rpt-coll { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+.rpt-gauge { position:relative; width:118px; height:118px; flex-shrink:0; }
+.rpt-gauge__mid {
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; pointer-events:none; text-align:center;
+}
+.rpt-gauge__mid b {
+    font-size:19px; font-weight:800; color:var(--text);
+    font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums;
+}
+.rpt-gauge__mid span { margin-top:2px; font-size:10px; color:var(--text3); }
+.rpt-coll__f { flex:1 1 170px; min-width:0; display:flex; flex-direction:column; gap:8px; }
+.rpt-fact { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+.rpt-fact span { font-size:12px; color:var(--text2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.rpt-fact b {
+    font-size:12.5px; font-weight:700; color:var(--text); white-space:nowrap;
+    font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums;
+}
+.rpt-fact b.is-neg { color:var(--red); }
+/* The three headcounts are a different kind of fact from the three amounts. */
+.rpt-fact--sep { margin-top:5px; padding-top:9px; border-top:1px solid var(--border); }
+
+/* ── STUDENT MOVEMENT ───────────────────────────────────────────────────────
+   Four tiles that balance: starting + admissions − departures = ending. */
+/* Two across while there is room, one when the column is narrow — four tiles
+   in a single file is better than four clipped captions. */
+.rpt-move { display:grid; grid-template-columns:repeat(auto-fit,minmax(126px,1fr)); gap:10px; align-content:start; }
+.rpt-mv {
+    display:flex; align-items:center; gap:9px; min-width:0; overflow:hidden;
+    padding:12px 10px; border-radius:12px;
+    background:var(--dash-sunk); border:1px solid var(--border);
+}
+/* The tile's hue comes from the `dh-*` class on its wrapper — `--dh` is the
+   ink and `--dh-bg` the wash (ui-kit.css). Falls back to the accent so a tile
+   written without a hue is still legible rather than invisible. */
+.rpt-mv__i {
+    width:30px; height:30px; border-radius:9px; flex-shrink:0;
+    display:inline-flex; align-items:center; justify-content:center;
+    background:var(--dh-bg, var(--accent-soft)); color:var(--dh, var(--accent-strong));
+}
+.rpt-mv__x { min-width:0; overflow:hidden; }
+/* THE LABEL WRAPS, IT DOES NOT CLIP. Four tiles two-across inside a third of a
+   row leaves ~120px beside a 34px icon, and "Starting Students" is 96px at
+   11.5px — it ellipsised to "Starting Stude…" on three of the four tiles. Two
+   short lines cost 14px of a tile that has the room; a clipped label costs the
+   word that tells the two pairs apart. */
+.rpt-mv__l { font-size:11.5px; font-weight:600; color:var(--text2);
+             white-space:normal; line-height:1.25; }
+.rpt-mv__v { font-size:21px; font-weight:800; color:var(--text); line-height:1.15;
+             font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
+.rpt-mv__s { margin-top:2px; font-size:10.5px; color:var(--text3);
+             overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* THE OCCUPANCY CARD'S BAR (owner's design, 2026-09-22). Occupancy is a RATIO
+   where the four cards beside it are running figures, and a percentage is the
+   one thing a bar can state honestly without a history behind it.
+
+   IN FLOW, UNDER THE CAPTION (owner, 2026-09-23: "the bar in the occupancy
+   card are hiding the occupied rooms number"). It was absolutely placed at the
+   card's bottom edge to stay inside the row's 94px budget while the other four
+   cards carried a sparkline in that same band — and it sat straight on top of
+   "18 / 22 rooms occupied", which is the fact the percentage is about.
+
+   The sparklines went on the same day, so the band is free and the bar simply
+   takes its own 12px. The row still measures 94. */
+/* On the caption's own line, taking whatever it leaves. The line stops
+   wrapping when it carries a bar — a wrap would put the bar on a second row
+   and cost the 12px this arrangement exists to save — and the caption gives
+   way first, which is why it is a span and not a bare text node. */
+.rpt-stat__sub:has(.rpt-stat__bar) { flex-wrap:nowrap; }
+.rpt-stat__subt { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* `min-width` stops a long caption crushing the bar to a dot. */
+.rpt-stat__bar {
+    flex:1 1 auto; min-width:34px; height:5px; border-radius:99px;
+    background:var(--dash-track); overflow:hidden;
+}
+.rpt-stat__bar span { display:block; height:100%; border-radius:99px; background:var(--accent); }
 
 /* ── Breakdown bars ──────────────────────────────────────────────────────── */
 .rpt-bars { display:flex; flex-direction:column; gap:11px; }
+/* THE LIST OUTGREW THE CARD (owner, 2026-09-22). Sorted biggest-first already,
+   so the rows that matter are above the fold; the rest scrolls. The height is
+   a max, not a fixed one — a hostel with four categories still gets a card
+   that fits its content.
+
+   `overscroll-behavior:contain` so reaching the end of this list does not then
+   scroll the page out from under the cursor. */
+.rpt-bars--scroll {
+    max-height:236px; overflow-y:auto; overscroll-behavior:contain;
+    padding-right:4px; scrollbar-width:thin;
+}
+.rpt-bars--scroll.is-draggable { cursor:grab; }
+.rpt-bars--scroll.is-dragging  { cursor:grabbing; user-select:none; }
+
+/* THE BAR IS THE POINT, SO IT GETS THE SLACK. `.rpt-brow`'s default widths —
+   a 104px name, a 92px value and a 38px share — were set when this card was
+   half the page. At a third of a row that is 234px of fixed columns inside a
+   ~300px track, leaving the track under 40px and the fill invisible: a row of
+   figures with a decorative stub beside it. Tighter fixed columns here, and
+   the track keeps what is left. */
+.rpt-row3 .rpt-brow    { gap:9px; }
+.rpt-row3 .rpt-brow__n { width:auto; flex:1 1 76px; min-width:0; }
+.rpt-row3 .rpt-brow__t { flex:0 0 74px; min-width:74px; }
+.rpt-row3 .rpt-brow__v { width:auto; flex:0 0 auto; }
+.rpt-row3 .rpt-brow__p { width:30px; }
 .rpt-brow { display:flex; align-items:center; gap:11px; }
 .rpt-brow__d { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
 .rpt-brow__n { width:104px; flex-shrink:0; font-size:12px; color:var(--text2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -237,6 +496,27 @@
 .rpt-tbl__chip { display:inline-flex; align-items:center; padding:4px 11px; border-radius:999px;
                  font-size:11px; font-weight:700; white-space:nowrap; }
 .rpt-tbl__z { color:var(--text3); }
+
+/* ── THE ROOM TABLE IN ROW 4 ─────────────────────────────────────────────────
+   Six columns in ~400px. The defaults above — 12px cell padding, 12.5px body
+   type, a pill around the type name — were set when this table had half the
+   page, and at a third they wanted 560px and scrolled 164 of it out of sight.
+
+   DENSITY, NEVER THE FIGURE. Exactly the rule the students register follows
+   (`.ui-table--dense`): the padding tightens, the uppercase header loses its
+   letter-spacing and wraps to two lines, and the type pill gives up its
+   horizontal air. Nothing is truncated, no column is dropped, and no number
+   shrinks below the 11px floor. The wrapper keeps `overflow-x:auto` as the
+   safety net for a hostel with unusually long type names. */
+.rpt-row4 .rpt-tbl thead th {
+    padding:8px 7px; letter-spacing:.3px; white-space:normal; line-height:1.25;
+}
+.rpt-row4 .rpt-tbl tbody td { padding:9px 7px; font-size:11.5px; }
+.rpt-row4 .rpt-tbl__chip    { padding:3px 8px; font-size:10.5px; }
+/* The first column holds a name, the other five hold figures: right-aligning
+   the numbers is what lets them share a narrow track legibly. */
+.rpt-row4 .rpt-tbl thead th:not(:first-child),
+.rpt-row4 .rpt-tbl tbody td:not(:first-child) { text-align:right; }
 
 /* ── Student summary ─────────────────────────────────────────────────────── */
 .rpt-sum { display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:12px; }
@@ -364,7 +644,7 @@
 .mov__cv {
     /* auto, not 4px: whatever the label did above it, the figure lands on the
        bottom edge of the cell and therefore level with its neighbours. */
-    margin-top:auto; padding-top:4px; font-size:17px; font-weight:800; letter-spacing:var(--ant-num-track); color:var(--dh);
+    margin-top:auto; padding-top:4px; font-size:var(--text-lg); font-weight:800; letter-spacing:var(--ant-num-track); color:var(--dh);
     font-family:var(--ant-num-font);
     font-variant-numeric:tabular-nums; line-height:1.2;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
@@ -424,28 +704,40 @@
 
 /* ══ THE REPORT BAR AND ITS TAB STRIP (owner ref: reports2.png) ════════════ */
 
-/* WHICH month, beside the segment that says how WIDE the window is. */
-.rpt-mo {
-    height: 34px; padding: 0 30px 0 12px; border-radius: 10px; cursor: pointer;
-    background: var(--card); border: 1px solid var(--border2); color: var(--text);
-    font-family: var(--font); font-size: 12.5px; font-weight: 600;
-    appearance: none; -webkit-appearance: none;
-    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23909090' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-    background-repeat: no-repeat; background-position: right 10px center;
-}
-.rpt-mo.is-set { border-color: var(--accent); color: var(--accent-strong); }
+/* `.rpt-mo` — the month <select> — stood here. It is `.rpt-mp` at the top of
+   this file now: a button and a twelve-month grid (owner, 2026-09-22). */
 
 /* THE SEVEN DETAIL VIEWS, NAMED. They have existed since long before this
    redesign and the only way into one was to click the right KPI card, which is
    not a thing anybody discovers. The strip scrolls sideways rather than
    wrapping: eight tabs on two lines stop reading as one control. */
+/* THE STRIP SCROLLS, AND NOW IT SAYS SO (owner, 2026-09-22: "make the
+   complaints in the nav bar a little visible because it is hidden").
+
+   It has had `overflow-x:auto` with a hidden scrollbar since it was built, so
+   at the 1366 floor the tenth tab was off the end with nothing on screen
+   admitting it — the row looked finished at Cancellations. A mask at whichever
+   edge still has tabs behind it makes the row read as cut off; rptTabsInit()
+   in reports.js toggles the two classes and scrolls the selected tab in.
+
+   `mask-image` rather than a gradient overlay: the strip has a sunk ground and
+   a border, and an overlay would have to repaint both to fade over them. */
 .rpt-tabs {
     display: flex; align-items: center; gap: 4px; margin-bottom: 14px;
     padding: 4px; border-radius: 12px;
     background: var(--dash-sunk); border: 1px solid var(--border);
     overflow-x: auto; scrollbar-width: none;
+    scroll-behavior: smooth;
 }
 .rpt-tabs::-webkit-scrollbar { display: none; }
+.rpt-tabs.has-more { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 34px), transparent);
+                             mask-image: linear-gradient(to right, #000 calc(100% - 34px), transparent); }
+.rpt-tabs.has-prev { -webkit-mask-image: linear-gradient(to right, transparent, #000 34px);
+                             mask-image: linear-gradient(to right, transparent, #000 34px); }
+.rpt-tabs.has-prev.has-more {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 34px, #000 calc(100% - 34px), transparent);
+            mask-image: linear-gradient(to right, transparent, #000 34px, #000 calc(100% - 34px), transparent);
+}
 .rpt-tab {
     display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
     height: 32px; padding: 0 13px; border-radius: 9px; cursor: pointer;
@@ -472,20 +764,18 @@
    cannot push the row taller — and a min-height is what makes that promise
    hold from the other direction too. */
 .rpt-stat { display: flex; flex-direction: column; box-sizing: border-box; min-height: 94px; }
-.rpt-stat__spark {
-    position: absolute; left: 42%; right: 0; bottom: 0; height: 30px;
-    opacity: .5; line-height: 0; pointer-events: none;
-}
-.rpt-stat__spark svg { width: 100%; height: 100%; display: block; color: var(--dh); }
-.rpt-stat__spark .dash-spark-empty { display: none; }
-/* The card's own content stays above it. */
+/* `.rpt-stat__spark` and its three marks stood here — the absolutely-placed
+   SVG behind each figure. Removed with the sparklines on 2026-09-23; this was
+   the last surface in the app calling _dashSpark(). */
 .rpt-stat__top, .rpt-stat__val, .rpt-stat__sub { position: relative; z-index: 1; }
 
 
 /* ══ QUICK REPORTS ═════════════════════════════════════════════════════════
    Seven documents in one row of tiles. Each is a BUTTON, not a link: it
    produces a file or opens a filtered register, and neither is navigation. */
-.rpt-quick { margin-top: 14px; }
+/* IN THE ROW NOW, NOT UNDER IT (owner's design, 2026-09-22): the third column
+   beside Room Type Performance and Student Movement. */
+.rpt-quick { margin-top: 0; }
 .rpt-quick__note {
     margin-left: auto; font-size: 11px; font-weight: 500; color: var(--text3);
     text-transform: none; letter-spacing: 0;
@@ -495,16 +785,31 @@
    `.rpt-card__h .rpt-card__a` splits the free space between them and leaves the
    note stranded in the middle of the row. */
 .rpt-quick__all { margin-left: 0 !important; }
+/* ONE COLUMN OF ROWS, not a tile grid. In a third of a row the old
+   `minmax(228px,1fr)` auto-fit collapsed to a single column anyway, but at 10px
+   gaps and tile padding; a list is what the design draws and what seven items
+   read as. It scrolls if a future eighth and ninth arrive rather than setting
+   the height of the whole row. */
 .rpt-quick__g {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(228px, 1fr));
-    gap: 10px; margin-top: 4px;
+    display: flex; flex-direction: column; gap: 6px; margin-top: 4px;
+    max-height: 292px; overflow-y: auto; overscroll-behavior: contain;
+    padding-right: 4px; scrollbar-width: thin;
 }
 .rpt-quick__b {
     display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer;
-    padding: 11px 13px; border-radius: 11px; min-width: 0;
+    padding: 9px 11px; border-radius: 10px; min-width: 0;
     background: var(--card); border: 1px solid var(--border);
     font-family: var(--font); transition: var(--transition);
 }
+/* The design draws a chevron at the end of every row — it is what says these
+   are actions rather than a legend. Drawn in CSS so the seven-item list stays
+   seven lines of data in reports.js. */
+.rpt-quick__b::after {
+    content: ''; margin-left: auto; flex-shrink: 0; width: 7px; height: 7px;
+    border-right: 1.8px solid var(--text3); border-top: 1.8px solid var(--text3);
+    transform: rotate(45deg); transition: var(--transition);
+}
+.rpt-quick__b:hover::after { border-color: var(--accent); }
 .rpt-quick__b:hover { border-color: var(--accent); background: var(--dash-sunk); }
 .rpt-quick__i {
     width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0;
@@ -529,25 +834,20 @@
    produces one register. The owner asked for it back by describing exactly
    that ("the print/pdf option ... vhich total summary at once"), so it leads.
 
-   The bar mixes control heights — .rpt-seg stands 40px with its inner padding,
-   .rpt-mo 34px — and .rpt-card__a is drawn 32px for card headers, where it sits
-   beside a 14.5px title rather than a segmented control. On the BAR it takes
-   .rpt-mo's 34px, so the four exports and the month select share one baseline.
+   .rpt-card__a is drawn 32px for card headers, where it sits beside a 14.5px
+   title. On the BAR it stands with the month picker instead, and everything on
+   that row now takes ONE height from the token rather than the three the bar
+   used to mix (the segment's 40, the month select's 34, the card action's 32).
    Card headers are untouched. */
-.rpt-bar .rpt-card__a { height: 34px; }
+.rpt-bar .rpt-card__a,
+.rpt-bar .rpt-mp__btn { height: var(--h-md); }
 
 .rpt-card__a--excel svg { color: var(--green); }
 
-.rpt-print {
-    display: inline-flex; align-items: center; gap: 6px;
-    height: 34px; padding: 0 14px; border-radius: 9px; cursor: pointer;
-    background: var(--accent); border: 1px solid var(--accent); color: var(--text-on-accent);
-    font-family: var(--font); font-size: 12px; font-weight: 650;
-    transition: var(--transition); white-space: nowrap;
-}
-.rpt-print svg   { flex-shrink: 0; }
-.rpt-print:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
-.rpt-print:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* `.rpt-print` stood here — the one filled button on the page. Removed with
+   the control on 2026-09-23: it ran printReport(), which is what "Full report
+   — PDF" inside the Export menu beside it already ran. */
+
 
 
 /* ══ KEY HIGHLIGHTS AS ITS OWN CARD (owner ref: reports2.png) ══════════════
@@ -590,7 +890,14 @@
    longer than its neighbour. A two-card row with a ragged bottom edge is
    ordinary; a card with a hole in the middle of it is not. */
 .rpt-toprow--top { align-items: start; }
-@container hi (min-width: 660px) { .rpt-hi .mov__strip { grid-template-columns: repeat(4, 1fr); } }
+/* 660 -> 880 (2026-09-17). At 660 a cell is 165px, and once the icon (38),
+   the gap (11) and the padding (32) are out, the figure gets 84px to hold
+   "Rs. 195,000.00" — so .mov__cv's ellipsis fired and the money was cut
+   short on the Key Highlights strip in both themes. The ellipsis was doing
+   its job; four across was the wrong shape for the card's real width.
+   A cell needs ~200px for the figure at 15px, so four of them need ~880.
+   Below that the strip stays two across, which is two rows and no cut. */
+@container hi (min-width: 880px) { .rpt-hi .mov__strip { grid-template-columns: repeat(4, 1fr); } }
 @container hi (max-width: 330px) { .rpt-hi .mov__strip { grid-template-columns: 1fr; } }
 
 /* The period the highlights describe, beside the title. It is a caption, not a

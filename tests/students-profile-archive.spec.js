@@ -17,6 +17,7 @@
 'use strict';
 
 const { test, expect, _electron: electron } = require('@playwright/test');
+const { settleFreshInstall } = require('./_fresh-install');
 const path = require('path');
 const { resetProfile } = require('./_profile');
 
@@ -45,12 +46,13 @@ async function openApp() {
   await win.waitForFunction(
     () => typeof WARDENS !== 'undefined' && Object.keys(WARDENS).length > 0,
     null, { timeout: 30000 });
-  await win.fill('#login-user', 'warden1');
+  await win.selectOption('#login-user', 'warden1');
   await win.fill('#login-input', 'admin123');
   await win.click('#login-btn');
   await win.waitForFunction(
     () => { const s = document.getElementById('login-screen'); return s && s.style.display === 'none'; },
     null, { timeout: 30000 });
+  await settleFreshInstall(win);   // setup done + the 42 rooms these specs expect
   await win.waitForTimeout(700);
   return { app, win };
 }
@@ -118,8 +120,12 @@ test('the students table states the whole agreement, not the rent half', async (
   const rows = await win.$$eval('.stu-table tbody tr', trs => trs.map(tr => ({
     name:   (tr.querySelector('.stu-who__name') || {}).textContent || '',
     charge: (tr.querySelector('.stu-charge') || {}).textContent || '',
-    title:  (tr.querySelector('.stu-charge') || {}).getAttribute('title') || '',
-    cover:  (tr.querySelector('.ui-chip') || {}).textContent || '',
+    // The hover text moved from `title` to the app's own tooltip (data-tip):
+    // '<plan> — <total> a month'. Still the plan and the total, never the split.
+    title:  (tr.querySelector('.stu-charge') || {}).getAttribute('data-tip') || '',
+    // The plan label is .stu-charge__plan since the register redesign; the
+    // row's first .ui-chip is now the student's status.
+    cover:  (tr.querySelector('.stu-charge__plan') || {}).textContent || '',
   })));
 
   const by = n => rows.find(r => r.name.trim() === n);
@@ -129,7 +135,7 @@ test('the students table states the whole agreement, not the rent half', async (
   expect(by('Both Charges').cover.trim()).toBe('Rent + Mess');
   // The title names the plan and does NOT restate the two figures — that
   // string was removed everywhere it appeared, on the owner's instruction.
-  expect(by('Both Charges').title).toBe('Rent + Mess');
+  expect(by('Both Charges').title).toMatch(/^Rent \+ Mess — /);
   expect(by('Both Charges').title).not.toContain('6,500');
   expect(by('Both Charges').title).not.toContain('8,000');
 

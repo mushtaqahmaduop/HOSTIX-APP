@@ -32,6 +32,7 @@
   <link rel="stylesheet" href="css/components/avatar.css">
   <link rel="stylesheet" href="css/components/dropdown.css">
   <link rel="stylesheet" href="css/components/tabs.css">
+  <link rel="stylesheet" href="css/components/tooltip.css">
   <link rel="stylesheet" href="css/components/stat.css">
   <link rel="stylesheet" href="components.css">
   <link rel="stylesheet" href="pw-eye.css">
@@ -127,12 +128,11 @@
     <aside class="lg-side">
 
       <div class="lg-brand">
+        <!-- ONE MARK EVERYWHERE (owner, 2026-09-25): the licence screen's tile —
+             white H on the blue rounded square — which is also the desktop,
+             taskbar and window icon. See scripts/make-brand-icon.py. -->
         <span class="lg-mark" aria-hidden="true">
-          <svg width="50" height="56" viewBox="0 0 50 56" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M25 2.6 46 14.3v27.4L25 53.4 4 41.7V14.3z" stroke="currentColor" stroke-width="3.2" stroke-linejoin="round"/>
-            <path d="M20.4 15.6h9.2M25 12.4v3.2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-            <text x="25" y="38" text-anchor="middle" fill="currentColor" font-family="Inter, sans-serif" font-size="20" font-weight="800">H</text>
-          </svg>
+          <img src="img/brand/app-tile.png" alt="" width="54" height="54">
         </span>
         <span>
           <span class="lg-brand__n">HOSTYLLO</span>
@@ -245,29 +245,29 @@
         <b id="login-hostel-name">your hostel</b>.</p>
       <div class="lg-addr" id="login-address" style="display:none"></div>
 
-      <!-- Username. The two-card warden picker was removed earlier: the app has
-           an open user list, and a picker printed every staff name to anyone
-           who opened the app. -->
-      <!-- Switch account (owner, 2026-09-15) steps through the usernames
-           remembered on this PC. It fills the username only — the password is
-           always typed. × forgets the name shown. See loginSwitchAccount() in
-           auth-nev.js. -->
-      <div class="lg-lblrow">
-        <label class="lg-lbl" for="login-user">Username</label>
-        <button type="button" id="login-swap" class="lg-link lg-swap" hidden onclick="loginSwitchAccount()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>
-          Switch account</button>
-      </div>
-      <div class="lg-field">
+      <!-- ══ THE ACCOUNT IS CHOSEN, NOT TYPED (owner, 2026-09-23) ════════════
+           "for the login page issue we should use the dropdown option instead
+           of username field to select between Admin and Warden".
+
+           A role dropdown alone cannot sign anybody in — two wardens share a
+           role — so this lists the ACCOUNTS, each with the role it holds. It
+           replaces both the username box and the circular swap sign added
+           earlier the same day: the sign existed to fill that box without
+           retyping, and a list you pick from does that by being a list.
+
+           This reverses the 2026-09-15 decision that the screen must not
+           advertise the staff list. That was the owner's call to make and they
+           made it: on a single hostel PC the names are on the rota by the door
+           anyway, and the password is still the whole of the lock.
+
+           It is still #login-user with a .value, so checkLogin(),
+           findUserByUsername() and the lockout path are untouched. -->
+      <label class="lg-lbl" for="login-user">Account</label>
+      <div class="lg-field lg-field--sel">
         <svg class="lg-lead" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
-        <input id="login-user" class="lg-in" type="text" placeholder="Enter your username"
-               autocomplete="username" autocapitalize="none" spellcheck="false" aria-label="Username"
-               oninput="loginPaintRemembered()">
-        <button id="login-forget" class="lg-eye lg-forget" type="button" hidden
-                aria-label="Forget this username on this PC" title="Forget this username on this PC"
-                onclick="loginForgetUser()">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-        </button>
+        <select id="login-user" class="lg-in lg-sel" aria-label="Account"
+                onchange="loginPickAccount()"></select>
+        <svg class="lg-selarrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
       </div>
 
       <label class="lg-lbl" for="login-input">Password</label>
@@ -437,8 +437,8 @@
            setting — the hostel's own name is the line of text beside it. The
            white variant is used because the rail is navy in both themes. -->
       <div class="sb-logo-icon" id="sb-logo-icon">
-        <img id="sb-logo-img" src="img/brand/mark-light.png" alt="Hostyllo"
-             style="width:22px;height:22px;object-fit:contain;position:relative;z-index:1">
+        <img id="sb-logo-img" src="img/brand/app-tile.png" alt="Hostyllo"
+             style="width:38px;height:38px;display:block;position:relative;z-index:1">
       </div>
       <div class="sb-logo-text">
         <div class="name">HOSTYLLO</div>
@@ -450,44 +450,89 @@
         <div class="sub" id="sb-hostel-name" hidden></div>
       </div>
     </div>
-    <!-- MONTH PICKER — in the sidebar, where the sketch puts it and where the
+    <span id="sb-location-sub" style="display:none"></span>
+    <span id="sb-location" style="display:none"></span>
+    <span id="sb-version" style="display:none"></span>
+  </div>
+    <!-- OUT OF THE BRAND BLOCK (owner review #2, 2026-09-18). This lived
+         inside .sb-logo, which carries `padding: 18px 16px 16px 44px` so the
+         mark clears the collapse button. The picker inherited the 44px: it had
+         151px of a 212px rail, its button 135px, and "September 2026" did not
+         fit in the 85px that left for the label - which is why the control
+         looked like it needed a shorter label. It did not; it needed to not be
+         a child of the logo. It also put a second hairline under .sb-logo's
+         own, indented 44px, so the rail had a short floating line in it. -->
+    <!-- MONTH PICKER - in the sidebar, where the sketch puts it and where the
          sb- class names always said it belonged. Every figure on the dashboard
          is scoped to this month, so it reads as a property of the whole app
-         rather than one control among several in the page header. -->
+         rather than one control among several in the page header.
+
+         ONE BUTTON, NOT THREE (owner review #2, 2026-09-18). It was < label >
+         - a stepper whose label showed today's date and never the month being
+         shown. The button now carries the selected month and opens a 12-month
+         grid; see the note at the top of src/modules/sidebar_calendar.js. -->
     <div id="sb-calendar-wrap" class="sb-month-picker" style="position:relative">
       <div class="sb-month-picker__header">
-        <button onclick="sbCalPrev();event.stopPropagation()" class="sb-month-picker__arrow" title="Previous month">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-        </button>
-        <div class="sb-month-picker__display" onclick="toggleSbCal()" title="Show calendar">
+        <button type="button" id="sb-cal-btn" class="sb-month-picker__display"
+                onclick="toggleSbCal();event.stopPropagation()"
+                aria-haspopup="true" aria-expanded="false"
+                title="Choose the month the dashboard shows">
           <svg class="sb-month-picker__icon" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
           <span id="sb-cal-today-lbl" class="sb-month-picker__label"></span>
+          <i id="sb-cal-off" class="sb-month-picker__off" hidden title="Not the current month"></i>
           <svg id="sb-cal-arrow" class="sb-month-picker__chevron" width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
-        </div>
-        <button onclick="sbCalNext();event.stopPropagation()" class="sb-month-picker__arrow" title="Next month">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
         </button>
       </div>
-      <div id="sb-cal-body" class="sb-month-picker__body" style="display:none;position:absolute;top:100%;right:0;width:280px;background:var(--bg2);border:1px solid var(--border2);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.5);z-index:999;margin-top:4px">
+      <div id="sb-cal-body" class="sb-month-picker__body" style="display:none">
         <div class="sb-month-picker__controls">
-          <span id="sb-cal-current-lbl" onclick="(()=>{const k=_sbCalYear+'-'+String(_sbCalMonth+1).padStart(2,'0');navigateToMonth(k);})()" class="sb-month-picker__month-label" title="Click to view this month on dashboard"></span>
-          <select id="sb-cal-year-sel" onchange="sbCalSetYear(parseInt(this.value));event.stopPropagation()" onclick="event.stopPropagation()" class="sb-month-picker__year-select"></select>
-          <button id="sb-cal-reset-btn" onclick="event.stopPropagation();_dashboardMonth=null;this.style.display='none';renderPage(currentPage)" class="sb-month-picker__reset" style="display:none" title="Return to today's month">Today</button>
+          <select id="sb-cal-year-sel" onchange="sbCalSetYear(parseInt(this.value));event.stopPropagation()" onclick="event.stopPropagation()" class="sb-month-picker__year-select" aria-label="Year"></select>
+          <span class="sb-month-picker__gap"></span>
+          <button type="button" id="sb-cal-reset-btn" onclick="sbCalToday();event.stopPropagation()" class="sb-month-picker__reset" style="display:none" title="Go back to the current month">This month</button>
+        </div>
+        <div id="sb-cal-months" class="sb-month-picker__months"></div>
+        <!-- The day grid is not a second picker: every cell navigates to the
+             month it belongs to. It is here for the per-day payment dots. -->
+        <div class="sb-month-picker__dayhead">
+          <span id="sb-cal-current-lbl"></span>
+          <!-- Opens the full month report for the month being browsed. The day
+               and month cells still just navigate; see sbCalMonthReport(). -->
+          <button type="button" id="sb-cal-report" class="sb-month-picker__report"
+                  onclick="sbCalMonthReport(event)"
+                  title="Open the full report for this month — fee records, expenses and exports">Report</button>
+          <span class="sb-month-picker__key"><i class="is-paid"></i>paid<i class="is-pend"></i>pending</span>
         </div>
         <div class="sb-month-picker__weekdays">
           <div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div class="sb-month-picker__weekend">Sa</div><div class="sb-month-picker__weekend">Su</div>
         </div>
         <div id="sb-cal-days" class="sb-month-picker__days"></div>
-        <div id="sb-cal-month-list" style="display:none"></div>
       </div>
     </div>
 
-    <span id="sb-location-sub" style="display:none"></span>
-    <span id="sb-location" style="display:none"></span>
-    <span id="sb-version" style="display:none"></span>
-  </div>
 
   <!-- SCROLLABLE MIDDLE — Main + Finance + System nav groups -->
+  <!-- DASHBOARD IS PINNED (owner, 2026-09-23: "the sidebar have much pages and
+       whenever you are on a lower page you have to drag up to go to dashboard,
+       so i want the dashboard should be pinned like the month selector").
+
+       It sits OUTSIDE .sb-nav, which is the element that scrolls, next to the
+       month picker that is pinned the same way and for the same reason: both
+       are properties of the whole app rather than one page among many. The
+       "Main" heading went with it — it labelled a section of one item, and a
+       heading over a pinned control is a heading over nothing.
+
+       It costs the scrolling list nothing: one item leaves the scroll and the
+       same height leaves the viewport with it. -->
+  <div class="sb-pinned">
+    <div class="nav-item active" onclick="navRail('dashboard')" data-page="dashboard" title="Dashboard">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect width="7" height="9" x="3" y="3" rx="1" />
+        <rect width="7" height="5" x="14" y="3" rx="1" />
+        <rect width="7" height="9" x="14" y="12" rx="1" />
+        <rect width="7" height="5" x="3" y="16" rx="1" />
+      </svg>
+      <span class="nav-label">Dashboard</span>
+    </div>
+  </div>
   <nav class="sb-nav sidebar__middle">
     <!-- SECTION ORDER IS BY FREQUENCY. Owner's call, 2026-09-04, taken against
          a measurement rather than a preference: this list SCROLLS on every
@@ -517,16 +562,6 @@
          Adding an item: put it in the section it belongs to, keep this order,
          and re-measure with tests/rail-reach.spec.js instead of assuming it
          still fits. -->
-    <div class="sb-section">Main</div>
-    <div class="nav-item active" onclick="navRail('dashboard')" data-page="dashboard" title="Dashboard">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <rect width="7" height="9" x="3" y="3" rx="1" />
-        <rect width="7" height="5" x="14" y="3" rx="1" />
-        <rect width="7" height="9" x="14" y="12" rx="1" />
-        <rect width="7" height="5" x="3" y="16" rx="1" />
-      </svg>
-      <span class="nav-label">Dashboard</span>
-    </div>
     <div class="sb-section">People</div>
     <div class="nav-item" onclick="navRail('students')" data-page="students" title="Students">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -804,6 +839,10 @@
   <!-- Spec §14 financial integrity layer. AFTER utils.js: it calls
        resolveCharges() and outstandingOf() rather than reimplementing them. -->
   <script src="src/finance.js"></script>
+  <!-- The month-domain layer (finance Phase 4): which month a record bills, who
+       was resident in a period, when cash moved, and the revenue / cash / fund
+       figures. AFTER utils.js (thisMonth); BEFORE every screen module. -->
+  <script src="src/periods.js"></script>
   <!-- The student ledger (warden ledger spec §2.1). AFTER finance.js: it prices
        records with money() and calculateOutstanding(). BEFORE storage.js, whose
        saveDB() hands it each save. -->

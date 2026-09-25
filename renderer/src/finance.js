@@ -164,6 +164,112 @@ function calculateBill(rec) {
     - money(r.concession   != null ? r.concession   : r.discount));
 }
 
+/* ── §14 · billSnapshot / billFreeze / billDrift ──────────────────────────────
+   THE BILL AS IT WAS FIRST RAISED (finance Phase 6, audit G6).
+
+   A record's charge fields are written in place. Correct a rent, add an extra,
+   grant a concession, and the figure the month was ORIGINALLY billed at is
+   gone: nothing on the record remembers it. The student ledger records that it
+   changed — "Rent changed 8,000 → 9,000", with a reason, a date and an account —
+   but recovering what the bill started as means replaying every entry on the
+   record in order. A month's opening bill is a fact a hostel is asked for
+   directly ("what did you charge me in August?"), and it should not have to be
+   reconstructed.
+
+   `p.generated` is that fact, written ONCE by whichever path raises the record
+   and never rewritten. It is a frozen copy, not a live figure — nothing asks it
+   what is owed, so it cannot become a second answer to that. calculateBill()
+   and outstandingOf() remain the only authorities on what the month bills now.
+
+   WRITTEN ONCE, AT CREATION. `billFreeze()` no-ops on a record that already has
+   one, so it is safe to call from anywhere and safe to call twice. A record
+   created and corrected the same afternoon keeps the first figure, typo and
+   all — which is what an audit trail is for; the correction is the ledger's to
+   tell, and billDrift() below pairs the two.
+
+   NOT BACKFILLED. Records raised before this existed have no snapshot, and
+   nothing invents one for them: `billDrift()` returns null and the screens say
+   they do not know. Deriving one from the ledger would produce a figure the
+   hostel never actually billed on a record where the ledger is incomplete. */
+function billSnapshot(p, source) {
+  const r = p || {};
+  const extras = r.extraTotal != null
+    ? money(r.extraTotal)
+    : moneySum(r.extraCharges, c => c && c.amount);
+  return {
+    at:     r.date || (typeof today === 'function' ? today() : ''),
+    by:     (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Auto',
+    source: String(source || ''),
+    monthlyRent:  money(r.monthlyRent != null ? r.monthlyRent : r.rent),
+    messCharge:   money(r.messCharge != null ? r.messCharge : r.mess),
+    messIncluded: r.messIncluded !== false,
+    admissionFee: money(r.admissionFee != null ? r.admissionFee : r.fee),
+    concession:   money(r.concession   != null ? r.concession   : r.discount),
+    extraTotal:   extras,
+    // The one figure that matters, from the one authority that prices a bill.
+    total:        calculateBill(r),
+  };
+}
+
+/** Write the snapshot if this record has none. Returns it either way. */
+function billFreeze(p, source) {
+  if (!p) return null;
+  if (p.generated && typeof p.generated === 'object') return p.generated;
+  p.generated = billSnapshot(p, source);
+  return p.generated;
+}
+
+/* What this bill has become since it was raised, or null when it has not moved
+   — and null, too, when there is no snapshot to compare against, which a caller
+   must treat as "not known" rather than "unchanged". `parts` names only the
+   components that actually differ, so a screen can say WHAT changed without
+   diffing the record itself. */
+function billDrift(p) {
+  const g = p && p.generated;
+  if (!g || typeof g !== 'object') return null;
+  const now = billSnapshot(p, g.source);
+  const keys = ['monthlyRent', 'messCharge', 'admissionFee', 'concession', 'extraTotal'];
+  const parts = [];
+  keys.forEach(k => {
+    const was = money(g[k]), is = money(now[k]);
+    if (was !== is) parts.push({ key: k, was: was, now: is });
+  });
+  // The mess being switched off is a change to the bill that moves no field of
+  // its own — messCharge can stay put while messIncluded flips.
+  if ((g.messIncluded !== false) !== (now.messIncluded !== false))
+    parts.push({ key: 'messIncluded', was: g.messIncluded !== false, now: now.messIncluded !== false });
+  const wasTotal = money(g.total), nowTotal = money(now.total);
+  if (!parts.length && wasTotal === nowTotal) return null;
+  return { was: wasTotal, now: nowTotal, delta: nowTotal - wasTotal, parts: parts, at: g.at, by: g.by };
+}
+
+/* ── §14 · newReceiptId ───────────────────────────────────────────────────────
+   ONE HAND-OVER, ONE IDENTITY (audit G5).
+
+   A warden takes Rs. 20,000 across a counter once. If it clears August's
+   arrears and pays September, that single act writes a collection on TWO
+   records — and nothing on either of them said they were the same hand-over.
+   The student holds one slip; the trail held N unrelated entries, and "show me
+   everything from this receipt" had no answer.
+
+   THE DECISION WAS DELIBERATELY NOT A TABLE (audit §1, owner). Making receipts
+   first-class with month records derived from them is the second source of
+   truth §14 exists to prevent — 52 call sites each answering "what is owed"
+   its own way is this codebase's documented history. So the posting stamps an
+   id on the trail entries it writes, and that is all: same answers, no
+   migration, no competing authority.
+
+   It is NOT `p.receiptNo`. That is the printed, human-facing number, assigned
+   lazily per RECORD the first time a receipt is printed (receipt.js). This is
+   assigned at collection time and groups the entries of one posting across
+   however many records it touched. A receipt reads the first; the trail reads
+   the second.                                                                */
+function newReceiptId() {
+  return 'rcp_' + (typeof uid === 'function'
+    ? uid()
+    : Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+}
+
 /* ── §14 · applyPayment ───────────────────────────────────────────────────────
    Collect money against a record. Every collection in the app goes through
    here: the Add Payment form, the Edit form, the single-row Mark Paid, the bulk
@@ -210,18 +316,31 @@ function applyPayment(p, opts) {
   p.overpaid = money(p.overpaid) + credit;
   p.status   = p.unpaid > 0 ? 'Pending' : 'Paid';
   p.paidDate = p.status === 'Paid' ? date : '';
-  p.method   = o.method || p.method || 'Cash';
+
+  /* THE RECORD'S METHOD IS NOT RESTAMPED BY A LATER COLLECTION (Rule 1: never
+     change a receipt's payment method). It used to be `o.method || p.method`
+     unconditionally, so a month opened in cash and topped up by bank transfer
+     retroactively became a bank transfer — on the record, on its row, and on
+     any receipt reprinted afterwards. The record's method describes the
+     collection that OPENED it; each later collection carries its own method on
+     its own trail entry, which is where a receipt reads it. */
+  const payMethod = o.method || p.method || 'Cash';
+  if (!p.method || paidBefore <= 0) p.method = payMethod;
 
   /* The instalment trail. Its entries carry their own dates, which is what lets
      a record part-paid in July and cleared in August be two cash events in two
      months rather than one lump on whichever date the record happens to hold. */
   if (!Array.isArray(p.partialPayments)) p.partialPayments = [];
   const entry = {
-    date, amount, method: p.method,
+    date, amount, method: payMethod,
     collectedBy: o.collectedBy ||
       ((typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden'),
     note: o.note || 'Collected',
   };
+  /* THE POSTING THIS COLLECTION BELONGED TO (audit G5). Written only when the
+     caller names one, so a record collected by an older build — or by a path
+     that has not been given one — carries no id rather than a made-up one. */
+  if (o.receiptId) entry.receiptId = String(o.receiptId);
   // A bank or wallet transaction number, when the collector gave one (Edit Payment).
   const ref = String(o.reference == null ? '' : o.reference).trim().slice(0, 40);
   if (ref) entry.reference = ref;
@@ -245,6 +364,34 @@ function applyPayment(p, opts) {
    belongs on the record as one.
 
    `amount` omitted reverses the whole collection.
+
+   ── TWO EVENTS, NOT ONE (owner, 2026-09-23) ─────────────────────────────────
+   `opts.kind` says which of them this is, and it is the only thing that
+   changes what the record owes afterwards:
+
+     correction  the money never really arrived — a mis-key, a double entry, a
+                 collection recorded against the wrong month. The debt RE-OPENS,
+                 because it was never actually settled. This is the default and
+                 the behaviour every reversal has had since this function was
+                 written, so nothing already on disk moves.
+     refund      the hostel handed the money back and the obligation went with
+                 it — an overcharged mess, a goodwill return, a duplicate
+                 payment given back. What is owed DOES NOT MOVE.
+
+   Until today there was only the first, and a warden recording the second got
+   a record that flipped to Pending and showed the student owing the very
+   amount they had just been given. That is the owner's report: "the refunded
+   amount and reverse amount still goes back to the unpaid amount".
+
+   WHY IT CANNOT BE FIXED WITHOUT ASKING WHICH. `owed = bill − collected`. A
+   reversal lowers `collected`, so `owed` rises unless something else gives.
+   Nothing on the record could tell the two apart — the reason field is free
+   text — so the modal asks, and the answer is stored.
+
+   THE SPLIT IS RECORDED, not re-derived later. `fromCredit` and `fromApplied`
+   go on the entry because the credit the record held at that moment is gone as
+   soon as the next collection lands, and refundRelief() in utils.js needs the
+   applied half to keep the derived balance honest.
 
    ORDER: credit first, then the applied balance. Reversing the 15,000 taken
    against a 14,500 bill has to take back the 500 credit before it starts
@@ -273,6 +420,12 @@ function reversePayment(p, opts) {
   if (amount > collected)  return { ok: false, reason: 'exceeds-collected', reversed: 0,
                                     max: collected };
 
+  /* Anything but the explicit 'refund' is a correction, including a missing
+     or misspelt kind. The safe default is the one that keeps a debt alive:
+     wrongly re-opening a settled month is visible on the next screen a warden
+     looks at, wrongly cancelling a real debt is not. */
+  const kind = o.kind === 'refund' ? 'refund' : 'correction';
+
   const creditBefore = money(p.overpaid);
   const fromCredit   = Math.min(amount, creditBefore);
   const fromApplied  = amount - fromCredit;
@@ -281,15 +434,24 @@ function reversePayment(p, opts) {
 
   p.amount   = collected - amount;
   p.overpaid = creditBefore - fromCredit;
-  p.unpaid   = money(p.unpaid) + fromApplied;
+  /* A CORRECTION RE-OPENS THE DEBT; A REFUND DOES NOT. Money taken out of a
+     credit never re-opened anything under either kind — it was never set
+     against a bill — which is why the cancellation settlement path has always
+     behaved correctly here and the manual reversal never did. */
+  p.unpaid   = money(p.unpaid) + (kind === 'refund' ? 0 : fromApplied);
   p.status   = p.unpaid > 0 ? 'Pending' : 'Paid';
   p.paidDate = p.status === 'Paid' ? (p.paidDate || date) : '';
 
   if (!Array.isArray(p.reversals)) p.reversals = [];
   const entry = {
-    date, amount,
+    date, amount, kind,
+    // Where the money came from, kept because it cannot be reconstructed later.
+    fromCredit, fromApplied,
     method: o.method || p.method || 'Cash',
     reason: String(o.reason || '').trim(),
+    // Money handed BACK across a counter is one act too, and belongs to a
+    // posting for the same reason a collection does (audit G5).
+    ...(o.receiptId ? { receiptId: String(o.receiptId) } : {}),
     by: o.by ||
       ((typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden'),
   };
@@ -299,7 +461,7 @@ function reversePayment(p, opts) {
   if (typeof ledgerTrack === 'function') ledgerTrack(p);
 
   return {
-    ok: true, reversed: amount, fromCredit, fromApplied, entry,
+    ok: true, reversed: amount, kind, fromCredit, fromApplied, entry,
     before: { paid: collected, credit: creditBefore },
     after:  { paid: p.amount, due: p.unpaid, status: p.status, credit: p.overpaid },
   };
@@ -487,6 +649,13 @@ function calculateReportTotals(payments, opts) {
     extras:        0,
     admissionFees: 0,
     reversed:      0,
+    /* `reversed` is every reversal, which is what left the drawer. `refunded`
+       is the part of it the hostel gave back rather than un-collected — the
+       figure a report needs to say "billed 14,500 · collected 14,500 ·
+       refunded 1,000" instead of losing the refund inside a correction total
+       (owner, 2026-09-23). `reversed` still includes it: one is a subset of
+       the other, not a sibling, because both are cash out of the drawer. */
+    refunded:      0,
   };
 
   for (const p of list) {
@@ -499,6 +668,7 @@ function calculateReportTotals(payments, opts) {
                                             : moneySum(p.extraCharges, c => c && c.amount);
     t.admissionFees += money(p.admissionFee != null ? p.admissionFee : p.fee);
     t.reversed      += moneySum(p.reversals, r => r && r.amount);
+    t.refunded      += moneySum(p.reversals, r => r && r.kind === 'refund' ? r.amount : 0);
   }
 
   t.safe = Object.keys(t).every(k => k === 'count' || moneyIsSafe(t[k]));

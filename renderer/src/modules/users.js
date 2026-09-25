@@ -178,10 +178,12 @@ function _usrAccountsView(tabs) {
     </div>
     <div class="al-head__acts">
       <button class="set-btn set-btn--go" onclick="showUserEditor(null)">${icon('plus','xs')}Add user</button>
-      <button class="set-btn" onclick="exportUsersExcel()">${icon('fileSpreadsheet','xs')}Export Excel</button>
-      <button class="set-btn" onclick="exportUsersPDF()">${icon('print','xs')}Export PDF</button>
       <button class="set-btn" onclick="navigate('activitylog')">${icon('list','xs')}Audit log</button>
       <button class="set-btn" disabled title="There is no importer for accounts. Each one is created here, because a password has to be set for it.">${icon('upload','xs')}Import</button>
+      ${''/* One control, both formats inside it (owner, 2026-09-08), and last
+             in the row as it is on every register. */}
+      ${tbExport({ id: 'usr-export', cls: 'set-btn',
+                   excel: 'exportUsersExcel()', pdf: 'exportUsersPDF()' })}
     </div>
   </div>
   ${tabs}
@@ -444,11 +446,14 @@ function usrCollectionsView(tabs) {
         : 'Money you have collected and not yet handed over.'}</div>
     </div>
     <div class="al-head__acts">
-      <button class="set-btn" onclick="exportMyCollectionsExcel()">${icon('fileSpreadsheet','xs')}Export Excel</button>
-      <button class="set-btn" onclick="exportMyCollectionsPDF()">${icon('print','xs')}Export PDF</button>
       ${noHandover ? '' : `<button class="set-btn set-btn--go" id="usr-handover" ${why ? 'disabled' : ''}
           title="${escHtml(why || 'Send the money you hold to an administrator to count and approve.')}"
           onclick="usrHoShowSend()">${icon(why ? 'lock' : 'wallet','xs')}Hand over cash</button>`}
+      ${''/* One control, both formats inside it (owner, 2026-09-08), last in
+             the row. Hand over cash is the action on this screen and keeps
+             its place ahead of it. */}
+      ${tbExport({ id: 'mycol-export', cls: 'set-btn',
+                   excel: 'exportMyCollectionsExcel()', pdf: 'exportMyCollectionsPDF()' })}
     </div>
   </div>
   ${tabs}
@@ -645,6 +650,104 @@ async function usrHoDoSend() {
   toast('Sent ' + fmtPKR(r.handover.totalAmount) + ' to the administrator', 'success', 'Handover sent');
 }
 
+/* ══ THE ADMIN WRITES DOWN A HANDOVER THEY TOOK (owner, 2026-09-23) ═══════
+   The counterpart to Hand over cash, from the other side of the desk. The
+   warden gave the admin cash, or sent them a JazzCash transfer, while the
+   admin was the one signed in — handovers.js has the rule; this is the form.
+
+   Only accounts actually holding money are offered, with what they hold, so
+   the admin picks a person rather than typing a figure: the amount is the
+   ledger's, never something retyped at a counter.                           */
+function usrHoShowRecord() {
+  if (typeof requireWritable === 'function' && !requireWritable('Recording a handover')) return;
+  if (typeof canDo === 'function' && !canDo('users')) {
+    toast('Only an account that manages users can record a handover.', 'error'); return;
+  }
+  if (typeof handoverSync === 'function') handoverSync();
+
+  const holders = Object.keys((typeof WARDENS !== 'undefined' && WARDENS) || {})
+    .filter(id => id !== CUR_ROLE && hoNeedsHandover(id))
+    .map(id => ({ id: id, name: (WARDENS[id] && WARDENS[id].name) || id,
+                  open: hoOpenFor(id), total: hoSum(hoPendingLines(id)),
+                  lines: hoPendingLines(id).length }))
+    .filter(x => x.total > 0 || x.open)
+    .sort((a, b) => b.total - a.total);
+
+  if (!holders.length) {
+    toast('Nobody is holding money to hand over right now.', 'info'); return;
+  }
+
+  showModal('modal-md',
+    `<div class="hf-mh"><div class="hf-mh__ico">${icon('wallet','sm')}</div>
+       <div><div class="hf-mh__t">Record a handover received</div>
+       <div class="hf-mh__s">Write down cash or a transfer a member of staff has already given you.</div></div></div>`,
+    `<div class="usr-ho-send">
+       <div class="usr-ho-list">
+         <table class="set-table usr-coltable is-compact">
+           <thead><tr><th></th><th>Who handed it over</th><th class="is-num">Lines</th><th class="is-num">Holding</th></tr></thead>
+           <tbody>
+             ${holders.map((x, i) => `<tr>
+               <td><input type="radio" name="ho-rec-who" value="${escHtml(x.id)}"
+                      ${x.open ? 'disabled' : (i === 0 ? 'checked' : '')} onchange="usrHoRecPick()"></td>
+               <td><div class="usr-colwho"><b>${escHtml(x.name)}</b>
+                 ${x.open ? '<span class="usr-colroom">Already sent one — review that instead</span>' : ''}</div></td>
+               <td class="is-num">${escHtml(String(x.lines))}</td>
+               <td class="is-num">${_usrAmt(money(x.total))}</td>
+             </tr>`).join('')}
+           </tbody>
+         </table>
+       </div>
+       <div class="field">
+         <label>Note <span class="opt">(optional)</span></label>
+         <input class="form-control" id="ho-rec-note" maxlength="120"
+                placeholder="e.g. JazzCash transfer, received 23 Sep">
+       </div>
+       <div class="usr-ho-summary" id="ho-rec-sum"></div>
+     </div>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-primary" id="ho-rec-btn" onclick="usrHoDoRecord()">Record handover</button>`);
+  usrHoRecPick();
+}
+
+/** Which account is ticked on the record form, or '' when none is. */
+function usrHoRecWho() {
+  const on = document.querySelector('input[name="ho-rec-who"]:checked');
+  return on ? on.value : '';
+}
+
+/* What this will settle, said before it is done — the figure is the ledger's,
+   so the admin is confirming a number rather than supplying one. */
+function usrHoRecPick() {
+  const sum = document.getElementById('ho-rec-sum');
+  const btn = document.getElementById('ho-rec-btn');
+  const id  = usrHoRecWho();
+  if (!sum) return;
+  if (!id) {
+    sum.textContent = 'Choose who handed the money over.';
+    if (btn) btn.setAttribute('disabled', '');
+    return;
+  }
+  const total = hoSum(hoPendingLines(id));
+  const name  = ((typeof WARDENS !== 'undefined' && WARDENS[id]) || {}).name || id;
+  sum.innerHTML = 'Recording <b>' + escHtml(fmtPKR(total)) + '</b> received from '
+    + escHtml(name) + '. It settles in their account straight away and shows there as recorded by you.';
+  if (btn) btn.removeAttribute('disabled');
+}
+
+async function usrHoDoRecord() {
+  const id = usrHoRecWho();
+  if (!id) { toast('Choose who handed the money over.', 'error'); return; }
+  const note = (document.getElementById('ho-rec-note')?.value || '').trim();
+  const r = hoRecordReceived(id, { note: note });
+  if (!r.ok) { toast(r.reason, 'error'); return; }
+  await saveDB();
+  closeModal();
+  renderPage('users');
+  if (typeof refreshNotifBell === 'function') refreshNotifBell();
+  toast('Recorded ' + fmtPKR(r.handover.totalAmount) + ' received from '
+      + (r.handover.wardenName || id), 'success', 'Handover recorded');
+}
+
 function usrHoTakeBack(id) {
   if (typeof requireWritable === 'function' && !requireWritable('Taking a handover back')) return;
   const h = hoFind(id);
@@ -670,6 +773,13 @@ function _usrHandoverQueue() {
     <div class="usr-ho-head">
       <div class="usr-sec">Waiting for approval</div>
       ${q.length ? `<span class="lk-chip dh-amber">${q.length} waiting</span>` : ''}
+      ${''/* THE OTHER DIRECTION, BESIDE THE QUEUE (owner, 2026-09-23). A handover
+             could only ever start with the warden pressing Send, so an admin who
+             had cash in their hand had nowhere to write it down and nothing to
+             confirm. The button sits on the queue because this is the screen an
+             admin comes to about handovers — whichever way the money travelled. */}
+      <button class="set-btn set-btn--go usr-ho-rec" onclick="usrHoShowRecord()">
+        ${icon('plus','xs')}Record one I received</button>
     </div>
     ${q.length ? `
     <div class="set-table-wrap">
@@ -1178,8 +1288,8 @@ function usrWardensView(tabs) {
       <div class="bk-head__s">What each account holds, and the handovers waiting for you to count.</div>
     </div>
     <div class="al-head__acts">
-      <button class="set-btn" onclick="exportWardensExcel()">${icon('fileSpreadsheet','xs')}Export Excel</button>
-      <button class="set-btn" onclick="exportWardensPDF()">${icon('print','xs')}Export PDF</button>
+      ${tbExport({ id: 'wrd-export', cls: 'set-btn',
+                   excel: 'exportWardensExcel()', pdf: 'exportWardensPDF()' })}
     </div>
   </div>
   ${tabs}
@@ -1290,8 +1400,6 @@ function usrWardenRail(u) {
 }
 
 function usrWardenOpen(id)  { usersRailFilter.page = 1; showWardenPanel(id); }
-function usrWardenClose()   { closeAccountPanel(); }
-
 /* ── EXPORTS — through the one engine (export/engine.js) ─────────────────────
    The document is the list on screen: the same rows, the same filters. */
 function _usrCollectionsExportDef() {
@@ -1573,7 +1681,6 @@ function refreshAccountPanel() {
 }
 
 function usrOpen(id) { showAccountPanel(id); }
-function usrClose() { closeAccountPanel(); }
 function usrReset() {
   usersFilter = { search: '', role: 'All', status: 'All', dept: 'All', page: 1, sel: usersFilter.sel };
   renderPage('users');

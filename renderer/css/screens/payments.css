@@ -142,7 +142,6 @@
 .pay-who__meta svg { flex-shrink:0; }
 
 .pay-num        { white-space:nowrap; }
-.pay-num--strong{ font-weight:var(--weight-strong); color:var(--text-primary); }
 /* The two figures that are a state rather than a number: money in, money owed. */
 .pay-num--in    { color:var(--success-fg); font-weight:var(--weight-medium); }
 .pay-num--due   { color:var(--danger-fg); font-weight:var(--weight-strong); }
@@ -1255,21 +1254,6 @@ input.ws__amt {
     /* 28px -> 26px on four buttons and their gaps. The 40x40 pointer target is
        drawn by .pay-act::after and is unaffected by the visual size. */
     .pay-act { width: 26px; height: 26px; border-radius: 7px; }
-    /* AND THE LAST TWO PIXELS. "CONCESSION" is one ten-character word, so it
-       cannot wrap and cannot abbreviate, and the table is already exactly its
-       container's width — no column can grow. Its header was running a
-       character under the pinned Actions cell and reading "CONCESSIO".
-
-       The three columns it belongs to — ADM. FEE, EXTRA CHARGES, CONCESSION —
-       hold a dash in almost every row, so their padding is doing nothing for
-       legibility that the empty cell is not already doing. 6px -> 4px drops
-       each column's minimum by 4px, which is enough for the word and leaves
-       margin. Shrinking the header type was the alternative and was rejected:
-       the whole point of the 7 Sep small-type pass was that this app's labels
-       are already at the floor. */
-    .pay-table thead th.pay-col-x, .pay-table tbody td.pay-col-x {
-        padding-left: 4px; padding-right: 4px;
-    }
 }
 
 
@@ -1575,14 +1559,32 @@ body.light-theme .pay-table-wrap::-webkit-scrollbar-track,
 }
 .pay-th { display:inline-flex; align-items:center; gap:4px; }
 .pay-th__l { display:inline-block; }
+/* ONE LINE ACROSS THE ROW (owner review #11, 2026-09-18; revisited 2026-09-23)
+
+   The original rule top-aligned the numeric cells. It had to: Extra and
+   Concession each carried a `.pay-why` reason under the figure, and
+   `vertical-align: middle` centres a two-line stack, which lifted those two
+   figures 9px above the single-line cells beside them. The money in a row did
+   not read across.
+
+   THOSE COLUMNS ARE A HOVER CARD NOW, so no cell in this table carries a
+   reason under a figure any more and the reason for top-aligning went with
+   them. Measured at 1366 it had started doing the opposite of its job: the
+   figures sat at 300 in a row whose centre is 310, with the room label at 310
+   and the method chip at 320 — three different heights across one row.
+
+   Everything is centred instead. The cells that now hold two lines — the
+   student's name over its coverage chip, the date over its byline — centre as
+   a pair, which is what puts them level with the single-line cells rather than
+   hanging above them. */
 .pay-table th.pay-col-num, .pay-table td.pay-col-num { text-align:center; }
+.pay-table tbody td { vertical-align:middle; }
 .pay-table th.pay-col-num .pay-th { justify-content:center; text-align:center; }
 .pay-table th.pay-col-no, .pay-table td.pay-col-no { width:1%; text-align:center; color:var(--text3); font-variant-numeric:tabular-nums; }
 .pay-num {
     font-size:13px; font-weight:500; color:var(--text); white-space:nowrap;
     font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums;
 }
-.pay-num--strong { font-weight:700; }
 .pay-num--in     { font-weight:700; color:var(--ant-success-fg); }
 .pay-num--due    { font-weight:700; color:var(--ant-danger-fg); }
 /* The coverage tag in the reference's colours: blue Rent + Mess, green Rent Only. */
@@ -1635,14 +1637,249 @@ body.light-theme .pay-table-wrap::-webkit-scrollbar-track,
     .pay-num { font-size:12.5px; }
 }
 
-/* WHY A FIGURE IS THERE, under the figure (owner, 2026-09-16).
-   Italic and one step down, because it is an annotation on the number above it
-   and must never be mistaken for a second number. The column is right-aligned,
-   so this is too — a left-aligned caption under a right-aligned figure reads as
-   belonging to the cell beside it. */
-.pay-why {
-    display: block; margin-top: 2px;
-    font-size: var(--text-xs); font-style: italic; font-weight: var(--weight-normal);
-    color: var(--text-tertiary); text-align: right;
+/* ══ THREE RANKS IN A PAYMENTS ROW (owner, 2026-09-23: "enterprise and premium
+   redesign with typography and hierarchy") ══════════════════════════════════
+   The same ladder the expenses register was given the day before, read for
+   this table's subject. A payments row answers three questions, and they are
+   not equally interesting:
+
+     1  WHO, AND WHAT MOVED — the student's name, and the two figures that can
+        change: what was collected (green) and what is still owed (red). Full
+        weight, full-strength or signal ink.
+     2  THE FRAME — the room, the month, the monthly charge, the method, the
+        status, the date. Facts you check once you have found the row.
+        Secondary ink, medium weight.
+     3  THE MARGINALIA — the row number, a zero figure, and the byline under
+        the date. Present, never competing. Tertiary ink.
+
+   EVERY RULE IS STATED AT `.pay-table tbody td …`. The shared `.ui-table tbody
+   td` sets colour and weight at (0,1,2); a bare `.pay-num--ref` is (0,1,0) and
+   would lose to it silently — the declaration would sit in the stylesheet
+   looking applied and the cell would render in the table's default ink. This
+   is the same trap that cost the expenses amount its weight on 2026-09-22.
+
+   SIZE IS NOT PART OF THE LADDER. The columns were measured to exactly fill
+   the 1070px panel at the 1366 floor with nothing overflowing; raising the
+   collected figure a point would widen its column and take the space back off
+   Actions. Rank is carried by weight and ink, which cost no width — and the
+   owner asked for contrast, which is what those two are. */
+/* THE NAME IS WHAT A ROW IS. It sat at 500 among figures at 700 — carried
+   into first rank only by being a point larger and a shade darker, which is a
+   thin margin for the one cell a warden looks up by. 600 puts it level with
+   the money without out-shouting the two coloured figures, which keep 700 and
+   a signal ink to themselves. */
+.pay-table tbody .pay-who__name { font-weight:var(--weight-semibold); }
+.pay-table tbody td .pay-num--ref { font-weight:var(--weight-medium); color:var(--text2); }
+.pay-table tbody td .pay-num--nil { font-weight:var(--weight-medium); color:var(--text3); }
+.pay-table tbody td .pay-num--in  { font-weight:var(--weight-bold); color:var(--ant-success-fg); }
+.pay-table tbody td .pay-num--due { font-weight:var(--weight-bold); color:var(--ant-danger-fg); }
+
+/* The frame. The month tick and the date are checked, not scanned — and the
+   date has an italic byline under it now, so the two lines have to separate by
+   something. The date keeps the secondary ink; the byline is already tertiary
+   and italic, which is the gap. */
+.pay-table tbody td.pay-col-mo   { color:var(--text2); }
+.pay-table tbody td.pay-col-date .pay-when { font-weight:var(--weight-medium); }
+/* The marginalia: the row number and the dash that stands in for a figure that
+   was never recorded. A dash is not a value and must not read as one. */
+.pay-table tbody td .pay-dash { color:var(--text3); }
+
+/* ══ CORRECTION OR REFUND, ON THE REVERSAL MODAL (owner, 2026-09-23) ════════
+   Two answers that leave opposite balances behind, so they are drawn as
+   choices to read rather than a select to skim past.
+
+   THE PATTERN IS SETTINGS' SERVICE-MODEL PILLS, REBUILT HERE RATHER THAN
+   BORROWED. `.svc-opt` lives in renderer/settings.css and belongs to that
+   screen; a payments modal reaching into another screen's stylesheet is the
+   cross-screen coupling the governance rules exist to stop — the day someone
+   restyles Settings, this modal changes shape for no reason anybody can find.
+
+   The native radio is KEPT, not replaced with a styled span: the pair stays
+   one keyboard group, arrow keys still move between them, and a screen reader
+   still announces it as a choice. `:has(input:checked)` paints the chosen one,
+   the same way the cancellation form's own options do. */
+.pay-rev__kind { display: grid; gap: var(--space-2); }
+.pay-rev__opt {
+    display: flex; align-items: flex-start; gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    background: var(--surface-2); cursor: pointer;
+}
+.pay-rev__opt:hover { border-color: var(--border-strong); }
+.pay-rev__opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.pay-rev__opt:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pay-rev__opt input { margin-top: 3px; flex: 0 0 auto; accent-color: var(--accent); }
+.pay-rev__opt__b { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pay-rev__opt__t {
+    font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text-primary);
+}
+.pay-rev__opt:has(input:checked) .pay-rev__opt__t { color: var(--accent-strong); }
+.pay-rev__opt__s {
+    font-size: var(--text-xs); color: var(--text-tertiary); line-height: var(--leading-normal);
+}
+
+
+
+/* ══ THE PAYMENT FORMS, READ AT A COUNTER (owner, 2026-09-19) ═══════════════
+   Three complaints from `44.png` and the message that came with it, answered
+   here rather than in the rules above, because this file's convention is that
+   the later block wins and the original rule keeps its reasoning intact.
+
+   The overrides are deliberately narrow: the student search on Add Payment,
+   the receive box on Edit Payment, and the small grey lines under the
+   headings. Nothing else in the payment screens changes size or colour. */
+
+/* 1 — THE STUDENT SEARCH IS THE FIRST QUESTION THE FORM ASKS, so it should not
+   look like the smallest control on the page. It sat at the shared .pf-in
+   size (34px, 12.5px type, the faint --border2) among a dozen identical
+   boxes; the warden's eye had nowhere to land. Taller, larger type, a border
+   that is actually a border, and a search icon in the accent so the box reads
+   as a search rather than a field waiting to be filled in. */
+#f-pstudent-search {
+    height: 42px;
+    font-size: 14px;
+    font-weight: 600;
+    border: 1.5px solid var(--border);
+    background: var(--card);
+}
+#f-pstudent-search::placeholder { color: var(--text2); font-weight: 500; }
+#f-pstudent-search:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.ap-who .pf-wrapin > svg { color: var(--accent); }
+.ap-who .pf-wrapin > .pf-caret { color: var(--text2); }
+
+/* 2 — THE RECEIVE BOX IS WHERE THE MONEY IS TYPED. It was the narrowest cell
+   of four, sharing its width with the "Full pending" button, so the field
+   that takes the only number the warden actually enters on this form was
+   smaller than the three read-only figures beside it (owner: "the receiving
+   money field is very small"). It gets a floor of 260px, and the input is set
+   in the same tabular figures at the same weight as the amounts it answers. */
+.pef-rcv { grid-template-columns: repeat(3, minmax(0,1fr)) minmax(260px, 1.9fr); }
+@media (max-width: 760px) {
+    /* Two columns of figures, and the box across the full width beneath them —
+       not squeezed into a half-cell. */
+    .pef-rcv { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .pef-rcv__in { grid-column: 1 / -1; border-top: 1px solid var(--border); }
+}
+.pef-rcv__in { padding: 10px 12px; gap: 6px; }
+.pef-rcv__in label { font-size: 11.5px; color: var(--text2); }
+#f-precv {
+    height: 40px;
+    font-size: 17px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    font-family: var(--ant-num-font);
+    letter-spacing: var(--ant-num-track);
+}
+.pef-rcv__full { padding: 9px 12px; font-size: 11.5px; }
+
+/* 3 — THE SMALL LINES UNDER THE HEADINGS were --text3, the tertiary step, and
+   at 10.5px on a dark ground they were not readable so much as present (owner:
+   "all the little descriptions below the heading like: Pick a student to load
+   the charge"). They carry real instruction — which student loads the charge,
+   what section 2 collects — so they move up one step to --text2 and gain half
+   a point of size. They stay lighter than the headings above them. */
+.ws__p i        { font-size: 11px; color: var(--text2); }
+.pef-sec__hint  { font-size: 11.5px; color: var(--text2); }
+.pef-note       { font-size: 11px; color: var(--text2); }
+
+/* 4 — RECENT PAYMENTS now lists instalments and money handed back, and expands
+   in place rather than navigating away (see _pefCollections in payments.js).
+   The expanded list is capped and scrolls: a student two years in has dozens of
+   collections, and the card must not push the sheet's own scroll around. */
+.pef-recent th.num, .pef-recent td.num { text-align: right; }
+/* CAPPED WHETHER OR NOT IT IS EXPANDED. It was uncapped when collapsed, so the
+   card grew with the student: this rail measured 1,055px against a 661px modal
+   body, and Recent payments was 376px of it — the single tallest thing on the
+   sheet, and the reason the owner's main-column savings did not shorten it. The
+   cap is the same either way; "View all" changes how many rows are IN the list,
+   not how much of the sheet it is allowed to take. */
+.pef-recent__w { max-height: 172px; overflow-y: auto; overscroll-behavior: contain; }
+.pef-recent__w.is-all { max-height: 216px; }
+.pef-recent__w thead th { position: sticky; top: 0; z-index: 1; }
+/* Money going back OUT. The minus sign is already on the figure; this stops it
+   reading as one more collection at a glance. */
+.pef-recent tr.is-back td,
+.pef-recent tr.is-back td b { color: var(--red); }
+
+/* 2b — the Full pending shortcut moves onto the label row, so the input owns
+   the cell's whole width (see the markup note in showEditPaymentModal). */
+.pef-rcv__lab { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pef-rcv__lab label { margin: 0; }
+.pef-rcv__row .hf-in { width: 100%; }
+
+/* 5 — THE WAY OUT FOR MONEY GOING BACK (owner: "no refund strategy there").
+   A quiet row, not a second primary action: taking money back out is rarer than
+   taking it in, and the receive box above must stay the loudest thing in this
+   section. The reason a warden may NOT use it sits beside the button, which is
+   the same rule the row menu follows. */
+.pef-back {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-top: 9px; padding: 8px 11px; border-radius: 9px;
+    border: 1px dashed var(--border); background: transparent;
+}
+.pef-back__t { font-size: 11.5px; font-weight: 700; color: var(--text2); }
+.pef-back__b {
+    border: 1px solid var(--border); background: var(--card); color: var(--red);
+    font: 700 11.5px var(--font); padding: 6px 11px; border-radius: 7px;
+    cursor: pointer; white-space: nowrap;
+}
+.pef-back__b:hover:not(:disabled) { border-color: var(--red); background: var(--red-dim); }
+.pef-back__b:disabled { opacity: .5; cursor: not-allowed; color: var(--text3); }
+.pef-back__m { font-size: 11px; color: var(--text3); margin-left: auto; }
+
+/* 6 — DENSITY (owner: "the form is very much crowded and looking as a slop").
+   Measured before: 1,066px of form inside a 661px modal body. Two changes, both
+   pairing fields that were stacked for no reason other than order.
+
+   Admission fee and Concession are one short number each and belong on one
+   line; only the concession's description needs the width. */
+.pef-adj__l { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 9px 10px; }
+.pef-adj__l > .field:nth-child(3) { grid-column: 1 / -1; }
+@media (max-width: 760px) { .pef-adj__l { grid-template-columns: minmax(0,1fr); } }
+
+/* Notes and the reason-for-a-change share the last row. auto-fit means one
+   child takes the full width, so a record holding no money — which has no
+   reason field — is unaffected. */
+.pef-pair {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+    gap: 12px; align-items: start;
+}
+.pef-pair > .pef-sec { margin-bottom: 0; }
+
+/* 6b — the new-balance figure was wrapping between "Rs." and the number, which
+   is the single sloppiest thing on the sheet: the one figure the block exists
+   to state, broken across two lines. The label may wrap; the figure may not. */
+.pef-newbal > b { flex-shrink: 0; white-space: nowrap; }
+.pef-newbal > span { min-width: 0; }
+
+/* 7 — THE DAY MONEY CAME IN (owner, 2026-09-20). Nowrap because a date broken
+   across three lines ("11-" / "Sept-" / "2026") is taller than the row and
+   unreadable as a date; tabular figures so a column of them lines up. */
+.pay-col-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+td.pay-col-date { font-size: var(--text-xs); color: var(--text2); }
+
+/* 8 — "Billed when raised" (finance Phase 6). A quieter row than the live
+   figures beneath it: it is history, not what anybody owes now, and it appears
+   only on a record whose bill has actually moved. */
+.pef-sum__was { color: var(--text3); }
+.pef-sum__was b { color: var(--text2); font-weight: 600; text-decoration: line-through; text-decoration-thickness: 1px; }
+
+/* ── THE DATE CELL'S BYLINE (owner, 2026-09-23) ──────────────────────────────
+   "Added by Hostyllo" / "Edited by Hostyllo" under the payment date, in small
+   italics. Italic because it is an ATTRIBUTION — the one line in this cell
+   that names a person rather than stating a fact about the payment — and the
+   slant is what stops the date and the byline reading as one block. The same
+   treatment the complaints register's `.iss-by` takes, for the same reason.
+
+   It clips rather than wrapping: this column is sized for a date, and a byline
+   that wraps would set the height of every row on the page. The full text is
+   on the hover card. */
+.pay-by {
+    margin-top: 2px; font-size: var(--text-xs); font-style: italic;
+    color: var(--text-tertiary); line-height: var(--leading-tight);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.pay-when { white-space: nowrap; }

@@ -17,6 +17,60 @@
 const crypto = typeof require !== 'undefined' ? require('crypto') : null;
 
 // ── Electron external link helper ─────────────────────────────────────────────
+/* A WhatsApp chat link that works on every PC (owner, 2026-09-24: "the whatsapp
+   support is broken").
+
+   `whatsapp://send` opens ONLY when WhatsApp Desktop is installed. On a PC
+   without it Windows has no handler, shell.openExternal rejects into a console
+   line, and the button does nothing at all. `https://wa.me/` is WhatsApp's own
+   universal link: it hands over to the desktop app when there is one and to
+   WhatsApp Web when there is not.
+
+   Pakistani numbers are normalised to the international form wa.me needs:
+   0342… and 0092342… both become 92342…. The encoded message is trimmed so
+   the whole link stays under the 2048 characters preload.js and main.js
+   accept — they drop a longer one silently. Returns '' without a number. */
+function waLink(phone, text) {
+  var num = String(phone || '').replace(/[^0-9]/g, '').replace(/^0092/, '92').replace(/^0/, '92');
+  if (!num) return '';
+  var pre = 'https://wa.me/' + num + '?text=';
+  return pre + waFitText(text, 1900 - pre.length);      // headroom under 2048
+}
+
+/* The longest head of `text` whose encoding fits `budget`, encoded. Trimmed in
+   whole CHARACTERS before encoding, never in the encoded string: an Urdu letter
+   is two or three %XX escapes, and cutting between them left a link WhatsApp
+   could not decode. Array.from keeps a surrogate pair (an emoji) whole too. */
+function waFitText(text, budget) {
+  var s = String(text || '');
+  var full = encodeURIComponent(s);
+  if (full.length <= budget) return full;
+  var chars = Array.from(s), lo = 0, hi = chars.length;
+  while (lo < hi) {                                      // largest n that fits
+    var mid = (lo + hi + 1) >> 1;
+    if (encodeURIComponent(chars.slice(0, mid).join('')).length <= budget) lo = mid;
+    else hi = mid - 1;
+  }
+  return encodeURIComponent(chars.slice(0, lo).join(''));
+}
+
+/* An email that opens WRITTEN, in Gmail (owner, 2026-09-24: "the gmail in the
+   support page only opens browser and not opens the gmail with the specified
+   id and message").
+
+   `mailto:` goes to whatever mail program Windows has as its default, and on
+   most hostel PCs that is nothing — so the click landed on a bare browser or a
+   "choose an app" prompt, with no address and no message. Gmail's compose URL
+   opens in the browser with the address, subject and body filled in; a warden
+   signed in to Gmail only has to press Send. Same 2048-character ceiling as
+   waLink(), and the body is trimmed the same way — in whole characters. */
+function gmailLink(to, subject, body) {
+  if (!to) return '';
+  var pre = 'https://mail.google.com/mail/?view=cm&fs=1&to=' + encodeURIComponent(to) +
+            '&su=' + encodeURIComponent(subject || '') + '&body=';
+  return pre + waFitText(body, 1900 - pre.length);      // headroom under 2048
+}
+
 function openExternalLink(url) {
   try {
     if (window.electronAPI && window.electronAPI.openExternal) {
@@ -107,7 +161,13 @@ function migrateStudentIdsToNumeric() {
   ['payments', 'cancellations', 'roomShifts', 'checkinlog', 'fines',
    'archive', 'complaints', 'issues', 'billSplits'].forEach(function (col) {
     (DB[col] || []).forEach(function (r) {
-      if (r && r.studentId && idMap[r.studentId]) r.studentId = idMap[r.studentId];
+      if (!r) return;
+      if (r.studentId && idMap[r.studentId]) r.studentId = idMap[r.studentId];
+      /* `raisedById` is the SAME LINK under the other name — a maintenance
+         ticket's resident. It was never remapped because maintenance was not in
+         this list at all; now that both kinds live in `issues`, missing it would
+         point every "raised by" at whoever inherits that code. */
+      if (r.raisedById && idMap[r.raisedById]) r.raisedById = idMap[r.raisedById];
     });
   });
 
@@ -121,12 +181,6 @@ function migrateStudentIdsToNumeric() {
 }
 
 // ── DOM helpers ───────────────────────────────────────────────────────────────
-function toggleClearBtn(inputId, btnId) {
-  const inp = /** @type {HTMLInputElement} */ (document.getElementById(inputId));
-  const btn = document.getElementById(btnId);
-  if (!inp || !btn) return;
-  btn.classList.toggle('visible', inp.value.length > 0);
-}
 
 // Safe window.open() wrapper — handles popup blocker gracefully
 function safeOpenWindow(width, height) {
@@ -173,8 +227,231 @@ function today() { return ymd(new Date()); }
    here.                                                                      */
 const RESIDENT_STATUSES = ['Active', 'Cancelling'];
 function isResident(t) { return !!t && RESIDENT_STATUSES.indexOf(t.status) !== -1; }
-function fmtPKR(n) { return 'PKR ' + Number(n || 0).toLocaleString('en-PK'); }
-function fmtNum(n) { return Number(n || 0).toLocaleString('en-PK'); } // number only — pair with <span class="pkr">PKR</span>
+/* Rs., NOT PKR, EVERYWHERE (owner, 2026-09-10: "remove PKR from everywhere and
+   use Rs."). The name stays — it is called from several hundred places and a
+   rename would be a diff nobody could read — but the string it produces is the
+   one the hostels themselves write. `PKR` is the ISO code a bank uses; `Rs.` is
+   what goes on a receipt in Peshawar. */
+function fmtPKR(n) { return 'Rs. ' + Number(n || 0).toLocaleString('en-PK'); }
+function fmtNum(n) { return Number(n || 0).toLocaleString('en-PK'); } // number only — pair with <span class="pkr">Rs.</span>
+
+/* ── BIG NUMBERS, SHORT ENOUGH TO FIT ────────────────────────────────────────
+   A KPI tile is about 190px wide with six across, which holds roughly
+   "PKR 9,999,999" and no more. A hostel billing in whole rupees reaches eight
+   and nine digits easily — a year of a 150-bed house is tens of millions — and
+   past that the tile simply clipped: "PKR 1,000,000,17" with the rest of the
+   number, and any sense of its size, cut off at the card edge. A figure you
+   cannot read the end of is worse than a rounded one.
+
+   So: exact up to 9,999,999, abbreviated above it. The threshold is where the
+   tile actually runs out, not a round-looking number — under it nothing
+   changes, which is why ordinary hostels see no difference at all.
+
+   Two decimals, because one is not enough at this scale: 1.2B and 1.24B are
+   forty million rupees apart.
+
+   THE EXACT FIGURE IS NEVER LOST. Every caller pairs this with a title
+   attribute carrying the full number (moneyValue does it automatically), so
+   the rounding is a display choice a hover undoes, not a discarded fact. */
+/* ── MONEY ON SCREEN, ONE RULE (owner, 2026-09-15) ──────────────────────────
+   "in expenses and some other places, the amount less than 1 million should be
+   like 14,000.00" — exact, thousands comma, two decimals, below a million; a
+   million and up is short: 1.25M. It replaces two older rules that disagreed —
+   fmtCompact was exact without decimals up to ten million, fmtCompactK shortened
+   from a thousand ("14K") — so both names now return the same string. Every
+   caller still carries the exact figure in its title. */
+function _fmtMoney2(v) {
+  return Number(v || 0).toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtCompact(n) {
+  const v = Number(n || 0);
+  const abs = Math.abs(v);
+  if (abs < 1e6) return _fmtMoney2(v);             // exact below a million
+  const sign = v < 0 ? '-' : '';
+  /* Divisor and suffix as separate values rather than a [suffix, divisor]
+     tuple: a mixed array types as (string|number)[], so the division fails
+     `npm run typecheck` — utils.js is one of the four files in its scope. */
+  const div = abs >= 1e12 ? 1e12 : abs >= 1e9 ? 1e9 : 1e6;
+  const suffix = abs >= 1e12 ? 'T' : abs >= 1e9 ? 'B' : 'M';
+  /* Trailing zeros trimmed: "5B" reads better than "5.00B", and the two mean
+     the same thing. Only the zeros go — 5.20B keeps its 2. */
+  const num = (abs / div).toFixed(2).replace(/\.?0+$/, '');
+  return sign + num + suffix;
+}
+
+/* ── COMPACT MONEY, FROM THE THOUSAND UP ─────────────────────────────────────
+   fmtCompact() above stays exact below ten million on purpose: a KPI card that
+   rounds PKR 476,700 to "PKR 477K" has thrown away the figure a warden is
+   about to reconcile against a cash drawer.
+
+   The dashboard's lower widgets are the other case. The Pending list and the
+   Collection donut are SCANNED, not reconciled — the lower-section spec §14
+   asks for "PKR 10K / PKR 476.5K / PKR 1.24M" there, and the exact number is
+   one click away on Payments. So this is a second formatter rather than a
+   change to the first: same rules, different threshold, and each caller picks
+   the one that matches what its number is for.
+
+   One decimal, trimmed: "PKR 10K" not "PKR 10.0K", "PKR 476.5K" kept. Below a
+   thousand there is nothing to compact and the exact figure is shorter anyway. */
+function fmtCompactK(n) {
+  /* No "K" any more (owner, 2026-09-15) — see the one rule above fmtCompact(). */
+  return fmtCompact(n);
+}
+/** The same, with the currency word — the lower widgets print it everywhere. */
+function fmtPKRk(n) { return 'Rs. ' + fmtCompactK(n); }
+
+/* THE CURRENCY WORD, FROM ONE PLACE (owner, 2026-09-10: "use Rs. instead of
+   PKR globally").
+
+   Nine screens read `DB.settings.currency` with their own `|| 'PKR'` fallback,
+   so changing the default in config.js moved none of them — and every install
+   that already exists has the string 'PKR' stored, which no default can reach.
+   This maps that stored value rather than migrating the database: 'PKR' and an
+   unset value both read as 'Rs.', and a hostel that has genuinely chosen USD
+   or AED keeps it. Nothing has to be written to fix an old install. */
+function currencyWord() {
+  const c = String((typeof DB !== 'undefined' && DB.settings && DB.settings.currency) || '').trim();
+  return (!c || c === 'PKR') ? 'Rs.' : c;
+}
+
+/* ── PAYMENT-METHOD COLOUR — THE ONLY PLACE THAT ANSWERS "WHAT COLOUR IS CASH" ─
+   Lifted out of renderDashboard(), where it lived as a local, because Reports
+   drew the same six wallets from a DIFFERENT ramp and picked BY INDEX rather
+   than by name (`_RPT_METHOD_HUES[i % len]`). So Cash was #2563EB on the
+   dashboard donut and whatever happened to sit at index 0 on the Reports one,
+   and the two screens described the same month in two colour schemes. Worse,
+   the Reports allocation moved every time a method was added or reordered in
+   Settings, so a wallet could change colour between two visits to the same
+   report.
+
+   Same shape of rule as finance.js: one authority, every screen a reader.
+
+   THE HUES. These are the design system's chart tokens (§17.2) plus two
+   neighbours, and deliberately NOT the status colours — a payment method is a
+   category, not a state, and green here would read as "good". Cash takes the
+   strong blue (owner, 7 Sep): it is the method most of the money arrives by in
+   this hostel, and the heaviest slice has to carry the heaviest colour or the
+   ring reads upside down. */
+const METHOD_HUES = {
+  'cash':          '#2563EB',
+  'easypaisa':     '#93C5FD',
+  'jazzcash':      '#16A34A',
+  'bank transfer': '#D97706',
+  'bank':          '#D97706',
+  'cheque':        '#7C3AED',
+  'other':         '#94A3B8',
+};
+
+/* SPARE HUES FOR METHODS THE OWNER ADDS IN SETTINGS. Every one is far from all
+   six named hues above — no second blue, and NO SECOND GREEN, which was the
+   bug: 'Crypto' is owner-added, fell to a hashed pick, and drew #65A30D, a lime
+   a few degrees off JazzCash's #16A34A. Two wallets in one green is not a
+   chart (owner, 7 Sep). */
+const METHOD_SPARE = ['#DB2777', '#0891B2', '#EA580C', '#4F46E5', '#0F766E',
+                      '#A21CAF', '#B45309', '#334155'];
+
+/* Allocated BY POSITION among the unnamed methods, not by hashing the name. A
+   hash can collide however long the spare list is, and the failure is invisible
+   until two particular wallets happen to be configured together; walking the
+   list cannot collide at all. Order comes from Settings, so a method keeps its
+   colour from month to month — only adding or removing one ABOVE it can move
+   it, which is the same guarantee the dashboard always gave.
+
+   Recomputed per call rather than cached: Settings can add a method at any
+   time, and this runs a handful of times per paint. */
+function methodHue(name) {
+  const k = String(name || '').trim().toLowerCase();
+  if (METHOD_HUES[k]) return METHOD_HUES[k];
+  const spare = new Map();
+  ((typeof DB !== 'undefined' && DB.settings && DB.settings.paymentMethods) || [])
+    .forEach(m => {
+      const j = String(m || '').trim().toLowerCase();
+      if (!j || METHOD_HUES[j] || spare.has(j)) return;
+      spare.set(j, METHOD_SPARE[spare.size % METHOD_SPARE.length]);
+    });
+  return spare.get(k) || '#94A3B8';
+}
+
+/* ── EXPENSE-CATEGORY COLOUR — THE ONLY PLACE THAT ANSWERS "WHAT COLOUR IS GAS"
+
+   Same rule as methodHue() above, and it is here for that reason plus one
+   more: the categories became DRAGGABLE in Settings on 2026-09-21.
+
+   Reports picked this colour with `_RPT_HUES[i % len]`, where `i` was the
+   category's POSITION in DB.settings.expenseCategories. That was defensible
+   while the list could only be appended to. The moment the owner can drag a
+   row it becomes the bug methodHue() already documents: reordering the list
+   repaints the whole Expense Breakdown, and a category is a different colour
+   between two visits to the same report for a reason nobody can see.
+
+   So the colour follows the NAME, and dragging changes the order of the list
+   without touching the chart.
+
+   ALLOCATED BY WALKING THE NAMES IN A STABLE ORDER, NOT BY HASHING ONE. A hash
+   can collide however long the ramp is, and the failure is invisible until two
+   particular categories happen to be configured together. Alphabetical is the
+   one ordering the owner cannot change by dragging, which is the whole point.
+
+   THE RAMP moved here from reports.js, where it was `_RPT_HUES`. Expenses are
+   money going out, so a warm ramp led by red reads correctly; these identify a
+   series and are not status signals. */
+const EXPENSE_CAT_HUES = ['#ef4444','#f97316','#f59e0b','#22c55e','#14b8a6',
+                          '#3b82f6','#8b5cf6','#ec4899','#84cc16','#06b6d4'];
+
+/* ONE STABLE LIST, INDEXED EVENLY.
+
+   The colour a category takes must be (a) the same on every screen and every
+   call, (b) unchanged when the owner DRAGS the categories into a new order in
+   Settings, and (c) as far from its neighbours' as a ten-hue ramp allows.
+
+   The version before this built its list per call, from Settings plus
+   whichever single name was being asked about. So the list — and therefore
+   every index in it — changed depending on the question: asking about
+   "Plumbing" produced an 11-name list and asking about "Owner Transfer"
+   produced a 12-name one, and the two landed on the SAME hue from different
+   positions. Two categories, one colour, on a page that had just started using
+   colour to tell them apart.
+
+   A hash of the name was the obvious repair and is the wrong one: djb2 over a
+   ten-entry ramp put sixteen real categories onto seven hues with three-way
+   collisions while three hues went unused. A hash spreads well over a large
+   space and badly over a tiny one.
+
+   So: ONE universe of names, built the same way whoever is asking — every
+   category Settings knows plus every category actually written on a record —
+   sorted, and indexed. Even spread by construction, identical from any call
+   site, and a drag in Settings cannot move it because the list is sorted
+   rather than taken in the owner's order.
+
+   ADDING a category can still shift the hues after it alphabetically. That is
+   the one cost, it is cosmetic, and it is the trade the even spread is worth:
+   a reader notices two categories sharing a colour today far more than they
+   notice a category changing colour the day a new one is created.
+
+   Past ten categories the ramp repeats, which no arithmetic can avoid. The
+   chip carries an icon and the word as well, which is why a repeat is a
+   repeat and not a collision of meaning. */
+function _expCatNames() {
+  const out = new Set();
+  const add = v => { const s = String(v || '').trim().toLowerCase(); if (s) out.add(s); };
+  if (typeof DB !== 'undefined' && DB) {
+    ((DB.settings && DB.settings.expenseCategories) || []).forEach(add);
+    (DB.expenses || []).forEach(e => add(e && e.category));
+    (DB.issues   || []).forEach(i => add(i && i.category));
+  }
+  return [...out].sort();
+}
+
+function expenseCatHue(name) {
+  const k = String(name || '').trim().toLowerCase();
+  if (!k) return '#94A3B8';
+  const names = _expCatNames();
+  let i = names.indexOf(k);
+  // A name nothing has heard of yet — a category being typed into the form —
+  // sorts into the same list rather than falling to a grey.
+  if (i < 0) { const all = [...names, k].sort(); i = all.indexOf(k); }
+  return EXPENSE_CAT_HUES[i % EXPENSE_CAT_HUES.length];
+}
 
 /* ── CHARGES RESOLVER — the ONLY place that answers "what is owed per month" ──
    Settings is the writer of price; every screen that shows or bills a monthly
@@ -279,9 +556,13 @@ function resolveCharges(student, opts) {
      serves no food. The configured amount is untouched in roomTypes, so
      switching the model back restores it. */
   const hostelMess = hostelServesMess();
+  /* A MESS EXEMPTION (warden ledger spec §2.6, step 7) is the one way off the
+     mess in a "rent + mess together" hostel: admin-approved, with a reason
+     (messExempt.js). Outside that model the flag is kept but ignored. */
+  const messExempt = serviceModel() === 'rent_mess_bundled' && s.messExempt === true;
   const messOptIn =
     !hostelMess       ? false :
-    !messIsOptional() ? true  :
+    !messIsOptional() ? !messExempt :
                         s.messOptIn !== false;
   const messAmount = hostelMess ? messFrom.v : 0;
   const messBilled = messOptIn ? messAmount : 0;
@@ -291,6 +572,7 @@ function resolveCharges(student, opts) {
     mess:       messAmount,      // the configured amount, billed or not
     messBilled,                  // what actually goes into the total
     messOptIn,
+    messExempt,                  // exempt from a bundled hostel's mess (step 7)
     hostelMess,                  // does this hostel serve food at all
     messOptional: hostelMess && messIsOptional(),  // may a student opt out
     total:      rentFrom.v + messBilled,   // the Monthly Charge
@@ -300,6 +582,143 @@ function resolveCharges(student, opts) {
     configured: rentFrom.src !== 'none',
     room, roomType: rtype
   };
+}
+
+/* ── WHAT IS STILL OWED ON A PAYMENT ──────────────────────────────────────────
+   `amount` is money COLLECTED; `unpaid` is money still owed. Records written
+   before `unpaid` existed carry only the first, and every screen invented its
+   own answer for the second — 29 sites fell back to `p.amount`, 26 fell back
+   to 0, and reports.js did both, so its Pending card and its own transaction
+   table disagreed about the same record. A warden chasing arrears from the
+   Payments screen therefore collected a different set than one chasing them
+   from Reports, and neither figure was labelled as an estimate.
+
+   Neither fallback was right. "Owes exactly what they already paid" is only
+   correct when nothing was paid, and "owes nothing" quietly drops real debtors
+   off every arrears list.
+
+   The answer comes from the charge authority instead, which is what §14 means
+   by reports reconciling against the same financial layer: resolveCharges()
+   knows what this student is billed today, and what is owed is that, less what
+   came in. This is not a new rule — the Edit Payment form has computed it this
+   way all along (payments.js). It was simply never shared, so every other
+   screen guessed.
+
+   The payment's own recorded rent/mess are the fallback for a student who has
+   since been deleted: the record still has to print a number on a receipt.
+
+   ORDER MATTERS HERE. A recorded `unpaid` is answered first and always, even
+   on a record marked Paid. Those two can disagree: every automatic settlement
+   writes `unpaid = 0` with the status, but the Edit Payment form takes the
+   status from a free dropdown while the balance beside it is readonly, so a
+   warden can mark a part-paid record Paid and save a balance with it. That
+   balance is money someone is owed. Deriving over it, or zeroing it because
+   the status says so, loses it silently.
+
+   The 'Paid' short-circuit therefore guards only the DERIVATION, which is
+   where it is actually needed: several call sites sum over lists that were
+   never filtered to Pending, and without it a legacy Paid record would
+   contribute its whole charge to Outstanding.
+
+   Everything derived is floored at 0 — a record whose collections already
+   cover the charge is settled, not in credit. */
+/* ── MONEY HANDED BACK THAT ALSO SETTLED THE DEBT ─────────────────────────────
+   (owner, 2026-09-23: "there is an issue with the refunded amount and reverse
+   amount, that it still goes back to the unpaid amount")
+
+   A reversal undoes a collection, and until now there was only one kind of it.
+   That made one line of arithmetic tell a lie:
+
+       owed = bill − collected
+
+   A reversal lowers `collected` and leaves `bill` alone, so `owed` HAS to rise.
+   For the case reversePayment() was written for — a warden keys 15,000 where
+   they meant 1,500 — that is exactly right: the money never came in, so the
+   debt re-opens. But for money genuinely handed BACK to a student, it is
+   wrong twice over: the record flips to Pending and the student appears to owe
+   the very amount they were just given.
+
+   THE TWO ARE NOW DIFFERENT EVENTS, told apart by `kind` on the reversal:
+
+     correction — the money never really arrived. The debt re-opens. (Default,
+                  and what every reversal recorded before today is read as, so
+                  no figure already on disk moves.)
+     refund     — the hostel gave it back and the obligation went with it. What
+                  is owed does not move.
+
+   THIS SUMS ONLY THE PART THAT CAME OUT OF APPLIED MONEY. A refund drawn from
+   a CREDIT — the cancellation settlement path — never re-opened anything in
+   the first place, because that money was never set against a bill; it would
+   be relieved twice if counted here. reversePayment() records the split on
+   each entry as `fromApplied`, so this is read, not re-derived.
+
+   The BILL ITSELF DOES NOT MOVE (owner's ruling, 2026-09-23): the month still
+   reads what the hostel charged, and the refund stands beside it as its own
+   figure, so a report says "billed 14,500 · collected 14,500 · refunded 1,000"
+   rather than quietly pretending only 13,500 was ever charged. */
+function refundRelief(p) {
+  const list = p && Array.isArray(p.reversals) ? p.reversals : [];
+  let s = 0;
+  for (const r of list) {
+    if (!r || r.kind !== 'refund') continue;
+    /* `fromApplied` is written by reversePayment(). A refund-kind entry that
+       predates it cannot have its split reconstructed — the credit the record
+       held at that moment is gone — so the whole amount is taken as applied,
+       which is what a refund recorded through the UI will almost always be. */
+    s += Number(r.fromApplied != null ? r.fromApplied : r.amount) || 0;
+  }
+  return s;
+}
+
+function outstandingOf(p) {
+  if (!p) return 0;
+  if (p.unpaid != null) return Number(p.unpaid) || 0;
+  if (p.status === 'Paid') return 0;
+
+  const t = (typeof DB !== 'undefined' && DB.students || []).find(s => s.id === p.studentId);
+  const c = t ? resolveCharges(t) : null;
+  const rent = (c && c.rent) || Number(p.monthlyRent || p.totalRent || 0);
+
+  /* Mess obeys resolveCharges' own rule: THE HOSTEL'S ANSWER OVERRIDES THE
+     RECORD'S. A rent-only hostel bills no food and a bundled one bills it for
+     everyone, whatever `messIncluded` a record written under an older setting
+     happens to carry — otherwise a hostel that switched to bundled would
+     under-state its arrears on every record from before the switch. Only an
+     optional hostel lets the record decide, which is the one case where that
+     flag is a billing fact rather than a stale preference.
+
+     With no student left to price against, the record is all there is. */
+  const mess = c
+    ? (c.messOptional && p.messIncluded != null
+        ? (p.messIncluded !== false ? c.mess : 0)
+        : c.messBilled)
+    : (p.messIncluded !== false ? Number(p.messCharge || 0) : 0);
+
+  /* Extra charges are part of the bill. Every place that WRITES a balance
+     computes it as monthlyRent + mess + extraTotal + admissionFee − concession
+     (payments.js:1816, :2552, :2732), so a derivation that drops extraTotal
+     reports less than the record owes. That omission is a real, recorded
+     defect — the Phase 0 fixture `m_legacy_no_unpaid` exists to catch it, and
+     `payments.js:2640` had it before this helper replaced that expression.
+
+     The recorded total wins; the line items are the fallback for a record that
+     carries them without it. */
+  const extras = p.extraTotal != null
+    ? Number(p.extraTotal) || 0
+    : (Array.isArray(p.extraCharges)
+        ? p.extraCharges.reduce((s, c) => s + (Number(c && c.amount) || 0), 0)
+        : 0);
+
+  /* Refunds are subtracted alongside what was collected. A record with no
+     stored balance derives one from its own fields, and `p.amount` has already
+     had the refund taken out of it — so without this the refund would re-open
+     the debt here exactly as it used to in the stored path. See
+     refundRelief() above for why this is only the applied part. */
+  return Math.max(0, rent + mess + extras
+                   + Number(p.admissionFee || p.fee || 0)
+                   - Number(p.concession   || p.discount || 0)
+                   - Number(p.amount       || 0)
+                   - refundRelief(p));
 }
 
 /* ── THE DEFAULT STUDENT AVATAR ───────────────────────────────────────────────
@@ -424,13 +843,23 @@ function chargeCoverage(c) {
   return { key: 'none', label: 'Not set', hue: 'dh-slate' };
 }
 
-/* One-line summary for the info strips: "PKR 16,000 rent + PKR 2,000 mess".
-   Kept next to the resolver so the phrasing cannot drift between screens. */
+/* One-line summary for the info strips.
+
+   IT USED TO SPELL OUT THE ARITHMETIC — "PKR 16,000 rent + PKR 2,000 mess" —
+   next to the total those two numbers add up to (owner, 2026-09-09: "remove
+   the +10000 rent +7000 mess included from everywhere and just label there
+   Rent+mess or Rent or Mess"). The reader of this line is the same person who
+   set both figures in Settings; what they cannot see from the total alone is
+   WHICH plan it covers, and that is the one thing this now says. The split
+   itself is still on the student's own profile and in Rent & Mess.
+
+   chargeCoverage() already names the four cases, so the phrasing comes from
+   there rather than being written a second time here. */
 function chargesBreakdown(c) {
   if (!c.configured) return 'No rent configured — set it in Settings → Rent &amp; Mess';
-  let out = fmtPKR(c.rent) + ' rent';
-  if (c.messOptIn && c.mess > 0)  out += ' + ' + fmtPKR(c.mess) + ' mess';
-  else if (c.mess > 0)            out += ' · mess off';
+  let out = chargeCoverage({ rent: c.rent, mess: c.mess,
+                             messIncluded: c.messOptIn && c.mess > 0,
+                             hasMess: c.mess > 0 }).label;
   // Say where the price came from — the whole bug was not being able to tell.
   out += c.rentSource === 'override' ? ' · custom rate for this student'
        : c.rentSource === 'room'     ? ' · from room (type has no rent set)'
@@ -446,165 +875,34 @@ function chargesBreakdown(c) {
 function moneyValue(amount, opts) {
   opts = opts || {};
   const size = opts.size || 'body';
-  const currency = opts.currency || 'PKR';
+  const currency = opts.currency || 'Rs.';   // owner, 2026-09-10 — see fmtPKR
   const color = opts.color ? `style="color:${opts.color}"` : '';
   const cls = opts.className ? ' ' + opts.className : '';
-  return `<span class="money-value money-value--${size}${cls}" ${color}>`
+  /* `compact` shortens the digits and keeps the exact figure in the title, so
+     a clipped card becomes a readable one without the precise number going
+     anywhere. Used by the KPI row, where the space is fixed and the values are
+     unbounded. */
+  const shown = opts.compact ? fmtCompact(amount) : fmtNum(amount);
+  const exact = opts.compact && shown !== fmtNum(amount)
+    ? ` title="${currency} ${fmtNum(amount)}"` : '';
+  return `<span class="money-value money-value--${size}${cls}" ${color}${exact}>`
        + `<span class="money-cur">${currency}</span>`
-       + `<span class="money-amt">${fmtNum(amount)}</span>`
+       + `<span class="money-amt">${shown}</span>`
        + `</span>`;
 }
 
-// ── PRINT / PDF STYLESHEET — single source of truth for ALL printed reports ──
-// Printed documents are always white/black-on-paper regardless of the app's
-// dark/light theme (correct for print), but every report generator used to
-// hand-roll its own near-duplicate <style> block with slightly different
-// brand colours, radii, and class names. This is the one place to edit the
-// brand look of every PDF (Monthly Report, Rent Summary, Transfers, etc.)
-const PRINT_BRAND = {
-  // Royal blue, matching --accent. This was still violet from before the
-  // accent ramp was repointed, so every PDF the app produced was branded a
-  // colour that appears nowhere in the app.
-  accent: '#2563eb',
-  green: '#16a34a',
-  red:   '#dc2626',
-  ink:   '#1a1a2e',
-  muted: '#64748b',
-  faint: '#94a3b8',
-};
+/* ── THE PRINTED DOCUMENTS LIVE IN src/export/ NOW ───────────────────────────
+   printDocStyles(), printHeader(), printKpiGrid() and printListDocument() were
+   this file's answer to "a header, some totals and a table", and every module
+   that grew an export grew a variant of them anyway. They are replaced by the
+   global export engine (src/export/engine.js), which renders the SAME
+   definition as a PDF and as a workbook so the two cannot drift apart — see
+   the export design specification, sections 58 to 61.
 
-function printDocStyles() {
-  const b = PRINT_BRAND;
-  return `<style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Inter','Segoe UI',Arial,sans-serif;color:${b.ink};background:#fff;padding:28px;font-size:12.5px}
-    .header,.hdr{display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:3px solid ${b.accent};margin-bottom:20px}
-    .title,.ht{font-size:21px;font-weight:800}
-    .subtitle,.hs{font-size:11px;color:#666;margin-top:3px}
-    .badge{padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;background:${b.accent}22;color:#6d28d9;border:1px solid ${b.accent}55}
-    /* KPI grid — supports both .kpi-grid > .kpi and .kg > .kc legacy markup */
-    .kpi-grid,.kg{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
-    .kpi,.kc{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;text-align:center}
-    .kpi label,.kl{font-size:9.5px;color:${b.faint};text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px}
-    .kpi .val,.kv{font-size:20px;font-weight:900;color:${b.ink}}
-    .section{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px}
-    .section h3,h3{font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${b.muted};margin:16px 0 10px}
-    .summary-box{border-radius:12px;padding:18px;margin-bottom:18px}
-    table{width:100%;border-collapse:collapse;font-size:11.5px}
-    th{background:#f1f5f9;padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:${b.muted};font-weight:700;border-bottom:1px solid #e2e8f0}
-    td{padding:8px 12px;border-bottom:1px solid #f8fafc}
-    .green,.gr{color:${b.green};font-weight:700}
-    .red,.re{color:${b.red};font-weight:700}
-    .gold,.go{color:#5b21b6;font-weight:700}
-    /* Partial: amber, matching payStatusHue()'s dh-amber on screen. It used
-       to borrow .gold, which is the room-number colour in these documents —
-       so a part-paid row and a room number read as the same kind of thing. */
-    .part{color:#b45309;font-weight:700}
-    .footer,.ft{margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;text-align:center;font-size:10.5px;color:${b.faint}}
-    @media print{body{padding:16px}}
-  </style>`;
-}
-
-// Renders a row of KPI tiles for a printed report. items: [{label, value, cls}]
-// value should already be a formatted string (e.g. fmtPKR(x) or a plain count).
-function printKpiGrid(items) {
-  return `<div class="kpi-grid">${items.map(it =>
-    `<div class="kpi"><label>${it.label}</label><div class="val${it.cls ? ' ' + it.cls : ''}"${it.color ? ` style="color:${it.color}"` : ''}>${it.value}</div></div>`
-  ).join('')}</div>`;
-}
-
-function printHeader(hostelName, title, subtitle) {
-  return `<div class="header"><div><div class="title">${escHtml(hostelName)}</div>` +
-    (subtitle ? `<div class="subtitle">${title} · ${subtitle}</div>` : `<div class="subtitle">${title}</div>`) +
-    `</div></div>`;
-}
-
-/* ── ONE BUILDER FOR THE APP'S TABULAR PRINT DOCUMENTS ────────────────────────
-   Students, Payments and Expenses all needed an Export PDF, and three separate
-   implementations of "a header, some totals and a table" is how the printed
-   documents in this app drifted apart the first time. This is the shape they
-   share; each caller supplies what is actually different — its columns, its
-   rows, and what it counts.
-
-   `groups` is what earns this being one function rather than a snippet. The
-   expenses export prints one category or every category, and "every category"
-   is not one table with a category column — it is a table per category, each
-   with its own subtotal, and a grand total under them. Students and Payments
-   pass a single unlabelled group and get a plain table.
-
-   Every column takes `get(row)` returning READY-TO-RENDER HTML or text. Escaping
-   is the caller's job, because half these columns are money and badges the
-   caller has already formatted and the other half are names typed by a warden.
-
-   opts:
-     title      document title, under the hostel name
-     subtitle   the scope in words — which month, which filter, how many rows
-     kpis       [{label, value, cls}] for printKpiGrid
-     columns    [{label, get, cls, align}]
-     groups     [{label, meta, rows, total}]  — label/meta/total optional
-     note       a closing line above the footer                            */
-function printListDocument(opts) {
-  const o        = opts || {};
-  const hostel   = (typeof DB !== 'undefined' && DB.settings && DB.settings.hostelName) || 'Hostel';
-  const columns  = o.columns || [];
-  const groups   = o.groups  || [];
-  const rowCount = groups.reduce((n, g) => n + ((g.rows || []).length), 0);
-
-  const head = '<tr>' + columns.map(c =>
-    `<th${c.align ? ` style="text-align:${c.align}"` : ''}>${escHtml(c.label)}</th>`).join('') + '</tr>';
-
-  const table = g => {
-    const rows = (g.rows || []).map(r => '<tr>' + columns.map(c =>
-      `<td${c.align ? ` style="text-align:${c.align}"` : ''}${c.cls ? ` class="${c.cls}"` : ''}>${c.get(r)}</td>`
-    ).join('') + '</tr>').join('');
-    // A subtotal row belongs INSIDE its table, not floating under it — on a
-    // page break the total must not end up on a different sheet from the rows
-    // it totals.
-    const foot = g.total
-      ? `<tr class="subtotal"><td colspan="${columns.length - 1}">${escHtml(g.total.label || 'Subtotal')}</td>` +
-        `<td style="text-align:right">${g.total.value}</td></tr>`
-      : '';
-    return `<table><thead>${head}</thead><tbody>${rows}${foot}</tbody></table>`;
-  };
-
-  const body = groups.map(g => {
-    if (!g.label) return table(g);
-    return `<div class="group">
-      <div class="group__head"><span class="group__t">${escHtml(g.label)}</span>` +
-      (g.meta ? `<span class="group__m">${g.meta}</span>` : '') + `</div>${table(g)}</div>`;
-  }).join('');
-
-  const empty = `<div class="empty">Nothing to print — the current filter matches no records.</div>`;
-
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <title>${escHtml(o.title || 'Report')} — ${escHtml(hostel)}</title>
-  ${printDocStyles()}
-  <style>
-    .group { margin-bottom: 18px; page-break-inside: avoid; }
-    .group__head { display:flex; align-items:baseline; justify-content:space-between;
-                   padding: 0 0 6px; border-bottom: 2px solid #e2e8f0; margin-bottom: 8px; }
-    .group__t { font-size: 13px; font-weight: 800; }
-    .group__m { font-size: 10.5px; color: #64748b; }
-    tr.subtotal td { border-top: 1px solid #cbd5e1; font-weight: 800; background: #f8fafc; }
-    .empty { padding: 40px; text-align: center; color: #94a3b8; font-size: 13px; }
-    .grand { display:flex; align-items:center; justify-content:space-between;
-             margin-top: 6px; padding: 12px 16px; border-radius: 12px;
-             background: #f1f5f9; border: 1px solid #e2e8f0; }
-    .grand__l { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #64748b; font-weight: 700; }
-    .grand__v { font-size: 18px; font-weight: 900; }
-    .sub { display:block; font-size: 9.5px; color: #64748b; font-weight: 600; margin-top: 1px; }
-    /* Long tables repeat their header on every sheet — a warden reading page 3
-       of a roster otherwise has to flip back to find out what column four is. */
-    thead { display: table-header-group; }
-    tr { page-break-inside: avoid; }
-  </style></head><body>
-  ${printHeader(hostel, o.title || 'Report', o.subtitle || '')}
-  ${o.kpis && o.kpis.length ? printKpiGrid(o.kpis) : ''}
-  ${rowCount ? body : empty}
-  ${o.grand ? `<div class="grand"><span class="grand__l">${escHtml(o.grand.label)}</span><span class="grand__v">${o.grand.value}</span></div>` : ''}
-  <div class="footer">${escHtml(hostel)} · ${rowCount} record${rowCount === 1 ? '' : 's'} · Generated ${new Date().toLocaleString('en-PK')}${o.note ? ' · ' + escHtml(o.note) : ''}</div>
-  </body></html>`;
-}
+   Two printed artefacts deliberately do NOT go through it, and are not
+   regressions: the room visit sheet and the student card. Those are physical
+   objects with a design the owner signed off, not data exports, and each keeps
+   its own stylesheet inside the module that builds it.                      */
 
 /* The filename these documents get. One rule, so a folder of them sorts by
    hostel then by what they are then by date, instead of three conventions. */
@@ -625,25 +923,93 @@ function fmtDate(d) {
   } catch (e) { return d; }
 }
 
-// Dashboard month selector (null = real current month, 'YYYY-MM' = selected)
-let _dashboardMonth = null;
+/* THE CALENDAR MONTH, AND THE MONTH THE DASHBOARD IS SHOWING, ARE TWO THINGS.
+   thisMonth() used to return the dashboard's picked month, so picking August to
+   look at it also moved every write that asks "which month is it?": ending a
+   concession ended it in August, a mess exemption took the charge off August's
+   record, and Add Payment and Generate Month defaulted to August. The owner
+   ruled (2026-09-17) that the picked month belongs to the dashboard alone, so
+   thisMonth() is the real month again and only dashboard code reads
+   dashMonth(). Every other screen has its own month filter in its toolbar. */
+let _dashboardMonth = null;   // null = the real month; 'YYYY-MM' = picked on the dashboard
 function thisMonth() {
-  return _dashboardMonth || ym(new Date());
+  return ym(new Date());
 }
-function thisMonthLabel() {
-  const [y, m] = thisMonth().split('-').map(Number);
+function dashMonth() {
+  return _dashboardMonth || thisMonth();
+}
+function _monthKeyLabel(key) {
+  const [y, m] = key.split('-').map(Number);
   return new Date(y, m - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' });
 }
+function thisMonthLabel() { return _monthKeyLabel(thisMonth()); }
+function dashMonthLabel() { return _monthKeyLabel(dashMonth()); }
 function thisYear() { return new Date().getFullYear().toString(); }
+
+/* A stored month key rendered for a person. `p.month` is 'YYYY-MM' on newer
+   records and the older 'August 2026' shape on ones written before that, so
+   this takes either and returns the readable form - printing the raw key put
+   "Room 22 · 2026-09" on the dashboard, which is a database value on a screen.
+
+   en-IN, not en-PK: the app already uses it everywhere for dates. */
+function monthLabel(key) {
+  const s = String(key || '').trim();
+  if (!s) return '';
+  const m = /^(\d{4})-(\d{2})$/.exec(s);
+  if (!m) return s;                       // already a label, or something else
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, 1);
+  if (isNaN(d.getTime())) return s;
+  return d.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+}
+
+/* ── PRORATED CHARGING (warden ledger spec §2.5, §3.10, step 9) ──────────────
+   The month a "By days" charge is for, as { y, m (1-12), days }. Takes a stored
+   'YYYY-MM' key or a 'September 2026' label, the same inputs monthLabel() takes.
+   null for anything else. */
+function prorateMonthOf(key) {
+  const s = String(key || '').trim();
+  let y, m;
+  const k = /^(\d{4})-(\d{2})$/.exec(s);
+  if (k) { y = Number(k[1]); m = Number(k[2]); }
+  else {
+    const l = /^([A-Za-z]{3,})\s+(\d{4})$/.exec(s);
+    if (!l) return null;
+    const names = ['january', 'february', 'march', 'april', 'may', 'june', 'july',
+                   'august', 'september', 'october', 'november', 'december'];
+    const i = names.findIndex(n => n.indexOf(l[1].toLowerCase()) === 0);
+    if (i < 0) return null;
+    y = Number(l[2]); m = i + 1;
+  }
+  if (!(m >= 1 && m <= 12)) return null;
+  return { y, m, days: new Date(y, m, 0).getDate() };
+}
+
+/* The days left in the month being charged, the first day counted (owner): from
+   the join date when it falls in that month, otherwise from today when the month
+   is this one; any other month counts from the 1st. Never more than the month. */
+function prorateDefaultDays(monthKey, joinDate, todayYmd) {
+  const mo = prorateMonthOf(monthKey);
+  if (!mo) return 0;
+  const dayIn = d => {
+    const x = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || ''));
+    return (x && Number(x[1]) === mo.y && Number(x[2]) === mo.m) ? Number(x[3]) : 0;
+  };
+  const from = dayIn(joinDate) || dayIn(todayYmd || today()) || 1;
+  return Math.max(1, Math.min(mo.days, mo.days - from + 1));
+}
+
+/* "Prorated: 16 days @ 700/day" — one wording for the form, the Edit form and
+   the ledger. */
+function prorateText(pr) {
+  if (!pr) return '';
+  const days = Number(pr.days) || 0;
+  return 'Prorated: ' + fmtNum(days) + (days === 1 ? ' day' : ' days') + ' @ ' + fmtNum(Number(pr.rate) || 0) + '/day';
+}
 
 // ── String helpers ────────────────────────────────────────────────────────────
 function escHtml(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-function csvEsc(s) {
-  const v = String(s == null ? '' : s);
-  return '"' + v.replace(/"/g, '""') + '"';
 }
 
 // ── Input formatters ──────────────────────────────────────────────────────────
@@ -654,12 +1020,6 @@ function formatRoomNumber(inp) {
 }
 function capFirstChar(inp) {
   if (inp.value.length === 1) inp.value = inp.value.toUpperCase();
-}
-function formScrollNext(inp) {
-  const field = inp.closest ? inp.closest('.field') : null;
-  if (!field) return;
-  const next = field.nextElementSibling;
-  if (next) next.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 // Capitalize ASCII only — protects Urdu/Arabic names
 function autoCapName(inp) {
@@ -941,6 +1301,15 @@ function courseKeyNav(e) {
 //       CCCC-CCCC = HMAC-SHA256('V4:EEEE:SSSS', SECRET) hex, first 8.
 //
 // A v4 licence runs to the END of its expiry day (23:59:59.999 local).
+//
+//   v5  HOSTEL-EEEE-SSSS-CCCC-CCCC     (same layout as v4)
+//       CCCC-CCCC = HMAC-SHA256('V5:EEEE:SSSS', SECRET) hex, first 8.
+//       Issued only by the control plane, and it must be ACTIVATED ONLINE ONCE
+//       (owner, 2026-09-24): that first activation is what binds the key to one
+//       PC. A v5 key cannot be told from a v4 key by eye — only by which tag its
+//       checksum was taken under — so parseLicenseKey() reports the layout and
+//       resolveKeyVersion() the version. A build that predates v5 fails its
+//       checksum and refuses the key outright, which is the safe direction.
 const LICENSE_KEY_RE_V3 = /^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
 const LICENSE_KEY_RE_V4 = /^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
 
@@ -960,6 +1329,7 @@ function parseLicenseKey(key) {
 // What the checksum is taken over. The 'V4:' tag stops a v4 key from ever
 // colliding with the v3 key that happens to share its first group.
 function licenseChecksumPayload(parsed) {
+  if (parsed.version === 5) return 'V5:' + parsed.expPart + ':' + parsed.serial;
   return parsed.version === 4
     ? 'V4:' + parsed.expPart + ':' + parsed.serial
     : parsed.expPart;
@@ -987,15 +1357,26 @@ function validateKeyFormat(key) {
   return parseLicenseKey(key) !== null;
 }
 
-function validateKeyChecksum(key, secret) {
+// 3, 4 or 5 for a key whose checksum holds, 0 for anything else. A v4-layout
+// key is tried as v4 first, then v5.
+function resolveKeyVersion(key, secret) {
   try {
     const parsed = parseLicenseKey(key);
-    if (!parsed) return false;
-    return parsed.checksum === licenseChecksum(parsed, secret);
+    if (!parsed) return 0;
+    if (parsed.checksum === licenseChecksum(parsed, secret)) return parsed.version;
+    if (parsed.version === 4
+        && parsed.checksum === licenseChecksum(Object.assign({}, parsed, { version: 5 }), secret)) {
+      return 5;
+    }
+    return 0;
   } catch (e) {
     console.error('[HOSTYLLO] Key checksum validation failed:', e.message);
-    return false;
+    return 0;
   }
+}
+
+function validateKeyChecksum(key, secret) {
+  return resolveKeyVersion(key, secret) !== 0;
 }
 
 // The expiry instant a key encodes. v3 keys keep their original meaning to the
@@ -1025,10 +1406,12 @@ function licenseSerial() {
 
 // Issue a key. `serial` is injectable for the tests only; every production
 // caller omits it and gets a fresh random one.
-function buildLicenseKey(year, month, day, secret, serial) {
+// `version` 5 cuts a key that must be activated online once (see v5 above).
+function buildLicenseKey(year, month, day, secret, serial, version) {
   const expPart = licenseDayNumber(year, month, day).toString(36).toUpperCase().padStart(4, '0');
   const ser     = String(serial || licenseSerial()).toUpperCase();
-  const chk     = licenseChecksum({ version: 4, expPart: expPart, serial: ser }, secret);
+  const ver     = version === 5 ? 5 : 4;
+  const chk     = licenseChecksum({ version: ver, expPart: expPart, serial: ser }, secret);
   return 'HOSTEL-' + expPart + '-' + ser + '-' + chk.slice(0, 4) + '-' + chk.slice(4, 8);
 }
 
@@ -1086,11 +1469,100 @@ function studentsByRoom(list) {
   });
 }
 
+/* ─── ONE ISSUES REGISTER — the shared transform ─────────────────────────────
+
+   Maintenance and complaints became one `issues` collection on 2026-09-21
+   (owner). Two places have to perform that fold and they must agree exactly:
+
+     migrations/003-issues-merge.js   the SQLite tables, once, on upgrade
+     _initDBFields() in modals.js     a RESTORED BACKUP written before the merge
+
+   The second is not optional. A backup file taken last month carries
+   `maintenance` and `complaints` and no `issues`, and restoreBackup() hands it
+   straight to _initDBFields(). Without the fold the register comes back EMPTY
+   and nothing says so — the records are in the file, just not where anything
+   looks.
+
+   So the transform lives HERE, in the module the renderer loads as globals and
+   node can require, and both callers use this one copy. The alternative is two
+   implementations of a data migration that must agree forever, which is the
+   mistake the vendored server copy exists to avoid.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/** The middle state, for both kinds, since the merge. */
+const ISSUE_MIDDLE_STATUS = 'InProgress';
+
+/**
+ * One maintenance ticket or complaint, as an issues record.
+ *
+ * Starts from a copy of the WHOLE record and applies three named changes — a
+ * whitelist would silently drop whatever it forgot, and it forgets the next
+ * field somebody adds to the form.
+ *
+ *   kind              stamped; it is what MA-/CO- reads
+ *   subject → title   one thing had two names, and one form cannot have both
+ *   UnderReview → InProgress   one register, one word for the middle state
+ *
+ * `seq` is stamped when absent, from the record's position in its ORIGINAL
+ * collection. Records written before `seq` existed fall back to that position
+ * for their reference number, and after the fold there is no such position —
+ * so this is the last moment MA-0004 can be kept at MA-0004.
+ *
+ * @param {'maintenance'|'complaint'} kind
+ * @param {object} rec
+ * @param {number} position  1-based, within its own original collection
+ */
+function issueMergeRecord(kind, rec, position) {
+  const out = Object.assign({}, rec);
+  out.kind = kind;
+  if (kind === 'complaint') {
+    // Both spellings can sit on a record edited across versions; `subject` wins
+    // because it is what the complaint form wrote.
+    out.title = String(rec.subject || rec.title || '');
+    delete out.subject;
+  } else {
+    out.title = String(rec.title || '');
+  }
+  if (out.status === 'UnderReview') out.status = ISSUE_MIDDLE_STATUS;
+  if (!Number(out.seq)) out.seq = Number(position) || 1;
+  return out;
+}
+
+/**
+ * Fold a pre-merge database shape into `d.issues`. Idempotent, and ONCE.
+ *
+ * The flag is load-bearing rather than tidy. Without it, every load would fold
+ * the legacy arrays again — and since those arrays are deliberately left
+ * populated as the rollback path, an issue the warden DELETED would come back
+ * on the next launch. So the fold happens once per database and is recorded.
+ */
+function issuesFoldLegacy(d) {
+  if (!d) return d;
+  if (!Array.isArray(d.issues)) d.issues = [];
+  if (!d.settings) d.settings = {};
+  if (d.settings.issuesMergedAt) return d;
+
+  const have = new Set(d.issues.map(function (x) { return x && x.id; }).filter(Boolean));
+  const take = function (arr, kind) {
+    (Array.isArray(arr) ? arr : []).forEach(function (rec, i) {
+      if (!rec || !rec.id || have.has(rec.id)) return;
+      d.issues.push(issueMergeRecord(kind, rec, i + 1));
+      have.add(rec.id);
+    });
+  };
+  take(d.maintenance, 'maintenance');
+  take(d.complaints, 'complaint');
+
+  d.settings.issuesMergedAt = new Date().toISOString().slice(0, 10);
+  return d;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    validateKeyFormat, validateKeyChecksum, parseLicenseKey, licenseKeyExpiry,
+    validateKeyFormat, validateKeyChecksum, resolveKeyVersion, parseLicenseKey, licenseKeyExpiry,
     licenseDayNumber, licenseDayToDate, licenseSerial,
-    buildLicenseKey, buildLegacyLicenseKey, cmpRoomNo
+    buildLicenseKey, buildLegacyLicenseKey, cmpRoomNo,
+    ISSUE_MIDDLE_STATUS, issueMergeRecord, issuesFoldLegacy, waLink, waFitText, gmailLink
   };
 }
 /* ─── BACKUP VALIDATION ──────────────────────────────────────────────────────
@@ -1130,12 +1602,25 @@ if (typeof module !== 'undefined' && module.exports) {
    naming an internal field.                                                  */
 const BACKUP_COLLECTIONS = [
   'students', 'rooms', 'payments', 'expenses', 'cancellations', 'maintenance',
-  'complaints', 'checkinlog', 'notices', 'fines', 'activityLog', 'inspections',
+  // `issues` is where maintenance and complaints live since 2026-09-21. The two
+  // older names stay listed so a backup written before the merge still counts as
+  // a valid file — restoreBackup() folds them in on the way through.
+  'complaints', 'issues', 'checkinlog', 'notices', 'fines', 'activityLog', 'inspections',
   'billSplits', 'transfers', 'roomShifts', 'archive',
+  // The student ledger: camelCase from Settings → Export Data, the table name
+  // from the menu backup. Both are lists of records with ids.
+  'studentLedger', 'student_ledger',
+  // The handover tables (warden ledger step 4), under both spellings too.
+  'wardenCollections', 'warden_collections', 'handovers', 'handoverItems', 'handover_items',
+  // Standing concessions (warden ledger step 8).
+  'concessions',
 ];
 // Collections whose records are written to SQLite by id, so an id is mandatory.
 const BACKUP_ID_REQUIRED = [
   'students', 'rooms', 'payments', 'expenses', 'cancellations', 'transfers', 'archive',
+  'studentLedger', 'student_ledger',
+  'wardenCollections', 'warden_collections', 'handovers', 'handoverItems', 'handover_items',
+  'concessions',
 ];
 const BACKUP_MAX_RECORDS = 200000;   // ~40x the largest real hostel seen
 const BACKUP_MAX_DEPTH   = 24;
@@ -1201,3 +1686,356 @@ function validateBackup(data) {
 
   return { ok: true };
 }
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE WHATSAPP MARK, IN ONE PLACE (owner, 2026-09-10: "use official whatsapp
+   logo").
+
+   There were three marks in this app: the brand's own outline on the students
+   register, a filled variant on the dashboard's reminder button, and — on the
+   Payments toolbar, the one button whose whole job is to say which channel the
+   reminder goes out on — a bare speech bubble with no handset in it, which
+   reads as "a chat app" rather than as WhatsApp.
+
+   This is the brand outline: the bubble with the tail bottom-left and the
+   handset inside it. It takes `currentColor` rather than the brand green, so a
+   register with forty of them in it does not become forty saturated green marks
+   competing with the column beside them; a caller that wants the green sets the
+   colour on the button.
+   ════════════════════════════════════════════════════════════════════════════ */
+function waMark(size) {
+  const s = size || 15;
+  return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+    + '<path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.46 1.32 4.96L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.86 9.86 0 0 0 12.04 2Zm0 1.67c2.2 0 4.27.86 5.83 2.42a8.2 8.2 0 0 1 2.41 5.82c0 4.54-3.7 8.24-8.25 8.24a8.24 8.24 0 0 1-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.26-8.24Z"/>'
+    + '<path d="M9.36 7.2c-.19-.42-.38-.43-.56-.44h-.47c-.16 0-.43.06-.66.31-.23.25-.86.84-.86 2.05s.89 2.38 1.01 2.54c.12.17 1.71 2.74 4.22 3.73 2.09.82 2.51.66 2.97.62.46-.04 1.48-.6 1.69-1.19.21-.58.21-1.08.15-1.19-.06-.1-.23-.16-.47-.29-.25-.12-1.48-.73-1.71-.81-.23-.09-.4-.13-.56.12-.17.25-.64.81-.79.98-.14.16-.29.19-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.38-1.72-.15-.25-.02-.38.11-.5.11-.11.25-.29.37-.44.12-.14.16-.25.25-.41.08-.17.04-.31-.02-.44-.06-.12-.55-1.34-.75-1.83Z"/></svg>';
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE CNIC, MASKED ON SCREEN AND REVEALED ON HOVER
+   Owner, 2026-09-10: "make the cnic detail in pages as it is in the pdf and
+   only should be shovn vhen cursor is placed upon it."
+
+   WHY THE PDF'S MASK AND NOT THE PAYMENTS PAGE'S
+   There were two masks in the codebase and they disagreed: the exports showed
+   `17300-30*******` and the payments register showed `17300-*******-6`. The
+   owner's instruction names the PDF as the one to match, so this is that one,
+   and payMaskCnic() now delegates here. A CNIC is a national identity number
+   on a screen a warden shares with whoever walks up to the desk; two different
+   partial views of it are also two different leaks.
+
+   IT IS THE SAME WIDTH AS THE FULL NUMBER — five digits, a hyphen, two digits,
+   seven asterisks — which is 15 characters, exactly what `17300-3012345-6` is.
+   That is deliberate: the hover reveal swaps the text in place and the row
+   must not reflow under the cursor, or the thing being read moves while it is
+   being read.
+
+   ANYTHING THAT IS NOT CNIC-SHAPED IS PASSED THROUGH. A hostel that types a
+   passport number or a B-Form into this field gets its value back untouched
+   rather than a mask that hides a shape this function guessed wrong.
+   ════════════════════════════════════════════════════════════════════════════ */
+function maskCnic(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return '';
+  const digits = s.replace(/\D/g, '');
+  if (digits.length < 13) return s;
+  return digits.slice(0, 5) + '-' + digits.slice(5, 7) + '*'.repeat(7);
+}
+
+/** The masked CNIC as a cell, with the full number underneath it revealed on
+ *  hover. Two spans rather than a `title` tooltip: a tooltip needs a second of
+ *  dwell, sits away from the value and cannot be read from a screenshot, and
+ *  "shown when the cursor is placed upon it" is what the owner asked for.
+ *  Returns '' for an empty value so the caller can fall back to its own dash.
+ *  Both halves are escaped — this is rendered into innerHTML. */
+function cnicHtml(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return '';
+  const m = maskCnic(s);
+  if (m === s) return '<span class="cnic-r">' + escHtml(s) + '</span>';  // not CNIC-shaped
+  return '<span class="cnic-r" aria-label="' + escHtml(s) + '">'
+       +   '<span class="cnic-r__m">' + escHtml(m) + '</span>'
+       +   '<span class="cnic-r__f">' + escHtml(s) + '</span>'
+       + '</span>';
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE ROOM CELL, IN ONE PLACE (owner, 2026-09-10: "label room number and floor
+   just like the students page room number globally").
+
+   Four registers print a room and every one of them printed it differently:
+   Students in a pale box, Payments as three loose lines ("#1", "1-Seater",
+   "Ground Floor"), Complaints and Cancellations as two. The box is the one the
+   owner drew and the one that works — two loose lines of text in the middle of
+   a wide row do not group, and the number is the thing being scanned for.
+
+   PALE, NOT TINTED. What sits under the number is a category, and CLAUDE.md
+   keeps hue for state.
+
+   The floor is SHORTENED, never truncated: "Ground" becomes "G-Floor", "1st"
+   becomes "1st-Floor", and a name a hostel typed for itself is passed through
+   with the same suffix rather than guessed at.
+   ════════════════════════════════════════════════════════════════════════════ */
+function floorShort(floor) {
+  const f = String(floor || '').trim();
+  if (!f) return '';
+  const low = f.toLowerCase();
+  if (low.startsWith('base') || low.startsWith('cellar')) return 'Base-Floor';
+  if (low.startsWith('ground') || low === 'g')            return 'G-Floor';
+  const m = f.match(/^(\d+)(st|nd|rd|th)?/i);
+  if (m) {
+    const n = Number(m[1]);
+    const suf = n % 10 === 1 && n % 100 !== 11 ? 'st'
+              : n % 10 === 2 && n % 100 !== 12 ? 'nd'
+              : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th';
+    return n + suf + '-Floor';
+  }
+  return f + '-Floor';
+}
+
+/**
+ * The boxed room label: the number, with the floor under it when there is one.
+ * `number` may be a room object or a bare number/string.
+ */
+function roomLabel(number, floor, ui) {
+  const room = (number && typeof number === 'object') ? number : null;
+  const n = room ? room.number : number;
+  const f = floorShort(room ? room.floor : floor);
+  const shown = (n === 0 || n) && String(n).trim() !== '' ? '#' + escHtml(String(n)) : '—';
+  /* `ui` picks the component layer over listkit's copy. It is a flag rather
+     than a free class string because the pill is three nested elements, not
+     one, and a caller passing a single class could only ever restyle the
+     outer: listkit.css loads AFTER components/, so a rebuilt screen that kept
+     `.lk-room` on the children would silently get listkit's type back. */
+  const c = ui ? 'ui-room' : 'lk-room';
+  return '<span class="' + c + '">'
+       + '<span class="' + c + '__n">' + shown + '</span>'
+       + (f ? '<span class="' + c + '__t">' + escHtml(f) + '</span>' : '')
+       + '</span>';
+}
+
+/**
+ * The same fact as ONE LINE OF PLAIN TEXT — "#12 · G-Floor" — for the places a
+ * room is named inside a sentence rather than given a cell of its own: a
+ * drawer field, a card fact, a search hit's sub-line, a modal title.
+ *
+ * The boxed roomLabel() above cannot go in any of those; it is a two-line
+ * block. Owner, 2026-09-10: "room number vith labelled floor name" — the floor
+ * is the half that tells someone where to WALK, and a hostel with a #3 on
+ * three floors has three of them.
+ *
+ * Returns the em dash when there is no room, so a caller can print it
+ * directly, and just the number when the room has no floor recorded.
+ * PLAIN TEXT, NOT MARKUP — escape it at the call site like any other value.
+ */
+function roomText(number, floor) {
+  const room = (number && typeof number === 'object') ? number : null;
+  const n = room ? room.number : number;
+  const f = floorShort(room ? room.floor : floor);
+  if (!((n === 0 || n) && String(n).trim() !== '')) return '—';
+  return '#' + String(n) + (f ? ' · ' + f : '');
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   "LEFT" AND "ON NOTICE" NAME A DATE — SO PRINT IT (owner, 2026-09-10:
+   "mention labelled left or vacate date with the left status globally to have
+   clarification").
+
+   Both statuses are about a moment, and neither said which one. "Left" on a
+   register of two hundred students answers nothing a warden asks next — left
+   when? — and "On Notice" is worse, because the bed is still occupied and the
+   only useful fact is the day it frees.
+
+   THE DATE COMES FROM A DIFFERENT PLACE FOR EACH. A departed student carries
+   their own `leftDate`; a student on notice does not carry a vacate date at all
+   — it lives on their PENDING cancellation record, and there can be more than
+   one if a request was filed, restored and filed again. The soonest is the one
+   that matters: it is the day the bed actually frees.
+
+   Returns '' for Active and Blacklisted, which name no date.
+   ════════════════════════════════════════════════════════════════════════════ */
+function statusDate(t) {
+  if (!t) return '';
+  const st = String(t.status || '');
+  if (st === 'Left') return t.leftDate || '';
+  if (st === 'Cancelling' || st === 'On Notice') {
+    const mine = (DB.cancellations || [])
+      .filter(c => c && c.status === 'Pending' && String(c.studentId) === String(t.id) && c.vacateDate)
+      .map(c => c.vacateDate).sort();
+    return mine[0] || '';
+  }
+  return '';
+}
+
+/* THE YEAR IS DROPPED WHEN IT IS THIS YEAR, and that is a width decision made
+   against a measurement: the status column on the students register is 74px,
+   and "Left 10-Sept-2026" is 95. Clipped, it read "Left 10-Sept-20", which is a
+   wrong date rather than a short one. Everything from an earlier year keeps its
+   year, because that is exactly when the year is the part you need. */
+function fmtDateShort(d) {
+  if (!d) return '';
+  try {
+    const dt = /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(d + 'T00:00:00') : new Date(d);
+    if (isNaN(dt.getTime())) return String(d);
+    /* Two literal calls rather than one options object: a `{day, month}` object
+       widens to `{day: string, month: string}` and stops satisfying
+       DateTimeFormatOptions, which `npm run typecheck` covers this file for. */
+    return dt.getFullYear() === new Date().getFullYear()
+      ? dt.toLocaleDateString('en-PK', { day: '2-digit', month: 'short' })
+      : dt.toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch (e) { return String(d); }
+}
+
+/** "Left 10-Sept" / "Vacates 30-Sept", or '' when the status names no date. */
+function statusDateText(t) {
+  const d = statusDate(t);
+  if (!d) return '';
+  return (String(t.status) === 'Left' ? 'Left ' : 'Vacates ') + fmtDateShort(d);
+}
+
+/** The same, as the small line that sits under a status pill. The full date
+    stays on the title, so a shortened one is never the only copy. */
+function statusDateNote(t) {
+  const s = statusDateText(t);
+  if (!s) return '';
+  const full = (String(t.status) === 'Left' ? 'Left ' : 'Vacates ') + fmtDate(statusDate(t));
+  /* THE APP'S OWN HOVER CARD, not the OS tooltip (owner, 2026-09-23). This line
+     prints a SHORTENED date — "Vacates 30-Sept" — so the full one is exactly
+     the kind of value the card exists for, and every register that draws a
+     status draws this. */
+  return '<div class="lk-statdate" data-tip="' + escHtml(full) + '" data-tip-always>'
+       + escHtml(s) + '</div>';
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE HOVER CARD FOR A CLIPPED VALUE (owner, 2026-09-23)
+
+   Every register clips values it has no room for and put the full text on a
+   native `title`. That was the owner's own request on 2026-09-15 and their
+   complaint on 2026-09-23: the OS tooltip is the one surface in this app the
+   theme cannot reach, so it stays a pale Windows box on a dark page.
+
+   HOW IT IS USED. Put `data-tip="the full value"` on the element instead of
+   `title`, and optionally `data-tip-label="Guardian"` for a caption above it.
+   Nothing else: one delegated listener covers every register, and a cell
+   rendered by a template literal needs no wiring.
+
+   IT ONLY OPENS WHEN THE TEXT IS ACTUALLY CLIPPED, which is the whole point —
+   a hover card over a value you can already read in full is noise. Pass
+   `data-tip-always` for the cases where the tip says something the cell does
+   not (whose number a phone is, what a mask hides).
+
+   ONE ELEMENT, ON <body>. A tooltip inside its trigger would be clipped by the
+   same `overflow:hidden` that clipped the text.
+   ════════════════════════════════════════════════════════════════════════════ */
+let _uiTipEl = null, _uiTipTimer = null, _uiTipFor = null;
+
+function _uiTipNode() {
+  if (_uiTipEl && _uiTipEl.isConnected) return _uiTipEl;
+  _uiTipEl = document.createElement('div');
+  _uiTipEl.className = 'ui-tip';
+  _uiTipEl.setAttribute('role', 'tooltip');
+  _uiTipEl.hidden = true;
+  document.body.appendChild(_uiTipEl);
+  return _uiTipEl;
+}
+
+/** Is this element's own text wider (or taller) than the box it was given? */
+function _uiTipClipped(el) {
+  if (el.hasAttribute('data-tip-always')) return true;
+  if (el.scrollWidth - el.clientWidth > 1 || el.scrollHeight - el.clientHeight > 1) return true;
+  /* A cell that clips through a CHILD — `.stu-who__name` inside its button —
+     reports no overflow itself. One level down covers every case on the
+     registers without walking the whole subtree on each hover. */
+  for (const c of el.children) {
+    if (c.scrollWidth - c.clientWidth > 1) return true;
+  }
+  return false;
+}
+
+function uiTipShow(el) {
+  const text = el.getAttribute('data-tip');
+  if (!text || !_uiTipClipped(el)) return;
+  const tip = _uiTipNode();
+  const label = el.getAttribute('data-tip-label');
+  tip.innerHTML = (label ? '<span class="ui-tip__l">' + escHtml(label) + '</span>' : '')
+                + escHtml(text);
+  tip.hidden = false;
+  _uiTipFor = el;
+
+  /* Placed against the viewport, above the trigger, nudged back inside when it
+     would run off an edge. `position:fixed`, so the page's own scrolling needs
+     no listener — a scroll hides it instead (see below), which is also what a
+     reader expects when the thing they were pointing at moves. */
+  const r = el.getBoundingClientRect();
+  const t = tip.getBoundingClientRect();
+  const gap = 8;
+  let top = r.top - t.height - gap;
+  if (top < gap) top = r.bottom + gap;                 // no room above: go under
+  let left = r.left + (r.width - t.width) / 2;
+  left = Math.max(gap, Math.min(left, window.innerWidth - t.width - gap));
+  tip.style.top = Math.round(top) + 'px';
+  tip.style.left = Math.round(left) + 'px';
+  requestAnimationFrame(() => tip.classList.add('is-on'));
+}
+
+function uiTipHide() {
+  clearTimeout(_uiTipTimer);
+  _uiTipFor = null;
+  if (!_uiTipEl) return;
+  _uiTipEl.classList.remove('is-on');
+  _uiTipEl.hidden = true;
+}
+
+/* Delegated, once, for the whole app. `mouseover` rather than `mouseenter`
+   because only the bubbling one can be delegated; the `closest()` guard makes
+   moving WITHIN a trigger a no-op rather than a re-open. */
+(function _uiTipBind() {
+  /* THIS FILE IS LOADED HEADLESSLY. finance.test.js and three other node suites
+     run utils.js inside a vm context with a stubbed `document` and no `window`
+     at all — they are testing the money helpers, not the DOM — so a binder that
+     assumes a browser takes those suites down at require() time with
+     "window.addEventListener is not a function".
+
+     Both objects are checked, and for the METHOD rather than the name: a stub
+     that defines `document` without addEventListener is exactly the shape that
+     got through the first guard. */
+  if (typeof document === 'undefined' || !document || typeof document.addEventListener !== 'function') return;
+  if (typeof window === 'undefined' || !window || typeof window.addEventListener !== 'function') return;
+  /* An Event's `target` is an EventTarget, which has no closest() — text nodes
+     and the document itself reach these handlers too. One reader, typed once,
+     rather than three `&& e.target.closest` guards that typecheck cannot see
+     through. */
+  const trigger = e => {
+    const n = /** @type {Node} */ (e.target);
+    return n && n.nodeType === 1
+      ? /** @type {Element} */ (n).closest('[data-tip]')
+      : null;
+  };
+  document.addEventListener('mouseover', e => {
+    const el = trigger(e);
+    if (!el || el === _uiTipFor) return;
+    clearTimeout(_uiTipTimer);
+    // Long enough not to flash while the cursor crosses a row on its way
+    // somewhere else; short enough to feel like the app answering.
+    _uiTipTimer = setTimeout(() => uiTipShow(el), 140);
+  }, true);
+  document.addEventListener('mouseout', e => {
+    const el = trigger(e);
+    if (el && el === _uiTipFor) uiTipHide();
+    else if (el) clearTimeout(_uiTipTimer);
+  }, true);
+  // Keyboard reaches it too: a tabbable trigger shows its tip on focus.
+  document.addEventListener('focusin', e => {
+    const el = trigger(e);
+    if (el) uiTipShow(el);
+  }, true);
+  document.addEventListener('focusout', uiTipHide, true);
+  /* Anything that moves the trigger closes it rather than leaving a card
+     floating over the wrong row. */
+  document.addEventListener('scroll', uiTipHide, true);
+  window.addEventListener('resize', uiTipHide);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') uiTipHide(); }, true);
+})();

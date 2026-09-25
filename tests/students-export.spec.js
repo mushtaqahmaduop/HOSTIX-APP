@@ -56,7 +56,7 @@ async function openApp() {
   await win.waitForFunction(
     () => typeof WARDENS !== 'undefined' && Object.keys(WARDENS).length > 0,
     null, { timeout: 30000 });
-  await win.fill('#login-user', 'warden1');
+  await win.selectOption('#login-user', 'warden1');
   await win.fill('#login-input', 'admin123');
   await win.click('#login-btn');
   await win.waitForFunction(
@@ -146,13 +146,16 @@ async function exportAndCapture(win) {
       rowCount: sheet.rows.length,
       headStyles: (sheet.rows[headerRow - 1].cells || []).map(c => c.s),
       styleNames: { HEAD: S.HEAD, TEXT: S.TEXT, DATE: S.DATE, MONEY: S.MONEY, WRAP: S.WRAP },
-      /* THE HEADINGS ARE THE OWNER'S SHEET NOW (`student excel sheet.png`,
-         2026-09-10): Phone is Contact, Emergency Phone is Emergency Contact,
-         Room is Room No. Date of Birth and Join are not on the sheet at all —
-         a roster is read for who is here and when they LEFT — so the two date
-         assertions below move to the column that survives. */
-      phone: cell(rHikmat, 'Contact'),
-      emerg: cell(rHikmat, 'Emergency'),
+      /* THE HEADINGS ARE THE OWNER'S SHEET (`student excel sheet.png`,
+         2026-09-10): Phone is Contact, Room is Room No. Date of Birth and Join
+         are not on the sheet at all — a roster is read for who is here and
+         when they LEFT — so the two date assertions below move to the column
+         that survives.
+
+         CONTACT AND EMERGENCY ARE ONE COLUMN, Contacts (owner, 2026-09-22),
+         holding both numbers as two lines in one cell. */
+      contacts: cell(rHikmat, 'Contacts'),
+      contactsEmpty: cell(rSalman, 'Contacts'),
       cnic:  cell(rSalman, 'CNIC'),
       charge: cell(rHikmat, 'Charges (Rs.)'),
       room:  cell(rHikmat, 'Room No.'),
@@ -223,12 +226,19 @@ test('phones and CNICs stay text, and a long address wraps', async () => {
   const { app, win } = await openApp();
   const out = await exportAndCapture(win);
 
-  // As a number this is 3,310,045,835 and the leading zero is gone.
-  expect(out.phone.t).toBe('text');
-  expect(out.phone.v).toBe('0326-2060904');
-  expect(out.emerg.v).toBe('03310045835');
-  /* Masked since 2026-09-10 — see the assertion in the columns test below. */
-  expect(out.cnic.v).toBe('11102-03*******');
+  /* As a number this is 3,310,045,835 and the leading zero is gone. BOTH
+     numbers are in one cell since 2026-09-22 and the typing matters more for
+     it, not less: a cell holding "0326-2060904\n03310045835" is unambiguously
+     text, but the moment either half is written alone it is a number again. */
+  expect(out.contacts.t).toBe('text');
+  expect(out.contacts.v).toBe('0326-2060904\n03310045835');
+  // A student the hostel has one number for gets one line, not a dangling break.
+  expect(out.contactsEmpty.v).toBe('0371-0501031\n03420949083');
+  /* NOT MASKED IN THE WORKBOOK (owner, 2026-09-22: "unmask in the excel").
+     It is masked on the screen and absent from the PDF; the workbook is the
+     complete record, and a half-starred number there has to be looked up
+     somewhere else anyway. */
+  expect(out.cnic.v).toBe('11102-0386165-3');
 
   /* THE DATE HALF OF THIS TEST IS GONE, and the test is renamed with it. It
      asserted Date of Birth and Join — the UTC-parse bug that lands 01-Mar on
@@ -259,27 +269,30 @@ test('every column declared is a column given a width', async () => {
   expect(out.cols.every(c => c.width > 0)).toBe(true);
   expect(new Set(out.cols.map(c => c.width)).size).toBeGreaterThan(3);
 
-  /* THE WORKBOOK AND THE PRINTED ROSTER ARE THE SAME COLUMNS (`student excel
-     sheet.png`, then the owner's edits of 2026-09-10). They were not: nine
-     fields were `pdf:false`, so the printed roster was missing exactly the
-     identity fields a hostel gets asked for.
+  /* THE WORKBOOK IS THE PRINTED ROSTER PLUS ONE COLUMN (`student excel
+     sheet.png`, then the owner's edits of 2026-09-10 and 2026-09-22).
+
+     They were once wildly different: nine fields were `pdf:false`, so the
+     printed roster was missing exactly the identity fields a hostel gets asked
+     for. That was fixed by making both files the same columns. CNIC is now the
+     single deliberate exception in the other direction — off the PDF, whole in
+     the workbook — and exports-pdf.spec.js holds the printed half of that.
 
      Three headings changed on 2026-09-10 and one column came and one went:
-     "Course / Study / Profession" is Occupation, "Emergency Contact" is
-     Emergency, the departure date folded into Remarks, and "Admitted" arrived
-     — a roster of who is HERE is read for when each of them came. */
-  for (const label of ['#', 'Room No.', 'Student Name', 'Father Name', 'Contact',
-                       'Emergency', 'CNIC', 'Occupation', 'Admitted',
+     "Course / Study / Profession" is Occupation, the departure date folded
+     into Remarks, and "Admitted" arrived — a roster of who is HERE is read for
+     when each of them came. Then on 2026-09-22 Contact and Emergency became
+     one Contacts column, the name the register's own heading took. */
+  for (const label of ['#', 'Room No.', 'Student Name', 'Father Name', 'Contacts',
+                       'CNIC', 'Occupation', 'Admitted',
                        'Gender', 'Address', 'Nationality', 'Charges (Rs.)',
                        'Status', 'Remarks']) {
     expect(out.headers, label + ' is missing from the workbook').toContain(label);
   }
-  expect(out.headers.length, 'the sheet is fifteen columns, no more').toBe(15);
-
-  /* A CNIC LEAVES PARTLY MASKED (owner, 2026-09-10: "hide other with **** so
-     that the legal data of anyone cannot be used or seen"). Enough to match a
-     person against the card in their hand; not enough to use. */
-  expect(out.cnic.v, 'the CNIC left the building whole').toBe('11102-03*******');
+  expect(out.headers.length, 'the sheet is fourteen columns, no more').toBe(14);
+  // The two it replaced must not come back as a third and fourth phone column.
+  expect(out.headers).not.toContain('Contact');
+  expect(out.headers).not.toContain('Emergency');
 
   await app.close();
 });
@@ -289,6 +302,14 @@ test('the filename and the title band both state the filter, not just the date',
   const captured = await win.evaluate(async () => {
     const d  = new Date();
     const mk = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    /* THE EXPORT DOES NOT RUN WITHOUT A HOSTEL NAME, and this fixture never
+       set one. hostelNameGate() (src/hostel-name.js) intercepts every export
+       while DB.settings.hostelName is still the neutral seed and opens the
+       "name your hostel" prompt instead — so HXW.save was never reached, the
+       capture came back null, and the failure read as a filename bug. The
+       other fixture in this file has always set a name, which is why only this
+       test saw it. */
+    DB.settings.hostelName = 'Continental Boys Hostel - 2';
     DB.rooms = [{ id: 'r9', number: 9, floor: 'Ground', typeId: null }];
     DB.students = [
       { id: 1, name: 'Active One', roomId: 'r9', joinDate: mk + '-01', status: 'Active' },

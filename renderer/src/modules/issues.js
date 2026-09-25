@@ -1,8 +1,6 @@
 /* ─── HOSTYLLO — ISSUES (Maintenance & Complaints) MODULE ────────────────────
    Contains: renderIssues, showIssueModal, saveIssue,
-             resolveMaintenance, progressMaintenance, deleteMaintenance,
-             resolveComplaint, deleteComplaint,
-             showAddMaintenanceModal, showAddComplaintModal
+             resolveIssue, progressIssue, delIssue
 
    REDESIGNED 2026-09-08 to the owner's references `complaints2.png` (the
    register) and `add complaaint and maintinanace.png` (both forms).
@@ -36,9 +34,10 @@
 'use strict';
 
 /* ── Issues v6 — toolbar state ───────────────────────────────────────────────
-   `issuesTab` (app.js) still decides which kind is shown, because nav.js sets
-   it from the /maintenance and /complaints routes. It also accepts 'all',
-   which is the unified register the reference design shows. */
+   ONE REGISTER (owner, 2026-09-21). There was an `issuesTab` here, set by
+   nav.js from the /maintenance and /complaints routes and by a three-tab strip
+   above the table. Both routes now land on the same register, unfiltered, and
+   the toolbar's Category is what narrows it. */
 let issueFilter = { search:'', status:'All', priority:'All', category:'All',
                     month:thisMonth(), sort:'newest', page:1, pageSize:30 };
 
@@ -67,6 +66,17 @@ registerFilter('issues', issueFilter, () => ({
    hostel actually logs. Each carries a glyph because the chip is neutral (see
    the header) and the glyph is doing the work colour does in the reference. */
 const ISS_CATS = [
+  /* MAINTENANCE IS A CATEGORY (owner, 2026-09-21), and it is first because it
+     is the one value that changes what the record IS: a record filed under it
+     is a maintenance job and numbers MA-, everything else numbers CO-. See
+     _issKindFor().
+
+     Worth knowing rather than rediscovering: the five below it — Plumbing,
+     Electrical, Furniture, Network, Appliance — are themselves maintenance
+     kinds, so in practice a warden reaches for this one when none of those
+     fit. It behaves like a second "Other" and that is expected; the kind is
+     what separates a job from a complaint, not the category. */
+  { key:'Maintenance', ico:'tool'     },
   { key:'Plumbing',    ico:'droplet'  },
   { key:'Electrical',  ico:'zap'      },
   { key:'Furniture',   ico:'armchair' },
@@ -82,59 +92,109 @@ function _issCatIcon(k) {
   return c ? icon(c.ico, 'xs') : icon('tag', 'xs');
 }
 
-/* Display reference. Maintenance is MA-####, complaints CO-####, matching the
-   reference. New records carry a persistent `seq`; anything created before
-   that falls back to its position within its own collection. */
+/* Which kind a record is, and it is the CATEGORY that decides — since the two
+   registers became one and Maintenance became a category (owner, 2026-09-21).
+   Read on save only; after that the record carries its own `kind`, so
+   re-categorising an old ticket cannot renumber it. */
+function _issKindFor(category) {
+  /* EVERY NEW RECORD IS A COMPLAINT (owner, 2026-09-23: "the maintenance be
+     treated as a category just like plumbing or electrical and should be
+     labelled as a complaint, because we are building a separate maintenance
+     page later").
+
+     This returned 'maintenance' for one category name, which gave those
+     records an MA- reference series of their own and a different room rule.
+     That was right while this register was both things; it is wrong now that
+     Maintenance is one category among Plumbing, Electrical and the rest, and
+     it would be wrong twice over once the real Maintenance page exists and
+     these records are not the ones it manages.
+
+     WHAT IS NOT CHANGED: records already filed as maintenance keep `kind:
+     'maintenance'`, keep their MA- references and keep counting in their own
+     series. A reference is identity — it has been printed, quoted and chased —
+     and renumbering one to tidy a label would break every record that names
+     it. So the two series coexist, one of them closed, exactly as the
+     2026-09-21 merge left the two collections.
+
+     The ROOM rule that used to hang off this is gone as a difference: see
+     _issAll(), where a record with no student now falls back to its own stored
+     roomId whatever its kind. That was the only behaviour the flag still
+     changed, and keeping it would have meant a new Maintenance-category
+     record losing the room it was raised against. */
+  return 'complaint';
+}
+
+/* Display reference. Maintenance is MA-####, complaints CO-####. Both series
+   continue exactly where they were: migration 003 stamped `seq` on every record
+   that lacked one, from its position in its ORIGINAL collection, because after
+   the merge there is no such position to fall back to. */
 function _issSeq(it) {
-  const pre  = it.kind === 'maintenance' ? 'MA' : 'CO';
-  const coll = it.kind === 'maintenance' ? (DB.maintenance||[]) : (DB.complaints||[]);
-  const n    = it.raw.seq || (coll.indexOf(it.raw) + 1);
+  const pre = it.kind === 'maintenance' ? 'MA' : 'CO';
+  const n = Number(it.raw.seq)
+    || ((DB.issues || []).filter(x => _issKindOf(x) === it.kind).indexOf(it.raw) + 1);
   return pre + '-' + String(n).padStart(4, '0');
 }
-function _issNextSeq(coll) {
-  return (coll || []).reduce((m, x) => Math.max(m, Number(x.seq) || 0), 0) + 1;
+/** A stored record's kind, defaulting the way the register reads it. */
+function _issKindOf(rec) {
+  return (rec && rec.kind) === 'maintenance' ? 'maintenance' : 'complaint';
+}
+/** The next number in ONE series. The two series are independent and stay so. */
+function _issNextSeq(kind) {
+  return (DB.issues || []).reduce(
+    (m, x) => (_issKindOf(x) === kind ? Math.max(m, Number(x.seq) || 0) : m), 0) + 1;
 }
 
-/* Both collections normalised onto one shape so the register, the filters and
-   the counters all read from a single list instead of two parallel branches. */
-function _issAll() {
-  const rooms  = DB.rooms || [];
-  const roomNo = id => { const r = rooms.find(x => x.id === id); return r ? String(r.number) : ''; };
+/* ONE COLLECTION (owner, 2026-09-21). This used to normalise DB.maintenance
+   and DB.complaints onto a single shape through two parallel branches; the
+   records now live in DB.issues and the shape is what they are stored as. The
+   function stays because everything downstream — the register, the filters, the
+   counters, the stat strip and both exports — reads this feed and not the raw
+   records.
 
-  const m = (DB.maintenance||[]).map(x => {
-    /* RAISED BY A STUDENT (owner, 2026-09-14): `raisedById` links the resident
-       who reported it, so the register shows them like a complaint's student.
-       A ticket raised by staff keeps the typed name and no link. */
-    const s = x.raisedById ? ((DB.students||[]).find(t => t.id === x.raisedById) || null) : null;
+   DB.maintenance and DB.complaints still exist and are still populated. They
+   are migration 003's rollback path for one release. NOTHING READS THEM. */
+function _issAll() {
+  const rooms    = DB.rooms || [];
+  const students = DB.students || [];
+  const roomNo   = id => { const r = rooms.find(x => x.id === id); return r ? String(r.number) : ''; };
+
+  return (DB.issues || []).map(x => {
+    /* The resident behind the record, under either key: a complaint's
+       `studentId` is who filed it, a ticket's `raisedById` is who reported it.
+       They are still two fields on purpose — folding them would reinterpret
+       data, and migration 003 only moves it. */
+    const s = students.find(t => t.id === (x.studentId || x.raisedById)) || null;
     return {
-    kind:'maintenance', raw:x, id:x.id, title:x.title||'',
-    desc:x.description||'', date:x.date||'', resolved:x.resolvedDate||'',
-    status:x.status||'Open', priority:x.priority||'Medium',
-    category:x.category||'', assigned:x.assignedTo||'',
-    expected:x.expectedDate||'', location:x.location||'', cost:Number(x.cost)||0,
-    /* `by` is who REPORTED it. It was hardcoded blank until 2026-09-10 because
-       the maintenance form never asked — so every maintenance row printed an
-       empty Student cell. Tickets written before the field existed still have
-       nothing to show, and show nothing rather than a guess. */
-    roomNo: roomNo(x.roomId), by: s ? s.name : (x.raisedBy||''), student: s, response:'',
+      kind: _issKindOf(x), raw: x, id: x.id, title: x.title || '',
+      desc: x.description || '', date: x.date || '', resolved: x.resolvedDate || '',
+      status: x.status || 'Open', priority: x.priority || '',
+      category: x.category || '', assigned: x.assignedTo || '',
+      expected: x.expectedDate || '', location: x.location || '',
+      /* FOLLOW THE PERSON WHEN THERE IS ONE, THE BUILDING WHEN THERE IS NOT.
+
+         This used to branch on KIND: a complaint's room came from its student,
+         a maintenance ticket's from its stored `roomId`. The note here warned
+         that merging them "quietly gives every student-raised ticket the wrong
+         room the day that student moves" — and that half is still true, which
+         is why the student still wins whenever there is one.
+
+         What changed on 2026-09-23 is the OTHER half. Maintenance stopped
+         being a kind and became a category, so a record raised against a room
+         with nobody attached is now an ordinary complaint — and under the old
+         expression its room resolved to '' and vanished from the register.
+         The stored roomId is the fallback, not the override: a leaking tap
+         filed against room 12 with no student still reads room 12, and a
+         student-raised issue still follows its student. `roomId` has always
+         been written for every record (see saveIssue), so this reads something
+         that was already there. */
+      roomNo: s ? roomNo(s.roomId) : roomNo(x.roomId),
+      by: s ? s.name : (x.raisedBy || ''), student: s, response: x.response || '',
+      /* The ACCOUNT that entered the record — not `by`, which is the student or
+         staff member the complaint is about. Absent on anything written before
+         2026-09-23, and the row prints the date alone rather than guessing. */
+      addedBy: x.addedBy || null, addedByName: x.addedByName || '',
     };
   });
-
-  const c = (DB.complaints||[]).map(x => {
-    const s = (DB.students||[]).find(t => t.id === x.studentId) || null;
-    return { kind:'complaint', raw:x, id:x.id, title:x.subject||'',
-      desc:x.description||'', date:x.date||'', resolved:x.resolvedDate||'',
-      status:x.status||'Open', priority:x.priority||'',
-      category:x.category||'', assigned:x.assignedTo||'',
-      expected:x.expectedDate||'', location:'', cost:0,
-      /* A complaint is filed BY a student, and its room is the room that
-         student lives in — derived on read, never a second stored copy that
-         drifts the first time somebody is moved. */
-      roomNo: s ? roomNo(s.roomId) : '',
-      by: s ? s.name : '', student: s, response:x.response||'' };
-  });
-
-  return m.concat(c);
 }
 
 // Open / working / done, collapsed across both collections. 'UnderReview' is a
@@ -164,12 +224,13 @@ function _issDays(from, to) {
    was on screen (§44). */
 function issuesFiltered() {
   const all = _issAll();
-  const tab = (issuesTab === 'maintenance' || issuesTab === 'complaints') ? issuesTab : 'all';
-  const wantKind = tab === 'complaints' ? 'complaint' : tab === 'maintenance' ? 'maintenance' : null;
   const q = (issueFilter.search || '').trim().toLowerCase();
 
+  /* ONE REGISTER (owner, 2026-09-21). There was a `wantKind` here, set by a
+     three-tab strip, and the /maintenance and /complaints routes drove it. The
+     register shows every issue now and the toolbar's Category filter is what
+     narrows it — including to Maintenance, which is a category. */
   const feed = all.filter(i => {
-    if (wantKind && i.kind !== wantKind) return false;
     if (issueFilter.status   !== 'All' && _issBucket(i.status) !== issueFilter.status) return false;
     if (issueFilter.priority !== 'All' && i.priority !== issueFilter.priority) return false;
     if (issueFilter.category !== 'All' && i.category !== issueFilter.category) return false;
@@ -218,18 +279,16 @@ function _issExportDef(list) {
   const spans = list.map(i => _issDays(i.date, i.resolved)).filter(n => n !== null);
   const avg = spans.length ? Math.round(spans.reduce((s, n) => s + n, 0) / spans.length) : null;
 
-  const tab = (issuesTab === 'maintenance' || issuesTab === 'complaints') ? issuesTab : 'all';
-
+  /* One register, so one document. The three titles this chose between went
+     with the tab strip — a Category of Maintenance is what narrows it now, and
+     the Category row below already states that. */
   return {
-    module: tab === 'complaints' ? 'Complaints' : tab === 'maintenance' ? 'Maintenance' : 'Issues',
-    title:  tab === 'complaints' ? 'Complaints Register'
-          : tab === 'maintenance' ? 'Maintenance Register'
-          : 'Complaints & Maintenance Register',
+    module: 'Issues',
+    title:  'Complaints Register',
     scope: '',
     sheet: 'Issues',
 
     filters: [
-      ['Kind',     tab === 'all' ? 'Complaints and maintenance' : _issExportKindLabel(tab)],
       ['Status',   issueFilter.status   !== 'All' ? _issExportBucketLabel(issueFilter.status) : null],
       ['Priority', issueFilter.priority !== 'All' ? issueFilter.priority : null],
       ['Category', issueFilter.category !== 'All' ? issueFilter.category : null],
@@ -276,9 +335,6 @@ function _issExportDef(list) {
   };
 }
 
-function _issExportKindLabel(tab) {
-  return tab === 'complaints' ? 'Complaints only' : 'Maintenance only';
-}
 function _issExportBucketLabel(b) {
   return b === 'open' ? 'Open' : b === 'progress' ? 'In progress' : 'Resolved';
 }
@@ -308,11 +364,7 @@ function renderIssues() {
   const nProg = all.filter(i=>_issBucket(i.status)==='progress').length;
   const nDone = all.filter(i=>_issBucket(i.status)==='resolved').length;
 
-  const mActive = (DB.maintenance||[]).filter(x=>x.status!=='Resolved').length;
-  const cOpen   = (DB.complaints||[]).filter(x=>x.status!=='Resolved').length;
-
-  const tab = (issuesTab==='maintenance'||issuesTab==='complaints') ? issuesTab : 'all';
-  const q   = (issueFilter.search||'').trim().toLowerCase();
+  const q = (issueFilter.search||'').trim().toLowerCase();
 
   // Shared with the exports, so the register and the document cannot disagree.
   const feed = issuesFiltered();
@@ -336,6 +388,10 @@ function renderIssues() {
      that categories are neutral. The first pass gave Maintenance violet and
      Complaint blue anyway, which is the rule broken in the one file that
      states it. The glyph and the MA-/CO- prefix carry the distinction. */
+  /* `KIND` is still read by the EXPORT's Kind column, which names the series a
+     record was filed in — a fact about its reference number, not a second
+     classification of the row. The register itself stopped drawing a kind
+     glyph on 2026-09-23, when Maintenance became a category. */
   const KIND = {
     maintenance: { label:'Maintenance', ico:'tool' },
     complaint:   { label:'Complaint',   ico:'helpCircle' },
@@ -358,7 +414,7 @@ function renderIssues() {
   /* One row of the register. Every cell is either a field the record holds or
      a dash — nothing here is computed to fill a column. */
   const mkRow = (i) => {
-    const k  = KIND[i.kind];
+
     const bk = _issBucket(i.status);
     const rm = i.roomNo ? rooms.find(r => String(r.number) === i.roomNo) : null;
     const held = _issDays(i.date, today());
@@ -377,13 +433,18 @@ function renderIssues() {
       : (held === null ? '' : held === 0 ? 'Today' : 'Open ' + held + 'd');
 
     return `<tr>
+      ${''/* THE KIND GLYPH IS GONE (owner, 2026-09-23). It marked each row as
+             Maintenance or Complaint — a distinction this page no longer makes,
+             since Maintenance is a category and the Category column already
+             shows it. What the reference prefix still says is which SERIES a
+             record was filed in, which is a fact about its number, not a second
+             classification of the row. */}
       <td class="iss-c-ref">
         <div class="iss-ref">${_issSeq(i)}</div>
-        <div class="iss-kind" title="${escHtml(k.label)}">${icon(k.ico,'xs')}</div>
       </td>
       <td class="iss-c-title">
         <div class="iss-t">${escHtml(i.title||'Untitled')}</div>
-        ${i.desc?`<div class="iss-d" title="${escHtml(i.desc)}">${escHtml(i.desc)}</div>`:''}
+        ${i.desc?`<div class="iss-d" data-tip="${escHtml(i.desc)}" data-tip-label="Description">${escHtml(i.desc)}</div>`:''}
         ${i.location?`<div class="iss-d">${icon('pin','xs')} ${escHtml(i.location)}</div>`:''}
       </td>
       <td class="iss-c-by">
@@ -417,14 +478,24 @@ function renderIssues() {
              this file's own comment states and the first pass broke. Priority
              and status are states and keep their roles. */}
       <td>${i.category
-            ? `<span class="ui-chip ui-chip--neutral">${_issCatIcon(i.category)}${escHtml(i.category)}</span>`
+            ? `<span class="ui-chip ui-chip--cat" style="--cat:${expenseCatHue(i.category)}">${_issCatIcon(i.category)}${escHtml(i.category)}</span>`
             : '<span class="iss-dash">—</span>'}</td>
       <td>${i.priority
             ? `<span class="ui-chip ${PH[i.priority]||'ui-chip--warning'}">${escHtml(i.priority)}</span>`
             : '<span class="iss-dash">—</span>'}</td>
       <td><span class="ui-chip ${SH[bk]}">${icon(bk==='resolved'?'check':bk==='progress'?'clock':'warning','xs')}${escHtml(_issStatusLabel(i.status))}</span></td>
+      ${''/* WHO RAISED IT, UNDER THE DATE (owner, 2026-09-23: "below the
+             reported date show the user name in italics who added it").
+
+             Italic because it is an attribution, not a value — the one line in
+             this row that names a person rather than stating a fact about the
+             issue. It reads the account that ENTERED the record, which is not
+             the same as `raisedBy` (the student or staff member the complaint
+             is about); a record written before the field was captured shows
+             the date alone rather than guessing. */}
       <td>
         <div class="iss-when">${icon('calendar','xs')}${fmtDate(i.date)}</div>
+        ${i.addedByName?`<div class="iss-by" data-tip="Entered by ${escHtml(i.addedByName)}" data-tip-label="Added by">${escHtml(ledgerFirstName(i.addedByName))}</div>`:''}
         ${age?`<div class="iss-sub${overdue?' iss-late':''}">${escHtml(age)}</div>`:''}
       </td>
       <td>${i.assigned
@@ -439,10 +510,20 @@ function renderIssues() {
              row is forty red marks on a full page. It fills on hover. Each has an aria-label:
              a title alone is not an accessible name for an icon button. */}
         <div class="iss-acts">
-          ${i.status!=='Resolved'?`<button class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" onclick="${i.kind==='maintenance'?`resolveMaint('${i.id}')`:`resolveComp('${i.id}')`}" title="Mark resolved" aria-label="Mark resolved">${icon('check','xs')}</button>`:''}
-          ${i.kind==='maintenance'&&i.status==='Open'?`<button class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" onclick="progressMaint('${i.id}')" title="Mark in progress" aria-label="Mark in progress">${icon('clock','xs')}</button>`:''}
-          <button class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" onclick="showIssueModal('${i.id}')" title="Edit this issue" aria-label="Edit this issue">${icon('edit','xs')}</button>
-          <button class="ui-btn ui-btn--ghost-danger ui-btn--icon ui-btn--sm" onclick="${i.kind==='maintenance'?`delMaint('${i.id}')`:`delComp('${i.id}')`}" title="Delete" aria-label="Delete this issue">${icon('trash','xs')}</button>
+          ${''/* ONE LABELLING RULE FOR ALL FOUR (owner, 2026-09-23: "label the
+                 other actions button just like the delete button there on
+                 hover").
+
+                 They were "Mark resolved", "Mark in progress", "Edit this
+                 issue" and "Delete" — three sentences and a verb, so the row
+                 read as if only Delete had a proper label. The hover is a
+                 VERB on each; the aria-label stays the full sentence, because
+                 a screen reader arriving at an icon button out of context
+                 needs to know what it acts on. */}
+          ${i.status!=='Resolved'?`<button class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" onclick="resolveIssue('${i.id}')" title="Resolve" aria-label="Mark this complaint resolved">${icon('check','xs')}</button>`:''}
+          ${i.status==='Open'?`<button class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" onclick="progressIssue('${i.id}')" title="In progress" aria-label="Mark this complaint in progress">${icon('clock','xs')}</button>`:''}
+          <button class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" onclick="showIssueModal('${i.id}')" title="Edit" aria-label="Edit this complaint">${icon('edit','xs')}</button>
+          <button class="ui-btn ui-btn--ghost-danger ui-btn--icon ui-btn--sm" onclick="delIssue('${i.id}')" title="Delete" aria-label="Delete this complaint">${icon('trash','xs')}</button>
         </div>
       </td>
     </tr>`;
@@ -463,23 +544,6 @@ function renderIssues() {
         <span class="ui-stat__s">All issues on record</span>
       </span>
     </div>
-  </div>
-
-  <!-- ══ TABS ══ -->
-  ${''/* A tab is a <button role="tab"> in a <div role="tablist">, and which one
-         is current is `aria-selected`, not a class. It was three buttons in a
-         segmented box with `.is-on` filling the active one in the accent — a
-         filled pill reads as a primary action, which a tab is not. */}
-  <div class="ui-tabs iss-tabs" role="tablist" aria-label="Issue type">
-    <button type="button" role="tab" class="ui-tab" aria-selected="${tab==='all'}" onclick="issSetTab('all')">
-      ${icon('list','sm')} All issues (${all.length})
-    </button>
-    <button type="button" role="tab" class="ui-tab" aria-selected="${tab==='maintenance'}" onclick="issSetTab('maintenance')">
-      ${icon('tool','sm')} Maintenance (${mActive} active)
-    </button>
-    <button type="button" role="tab" class="ui-tab" aria-selected="${tab==='complaints'}" onclick="issSetTab('complaints')">
-      ${icon('helpCircle','sm')} Complaints (${cOpen} open)
-    </button>
   </div>
 
   <!-- ══ TOOLBAR + REGISTER ══ -->
@@ -555,7 +619,12 @@ function renderIssues() {
                    reported the record, and since 2026-09-10 a maintenance
                    ticket has one too — often a warden or a contractor rather
                    than a resident. */}
-            <th>#</th><th>Issue</th><th>Raised by</th><th>Room</th><th>Category</th>
+            ${''/* "ID", not "#" (owner, 2026-09-23: "add ID to the # in the
+                   heading to the complaints id column: CO001"). The cell holds
+                   a reference — CO001, MT014 — not a row number, and "#" is what
+                   the registers that DO count rows use. Two characters that
+                   say which of the two this is. */}
+            <th>ID</th><th>Issue</th><th>Raised by</th><th>Room</th><th>Category</th>
             <th>Priority</th><th>Status</th><th>Reported on</th><th>Assigned to</th><th>Actions</th>
           </tr></thead>
           <tbody>${_pg.slice.map(mkRow).join('')}</tbody>
@@ -568,11 +637,6 @@ function renderIssues() {
 /* ── Issues v6 — toolbar behaviour ───────────────────────────────────────── */
 function issSet(key, val) { issueFilter[key] = val; issueFilter.page = 1; renderPage('issues'); }
 const issSearch = debounce(function (v) { issSet('search', v); }, 220);
-function issSetTab(t) {
-  issuesTab = t;
-  issueFilter.page = 1;
-  renderPage('issues');
-}
 /* Kept as a name because older call sites use it; the registry is the one
    definition of what "cleared" means, so this cannot drift from the Clear
    button beside it. */
@@ -682,7 +746,7 @@ function _issField(label, ico, ctrl, o) {
    of the name had nothing to type and a thousand-row scroll to do instead.
 
    THE <select> SURVIVES, HIDDEN. It keeps the options, it keeps the value, and
-   it keeps its own onchange — so _issSyncCompRoom(), _issSyncMtRoom(), the
+   it keeps its own onchange — so _issSyncMtRoom(), the
    submit paths and the edit-time preselection all read exactly what they read
    before, and none of them had to learn about this control. The search box is
    a way of setting it, not a replacement for it.
@@ -788,33 +852,50 @@ function issPickSync(selectId) {
   inp.value = (opt && opt.value) ? opt.text : '';
 }
 
+/* ── ONE FORM (owner, 2026-09-21) ─────────────────────────────────────────────
+
+   There were two, behind a Maintenance/Complaint switch, and the warden had to
+   decide which register a thing belonged in before they could describe it. Now
+   there is one form and CATEGORY decides: Maintenance numbers MA-, everything
+   else numbers CO-.
+
+   IT IS THE MAINTENANCE FORM THAT SURVIVED, because it is the superset — the
+   complaint form asked for nothing this does not, while this asks for Location
+   and, crucially, carries the "Raised by: Student / Staff" switch.
+
+   THAT SWITCH IS NOT THE OLD ONE AND MUST NOT BE READ AS IT. It answers WHO
+   REPORTED THIS, not which register this is. It stays because the complaint
+   form required a student and a burst pipe reported by the cook has none — drop
+   it and a whole class of record becomes unloggable.
+
+   The field ids are still `mt-*`. They are internal, every helper on this
+   screen already speaks them, and renaming them would be a large diff through
+   working code to no visible end. */
 function showIssueModal(id) {
-  const rec  = id ? _issAll().find(x => x.id === id) : null;
-  const kind = rec ? rec.kind
-             : (issuesTab === 'complaints' ? 'complaint' : 'maintenance');
+  const rec = id ? _issAll().find(x => x.id === id) : null;
 
   const roomOpts = roomsByNumber(DB.rooms || []).map(r =>
     `<option value="${escHtml(r.id)}" ${rec && rec.raw.roomId === r.id ? 'selected' : ''}>Room ${escHtml(String(r.number))}</option>`).join('');
 
-  /* Complaints are raised by residents. On an EDIT the recorded student is
-     offered even if they have since left, so re-saving an old complaint cannot
-     silently blank the person it was about. */
-  const stuPool = (DB.students || []).filter(s =>
-    s.status === 'Active' || (rec && rec.raw.studentId === s.id));
-  const stuOpts = studentsByRoom(stuPool).map(s => {
-    const r = (DB.rooms || []).find(x => x.id === s.roomId);
-    return `<option value="${escHtml(s.id)}" ${rec && rec.raw.studentId === s.id ? 'selected' : ''}>`
-         + `${escHtml(s.name)}${r ? ' — Room ' + escHtml(String(r.number)) : ''}</option>`;
-  }).join('');
-
   /* The maintenance form's student list — same pool, selected by the ticket's
      `raisedById` rather than a complaint's `studentId`. */
-  const mtByStu = !!(rec && rec.kind === 'maintenance' && rec.raw.raisedById);
+  /* STUDENT IS THE DEFAULT ON A NEW MAINTENANCE JOB (owner, 2026-09-17:
+     "keep the maintinace raised by student default"). Most jobs are reported
+     by the person living with the fault; staff is the exception. On an EDIT
+     the record decides, because it already knows who raised it — a default
+     that overrode a stored fact would be inventing one. */
+  const mtByStu = rec ? !!(rec.raw.raisedById || rec.raw.studentId) : true;
+  /* A complaint stores its resident as `studentId`, a ticket as `raisedById`.
+     Still two fields (migration 003 moves data, it does not reinterpret it), so
+     the picker reads whichever this record carries. On an EDIT the recorded
+     student is offered even if they have since left, so re-saving an old record
+     cannot silently blank the person it was about. */
+  const recStu = rec ? (rec.raw.raisedById || rec.raw.studentId || '') : '';
   const mtStuPool = (DB.students || []).filter(s =>
-    s.status === 'Active' || (rec && rec.raw.raisedById === s.id));
+    s.status === 'Active' || (recStu && recStu === s.id));
   const mtStuOpts = studentsByRoom(mtStuPool).map(s => {
     const r = (DB.rooms || []).find(x => x.id === s.roomId);
-    return `<option value="${escHtml(s.id)}" ${rec && rec.raw.raisedById === s.id ? 'selected' : ''}>`
+    return `<option value="${escHtml(s.id)}" ${recStu === s.id ? 'selected' : ''}>`
          + `${escHtml(s.name)}${r ? ' — Room ' + escHtml(String(r.number)) : ''}</option>`;
   }).join('');
 
@@ -840,7 +921,7 @@ function showIssueModal(id) {
 
 /* ── Maintenance ───────────────────────────────────────────────────────── */
   const maint = `
-    <div id="if-maint" class="hf-form"${kind === 'complaint' ? ' hidden' : ''}>
+    <div id="if-maint" class="hf-form">
       <div class="hf-sec">
         ${_issSecHead(1, 'The issue', 'What is broken, and where')}
         <div class="hf-g2">
@@ -939,88 +1020,30 @@ function showIssueModal(id) {
       </div>
     </div>`;
 
-  /* ── Complaint ─────────────────────────────────────────────────────────── */
-  const comp = `
-    <div id="if-comp" class="hf-form"${kind === 'complaint' ? '' : ' hidden'}>
-      <div class="hf-sec">
-        ${_issSecHead(1, 'Student & room', 'Who raised it — the room follows the student')}
-        <div class="hf-g2">
-          ${_issField('Student', 'student',
-            _issStuPicker('cp-student', 'Search by name or room number…',
-              `<select id="cp-student" class="form-control" hidden onchange="_issSyncCompRoom()"><option value="">Select student</option>${stuOpts}</select>`),
-            { req: true })}
-          ${_issField('Room', 'bed',
-            `<input id="cp-room" class="form-control" readonly value="${rec && rec.roomNo ? '#' + escHtml(rec.roomNo) : ''}" placeholder="From the student's record">`,
-            { readonly: true })}
-        </div>
-      </div>
-
-      <div class="hf-sec">
-        ${_issSecHead(2, 'Complaint details', 'What the complaint is about')}
-        <div class="hf-g3">
-          ${_issField('Category', 'tag',
-            `<select id="cp-category" class="form-control"><option value="">Select category</option>${catOpts}</select>`)}
-          ${_issField('Priority', 'warning',
-            `<select id="cp-priority" class="form-control">${prioOpts(rec && rec.priority ? rec.priority : 'Medium')}</select>`)}
-          ${_issField('Status', 'check',
-            `<select id="cp-status" class="form-control">
-               <option value="Open"        ${rec && rec.status === 'Open' ? 'selected' : ''}>Open</option>
-               <option value="UnderReview" ${rec && rec.status === 'UnderReview' ? 'selected' : ''}>Under Review</option>
-               <option value="Resolved"    ${rec && rec.status === 'Resolved' ? 'selected' : ''}>Resolved</option>
-             </select>`)}
-          ${_issField('Complaint date', 'calendar', dateCtrl('cp-date', rec ? rec.date : today(), 'Select date'), { req: true })}
-          ${_issField('Expected resolution', 'clock', dateCtrl('cp-expected', rec ? rec.expected : '', 'Optional'))}
-          ${_issField('Assigned to', 'person',
-            `<input id="cp-assigned" class="form-control" list="iss-staff" placeholder="Staff member" value="${rec ? escHtml(rec.assigned) : ''}">`)}
-          ${_issField('Subject', 'fileText',
-            `<input id="cp-subject" class="form-control" placeholder="e.g. No water in bathroom" value="${rec ? escHtml(rec.title) : ''}">`,
-            { req: true, full: true })}
-          ${_issField('Description', 'fileText',
-            `<textarea id="cp-desc" class="form-control" placeholder="Describe the complaint in detail…">${rec ? escHtml(rec.desc) : ''}</textarea>`,
-            { full: true, top: true })}
-        </div>
-      </div>
-    </div>`;
-
-  /* The kind switch. Neutral, not accent-filled: it selects which form is on
-     screen, and the one saturated action on this modal is Save. Hidden on an
-     edit — a complaint cannot become a maintenance ticket. */
-  const switcher = rec ? '' : `
-    <div class="hf-switch" role="tablist">
-      <button type="button" id="ib-maint" role="tab" class="hf-switch__b${kind === 'maintenance' ? ' is-on' : ''}"
-              onclick="_issPickKind('maintenance')">${icon('tool','xs')} Maintenance</button>
-      <button type="button" id="ib-comp" role="tab" class="hf-switch__b${kind === 'complaint' ? ' is-on' : ''}"
-              onclick="_issPickKind('complaint')">${icon('helpCircle','xs')} Complaint</button>
-    </div>`;
-
-  const heading = rec
-    ? (kind === 'maintenance' ? 'Edit Maintenance — ' + _issSeq(rec) : 'Edit Complaint — ' + _issSeq(rec))
-    : 'Add Complaint / Maintenance';
+  const heading = rec ? 'Edit issue — ' + _issSeq(rec) : 'Add Issue';
   const sub = rec
     ? 'Update this record. Its reference number does not change.'
-    : 'Record a maintenance task or register a complaint from a student.';
+    : 'Record a complaint, or a maintenance job — the category decides which.';
 
   showModal('modal-form', `
     <div class="hf-mh">
-      <span class="hf-mh__ico">${icon(kind === 'maintenance' ? 'tool' : 'helpCircle', 'sm')}</span>
+      <span class="hf-mh__ico">${icon('helpCircle', 'sm')}</span>
       <span style="min-width:0">
         <span class="hf-mh__t">${escHtml(heading)}</span>
         <span class="hf-mh__s">${escHtml(sub)}</span>
       </span>
     </div>`,
-    dlist + switcher + maint + comp,
+    dlist + maint,
     `<div class="hf-actions">
        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
        <button class="btn btn-primary" onclick="saveIssue(${id ? `'${escHtml(id)}'` : ''})">
          ${icon('save','xs')} ${rec ? 'Save changes' : 'Save issue'}</button>
      </div>`);
 
-  if (kind === 'complaint' && !rec) _issSyncCompRoom();
   if (mtByStu) _issSyncMtRoom();
   /* On an edit the hidden select already holds the recorded student, so the
      search box has to open showing their name — an empty box over a filled
      select reads as "nobody chosen" and invites choosing again. */
-  issPickSync('cp-student');
   issPickSync('mt-raised-stu');
 }
 
@@ -1056,129 +1079,84 @@ function _issSyncMtRoom() {
   }
 }
 
-/** Swap which of the two forms is on screen. */
-function _issPickKind(kind) {
-  const m = document.getElementById('if-maint');
-  const c = document.getElementById('if-comp');
-  const bm = document.getElementById('ib-maint');
-  const bc = document.getElementById('ib-comp');
-  if (!m || !c) return;
-  const wantComp = kind === 'complaint';
-  m.hidden = wantComp;
-  c.hidden = !wantComp;
-  if (bm) bm.classList.toggle('is-on', !wantComp);
-  if (bc) bc.classList.toggle('is-on', wantComp);
-  /* The modal header carries the kind's glyph. Rendered once at open time, it
-     went on showing a wrench over a complaint form. */
-  const mh = document.querySelector('.hf-mh__ico');
-  if (mh) mh.innerHTML = icon(wantComp ? 'helpCircle' : 'tool', 'sm');
-  if (wantComp) _issSyncCompRoom();
-}
-
-/** The complaint's room is the room its student lives in — shown, never typed. */
-function _issSyncCompRoom() {
-  const sel = document.getElementById('cp-student');
-  const out = document.getElementById('cp-room');
-  if (!sel || !out) return;
-  const s = (DB.students || []).find(t => t.id === sel.value);
-  const r = s ? (DB.rooms || []).find(x => x.id === s.roomId) : null;
-  out.value = r ? '#' + String(r.number) : '';
-}
-
-/** Which form is showing. `hidden` rather than an inline display style, so the
- *  answer does not depend on how the element was last written to. */
-function _issFormIsComplaint() {
-  const c = document.getElementById('if-comp');
-  return !!(c && !c.hidden);
-}
+/* _issPickKind(), _issSyncCompRoom() and _issFormIsComplaint() lived here and
+   went with the second form. What decided the kind was a switch the warden
+   pressed; what decides it now is the category they choose — see
+   _issKindFor(). */
 
 const _issVal = (id) => String((document.getElementById(id) || {}).value || '').trim();
 
 async function saveIssue(id) {
-  const isComp = _issFormIsComplaint();
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('This record')) return;
 
-  if (!isComp) {
-    const title = _issVal('mt-title');
-    if (!title) { toast('Enter an issue title', 'error'); return; }
-    if (!DB.maintenance) DB.maintenance = [];
+  const title = _issVal('mt-title');
+  if (!title) { toast('Enter a title', 'error'); return; }
+  if (!Array.isArray(DB.issues)) DB.issues = [];
 
-    /* Raised by a student: their name and link are recorded, and the room is
-       the one on their record — not whatever the room box says. */
-    const byStudent = _issMtByStudent();
-    const byStu = byStudent
-      ? ((DB.students || []).find(s => s.id === _issVal('mt-raised-stu')) || null) : null;
-    if (byStudent && !byStu) { toast('Select the student who raised it', 'error'); return; }
+  /* Raised by a student: their link is recorded and the room is the one on
+     THEIR record, not whatever the room box says. Raised by staff: the typed
+     name, and the room is chosen by hand. */
+  const byStudent = _issMtByStudent();
+  const byStu = byStudent
+    ? ((DB.students || []).find(s => s.id === _issVal('mt-raised-stu')) || null) : null;
+  if (byStudent && !byStu) { toast('Select the student who raised it', 'error'); return; }
 
-    const status = _issVal('mt-status') || 'Open';
-    const fields = {
-      title,
-      roomId:       byStu ? (byStu.roomId || '') : _issVal('mt-room'),
-      category:     _issVal('mt-category'),
-      priority:     _issVal('mt-priority') || 'Medium',
-      location:     _issVal('mt-location'),
-      description:  _issVal('mt-desc'),
-      date:         _issVal('mt-date') || today(),
-      expectedDate: _issVal('mt-expected'),
-      assignedTo:   _issVal('mt-assigned'),
-      // Who reported it (owner, 2026-09-10). Read back by _issAll() as `by`.
-      raisedBy:     byStu ? byStu.name : _issVal('mt-raised'),
-      raisedById:   byStu ? byStu.id : '',
-      status,
-    };
+  const category = _issVal('mt-category');
+  const status   = _issVal('mt-status') || 'Open';
+  const existing = id ? (DB.issues || []).find(x => x.id === id) : null;
 
-    const existing = id ? DB.maintenance.find(x => x.id === id) : null;
-    if (existing) {
-      Object.assign(existing, fields);
-      /* Moving a ticket OFF Resolved has to take the closing date with it, or
-         the register shows an open ticket that also states the day it closed.
-         Moving it ON keeps a date already stamped by the row's button. */
-      if (status === 'Resolved') { if (!existing.resolvedDate) existing.resolvedDate = today(); }
-      else existing.resolvedDate = '';
-      logActivity('Maintenance Updated', title, 'Maintenance');
-    } else {
-      DB.maintenance.push(Object.assign({
-        id: 'mt_' + uid(), seq: _issNextSeq(DB.maintenance),
-        resolvedDate: status === 'Resolved' ? today() : '',
-      }, fields));
-      logActivity('Maintenance Added', title, 'Maintenance');
-    }
-    issuesTab = 'maintenance';
+  /* THE KIND IS SET ONCE, AT CREATION, AND NEVER MOVES.
 
+     Category decides it (owner, 2026-09-21) — but only for a NEW record. An
+     existing one keeps the kind it was filed under, because the kind is what
+     MA-/CO- reads: re-categorising CO-0012 must not silently reissue it as
+     MA-0034 on a sheet somebody has already printed. */
+  const kind = existing ? _issKindOf(existing) : _issKindFor(category);
+
+  const fields = {
+    title,
+    category,
+    roomId:       byStu ? (byStu.roomId || '') : _issVal('mt-room'),
+    priority:     _issVal('mt-priority') || 'Medium',
+    location:     _issVal('mt-location'),
+    description:  _issVal('mt-desc'),
+    date:         _issVal('mt-date') || today(),
+    expectedDate: _issVal('mt-expected'),
+    assignedTo:   _issVal('mt-assigned'),
+    /* Who reported it. A complaint recorded this as `studentId`, a ticket as
+       `raisedById`, and both keys are still read — so write the one that
+       matches the record's own kind rather than converting anything. */
+    raisedBy:     byStu ? byStu.name : _issVal('mt-raised'),
+    raisedById:   (byStu && kind === 'maintenance') ? byStu.id : '',
+    studentId:    (byStu && kind === 'complaint')   ? byStu.id : '',
+    status,
+  };
+
+  const label = kind === 'maintenance' ? 'Maintenance' : 'Complaint';
+  if (existing) {
+    Object.assign(existing, fields);
+    /* Moving a record OFF Resolved has to take the closing date with it, or the
+       register shows something open that also states the day it closed. Moving
+       it ON keeps a date already stamped by the row's button. */
+    if (status === 'Resolved') { if (!existing.resolvedDate) existing.resolvedDate = today(); }
+    else existing.resolvedDate = '';
+    logActivity(label + ' Updated', title, label);
   } else {
-    const subject = _issVal('cp-subject');
-    if (!subject) { toast('Enter a subject', 'error'); return; }
-    if (!DB.complaints) DB.complaints = [];
-
-    const status = _issVal('cp-status') || 'Open';
-    const fields = {
-      subject,
-      studentId:    _issVal('cp-student'),
-      category:     _issVal('cp-category'),
-      priority:     _issVal('cp-priority') || 'Medium',
-      description:  _issVal('cp-desc'),
-      date:         _issVal('cp-date') || today(),
-      expectedDate: _issVal('cp-expected'),
-      assignedTo:   _issVal('cp-assigned'),
-      status,
-    };
-
-    const existing = id ? DB.complaints.find(x => x.id === id) : null;
-    if (existing) {
-      Object.assign(existing, fields);
-      /* Resolving from the form must stamp the date the resolve BUTTON stamps,
-         and clearing the status must take it back off — otherwise a record can
-         read Open while still carrying the day it was closed. */
-      if (status === 'Resolved') { if (!existing.resolvedDate) existing.resolvedDate = today(); }
-      else existing.resolvedDate = '';
-      logActivity('Complaint Updated', subject, 'Complaint');
-    } else {
-      DB.complaints.push(Object.assign({
-        id: 'cp_' + uid(), seq: _issNextSeq(DB.complaints),
-        resolvedDate: status === 'Resolved' ? today() : '', response: '',
-      }, fields));
-      logActivity('Complaint Added', subject, 'Complaint');
-    }
-    issuesTab = 'complaints';
+    DB.issues.push(Object.assign({
+      id: (kind === 'maintenance' ? 'mt_' : 'cp_') + uid(),
+      kind,
+      seq: _issNextSeq(kind),
+      resolvedDate: status === 'Resolved' ? today() : '',
+      response: '',
+      /* WHO ENTERED IT (owner, 2026-09-23). Stamped on create only: an edit
+         six weeks later by somebody else does not change who raised the
+         record. Both halves, the pair ledger.js writes — the account id
+         survives a rename, the name survives the account being deleted. */
+      addedBy:     (typeof CUR_ROLE !== 'undefined' && CUR_ROLE) || null,
+      addedByName: (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) || '',
+    }, fields));
+    logActivity(label + ' Added', title, label);
   }
 
   await saveDB();
@@ -1187,50 +1165,93 @@ async function saveIssue(id) {
   toast(id ? 'Changes saved' : 'Saved', 'success');
 }
 
-async function resolveMaint(id){var m=DB.maintenance.find(function(x){return x.id===id;});if(m){m.status='Resolved';m.resolvedDate=today();await saveDB();renderPage('issues');toast('Resolved','success');}}
-async function progressMaint(id){var m=DB.maintenance.find(function(x){return x.id===id;});if(m){m.status='InProgress';await saveDB();renderPage('issues');toast('In Progress','info');}}
-/* THE DELETE PERMISSION REACHES MAINTENANCE AND COMPLAINTS TOO (owner,
-   2026-09-10). Both of these destroyed a record with no permission check of any
-   kind, which is why an account created with the delete box unticked could
-   still empty the issues register. */
-async function delMaint(id){
-  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
-  showConfirm('Delete?','',async function(){DB.maintenance=DB.maintenance.filter(function(x){return x.id!==id;});await saveDB();renderPage('issues');toast('Deleted','info');});}
-async function resolveComp(id) {
-  // FIX #7: Replace blocking native prompt() with an in-app modal dialog
-  var cc = DB.complaints.find(function(x){return x.id===id;}); if(!cc) return;
-  showModal('modal-sm', 'Resolve Complaint',
-    '<div class="field"><label>Optional Response</label>' +
-    '<textarea id="comp-resolve-text" class="form-control" rows="3" placeholder="Enter a response or leave blank…"></textarea></div>',
+/* ── The row actions, against one collection ────────────────────────────────
+
+   These were resolveMaint / progressMaint / delMaint / resolveComp / delComp —
+   five functions over two arrays, differing only in which array they searched.
+   The old names are kept as aliases at the bottom of this block: they are what
+   any hand-written onclick in an older screen would call, and they cost a line
+   each. */
+
+function _issFind(id) { return (DB.issues || []).find(x => x.id === id) || null; }
+
+async function resolveIssue(id) {
+  const it = _issFind(id);
+  if (!it) return;
+
+  /* A COMPLAINT IS RESOLVED WITH A REPLY; A JOB IS JUST DONE.
+
+     The student who filed it is owed an answer, and `response` is where it
+     goes. A burst pipe has nobody to answer, so asking would be a box the
+     warden closes every time. */
+  if (_issKindOf(it) !== 'complaint') {
+    it.status = 'Resolved';
+    it.resolvedDate = today();
+    await saveDB();
+    renderPage('issues');
+    toast('Resolved', 'success');
+    return;
+  }
+
+  showModal('modal-sm', 'Resolve complaint',
+    '<div class="field"><label>Optional response</label>' +
+    '<textarea id="iss-resolve-text" class="form-control" rows="3" ' +
+    'placeholder="Enter a response or leave blank…"></textarea></div>',
     '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
-    '<button class="btn btn-success" onclick="(async function(){' +
-      'var cc=DB.complaints.find(function(x){return x.id===\'' + id + '\';});' +
-      'if(cc){cc.status=\'Resolved\';cc.resolvedDate=today();cc.response=(document.getElementById(\'comp-resolve-text\')||{}).value||\'\';}' +
-      'await saveDB();closeModal();renderPage(\'issues\');toast(\'Complaint resolved\',\'success\');' +
-    '})()">Mark Resolved</button>'
-  );
+    '<button class="btn btn-success" onclick="_issResolveWithResponse(\'' + escHtml(id) + '\')">' +
+      'Mark resolved</button>');
 }
-async function delComp(id){
+
+/* Split out of an inline onclick that built a function body as a STRING and
+   interpolated the id into it — which is a script-injection sink wearing a
+   handler's clothes, and unreadable besides. */
+async function _issResolveWithResponse(id) {
+  const it = _issFind(id);
+  if (it) {
+    it.status = 'Resolved';
+    it.resolvedDate = today();
+    it.response = (document.getElementById('iss-resolve-text') || {}).value || '';
+  }
+  await saveDB();
+  closeModal();
+  renderPage('issues');
+  toast('Complaint resolved', 'success');
+}
+
+async function progressIssue(id) {
+  const it = _issFind(id);
+  if (!it) return;
+  it.status = 'InProgress';
+  await saveDB();
+  renderPage('issues');
+  toast('In Progress', 'info');
+}
+
+/* THE DELETE PERMISSION REACHES THIS (owner, 2026-09-10). Both of the functions
+   this replaces destroyed a record with no permission check of any kind, which
+   is why an account created with the delete box unticked could still empty the
+   register. */
+async function delIssue(id) {
   if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
-  showConfirm('Delete?','',async function(){DB.complaints=DB.complaints.filter(function(x){return x.id!==id;});await saveDB();renderPage('issues');toast('Deleted','info');});}
+  showConfirm('Delete?', '', async function () {
+    DB.issues = (DB.issues || []).filter(function (x) { return x.id !== id; });
+    await saveDB();
+    renderPage('issues');
+    toast('Deleted', 'info');
+  });
+}
+
+const resolveMaint = resolveIssue, progressMaint = progressIssue, delMaint = delIssue;
+const resolveComp  = resolveIssue, delComp       = delIssue;
 
 /* The pre-v5 names. Nothing in the app calls them today — verified 2026-09-08
    across the whole renderer — but they are the names every older call site and
    any hand-written onclick used, and they cost four lines. Do not add a comment
    claiming a caller without checking: the previous one said "so dashboard
    alerts still work", and the dashboard navigates to this page instead. */
-function resolveMaintenance(id){resolveMaint(id);}
-function progressMaintenance(id){progressMaint(id);}
-function deleteMaintenance(id){delMaint(id);}
-function resolveComplaint(id){resolveComp(id);}
-function deleteComplaint(id){delComp(id);}
 // `showAddIssueModal` is what the older call sites and the keyboard shortcut
 // use; it is the add form, which is showIssueModal with no record.
 function showAddIssueModal(){showIssueModal();}
-function showAddMaintenanceModal(){issuesTab='maintenance';showIssueModal();}
-function showAddComplaintModal(){issuesTab='complaints';showIssueModal();}
-
-
 // ══════════════════════════════════════════════════════════════════
 // RECEIPT GENERATOR
 // ══════════════════════════════════════════════════════════════════

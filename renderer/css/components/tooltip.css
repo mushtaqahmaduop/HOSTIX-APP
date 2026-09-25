@@ -1,0 +1,50 @@
+/* ============================================================
+   Tooltip — the hover card for a value the table had to clip.
+
+   WHY THIS EXISTS. Every clipped cell on the registers carried a native
+   `title`, which the owner asked for on 2026-09-15 and rejected on 2026-09-23:
+   the OS tooltip waits about a second, paints in the operating system's own
+   colours, and so stays a pale Windows box on a dark page and a dark box on a
+   light one. It is the one surface in the app the theme cannot reach.
+
+   WHAT IT IS NOT. It is not a general popover, and it holds no controls: it
+   shows the FULL TEXT of something already on screen in short form. That is
+   why it is `pointer-events:none` — there is nothing in it to click, and a
+   tooltip that can be hovered is a tooltip that can trap a cursor.
+
+   It is positioned by JS (uiTip in utils.js) because a CSS-only tooltip has to
+   live inside its trigger, and every trigger here sits in a cell with
+   `overflow:hidden` — which is precisely why the text was clipped in the first
+   place. One element, appended to <body>, moved to whatever is hovered.
+   ============================================================ */
+
+.ui-tip {
+  position: fixed; z-index: 400;   /* over .modal-overlay's 350 and the panel's 331 */
+  max-width: 320px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1); border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-menu);
+  color: var(--text-primary);
+  font-family: var(--font); font-size: var(--text-sm); font-weight: var(--weight-regular);
+  line-height: var(--leading-normal);
+  /* A value, not a sentence: wrap on words, keep a long CNIC or phone whole. */
+  white-space: pre-wrap; overflow-wrap: break-word;
+  pointer-events: none;
+  opacity: 0; transform: translateY(2px);
+  transition: opacity .12s ease, transform .12s ease;
+}
+.ui-tip.is-on { opacity: 1; transform: translateY(0); }
+
+/* A label above the value — "Guardian", "Room" — so a two-line hover says what
+   it is showing as well as what it says. */
+.ui-tip__l {
+  display: block; margin-bottom: 2px;
+  font-size: var(--text-xs); font-weight: var(--weight-semibold);
+  color: var(--text-tertiary);
+  text-transform: uppercase; letter-spacing: .04em;
+}
+
+/* The trigger keeps the cursor it would have had. A tooltip is not an action,
+   so it must not promise one — no pointer, no underline. */
+[data-tip] { cursor: inherit; }

@@ -127,7 +127,7 @@ function renderSetup() {
   host.innerHTML = `
     <div class="onb-box">
       <div class="onb-rail">
-        <div class="onb-brand">${escHtml(DB.settings.appName || 'HOSTYLLO')}</div>
+        <div class="onb-brand"><img src="img/brand/app-tile.png" alt="" width="28" height="28">${escHtml(DB.settings.appName || 'HOSTYLLO')}</div>
         <div class="onb-steps">
           ${ONB_STEPS.map((s, i) => `
             <div class="onb-step${i === _onbStep ? ' is-on' : ''}${i < _onbStep ? ' is-done' : ''}">

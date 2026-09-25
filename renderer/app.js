@@ -130,7 +130,7 @@ function _pdfInject(html, opts) {
     + '<div id="__hxmsg" class="pdf-bar__m"></div>'
     + '<script>function __hxSavePdf(btn){'
     + 'var m=document.getElementById("__hxmsg");'
-    + 'if(!(window.hostylloPdf&&window.hostylloPdf.save)){window.print();return;}'
+    + 'if(!(window.hostylloPdf&&window.hostylloPdf.save)){'+ 'if(/Electron/.test(navigator.userAgent)){m.textContent="Save is unavailable in this build — falling back to the print dialog.";}'+ 'window.print();return;}'
     + 'btn.disabled=true;m.textContent="Generating PDF\\u2026";'
     + 'window.hostylloPdf.save().then(function(r){btn.disabled=false;'
     + 'm.textContent=r&&r.success?"Saved: "+r.filePath:(r&&r.reason==="cancelled"?"":(r&&r.reason)||"Export could not be generated. Please try again.");'
@@ -416,7 +416,10 @@ document.addEventListener('keydown', function(e) {
 // 'all' | 'maintenance' | 'complaints'. v5 lands on the unified feed the
 // reference design shows; nav.js still forces a single kind for the
 // /maintenance and /complaints routes.
-var issuesTab = 'all';
+/* `issuesTab` stood here. It chose which kind the issues screen showed, and
+   it went with the tab strip on 2026-09-21 — one register, nothing to
+   choose. Removed rather than left at 'all': a global nothing reads is a
+   question for whoever finds it next. */
 
 
 // ── Fix #8: Patch window.open so receipt windows never show LICENSE INFO ──────
@@ -455,15 +458,6 @@ var issuesTab = 'all';
 
 
 // ── SETTINGS DROPDOWN ────────────────────────────────────────────────────────
-function toggleSettingsDropdown() {
-  const dd = document.getElementById('settings-dropdown');
-  const ch = document.getElementById('settings-chevron');
-  if (!dd) return;
-  const open = dd.style.display === 'block';
-  dd.style.display = open ? 'none' : 'block';
-  if (ch) ch.style.transform = open ? '' : 'rotate(180deg)';
-}
-
 // ── FORMER STUDENTS — search & restore ─────────────────────────────────────
 // NOTE: showFormerStudentsModal() is defined in src/modules/students.js
 

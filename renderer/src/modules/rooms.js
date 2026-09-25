@@ -159,7 +159,25 @@ function renderRooms() {
         ${r.photo?`<img src="${escHtml(r.photo)}" alt="Room ${escHtml(String(r.number))}">`:picPlaceholder}
         <span class="rms-card__state">${occ>0?'Occupied':'Vacant'}</span>
         <span class="rms-card__beds">${occ}/${cap} beds</span>
-        ${nVac?`<span class="rms-card__vac" title="${nVac} of these beds ${nVac===1?'is':'are'} on notice and will free up">${nVac} vacating</span>`:''}
+        ${''/* ONE WORD FOR ONE STATE (owner, 2026-09-23: "the student page
+               shows a student cancelling and rooms page show it vacating,
+               should use one to have trust and uniformity").
+
+               Three words described one thing: the students register said
+               Cancelling, this card said vacating, and the occupant chip below
+               said Leaving. A warden checking the same student in two places
+               got two answers and no way to know they were the same answer.
+
+               `Cancelling` wins because it is what the record actually says —
+               it is the stored `status`, one of RESIDENT_STATUSES, and the
+               chip on every register already prints it. The other two were
+               prose written around it.
+
+               `Vacates <date>` survives, and only for DATES: it is a verb
+               about the bed, not a name for the student's state, and
+               statusDateText() has printed it that way everywhere since
+               2026-09-10. Two words, and they do not overlap. */}
+        ${nVac?`<span class="rms-card__vac" data-tip="${nVac} of these beds ${nVac===1?'is':'are'} held by a student who has given notice. They stay occupied until the vacate date." data-tip-always>${nVac} cancelling</span>`:''}
       </div>
       <div class="rms-card__body ${stateHue}">
         <div class="rms-card__head">
@@ -183,7 +201,7 @@ function renderRooms() {
         ${people.length?`<div class="rms-occ">${people.map(p=>{
           const leaving = p.leaves !== null;
           const when = leaving ? (p.leaves ? fmtDate(p.leaves) : 'end of month') : '';
-          return `<span class="rms-occ__chip${leaving?' is-vacating':''}" onclick="event.stopPropagation();showStudentPanel('${p.id}')" title="${leaving?`Leaving ${escHtml(when)} — bed stays theirs until then`:`Open ${escHtml(p.name)}`}"><i></i><span>${escHtml(p.name)}</span>${leaving?`<b class="rms-occ__vac">${escHtml(when)}</b>`:''}</span>`;
+          return `<span class="rms-occ__chip${leaving?' is-vacating':''}" onclick="event.stopPropagation();showStudentPanel('${p.id}')" data-tip="${leaving?`Cancelling — vacates ${escHtml(when)}. The bed stays theirs until then.`:`Open ${escHtml(p.name)}`}" data-tip-always><i></i><span>${escHtml(p.name)}</span>${leaving?`<b class="rms-occ__vac">Vacates ${escHtml(when)}</b>`:''}</span>`;
         }).join('')}</div>`:''}
 
         <div class="rms-acts">
@@ -316,12 +334,15 @@ function renderRooms() {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><path d="M17.5 14.5v6"/><path d="M14.5 17.5h6"/></svg>
         Bulk Add
       </button>
-      ${tbExport({ id:'rms-export', cls:'rms-btn',
-                   excel:'exportRoomsExcel()', pdf:'exportRoomsPDF()' })}
       <button class="rms-btn" onclick="printSeatAvailability()" title="Print a room + occupancy sheet by floor">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
         Print
       </button>
+      ${''/* Export last, as on every other register (owner, 2026-09-20). Print
+             stays its own control: it makes a seat-availability sheet by floor,
+             not a copy of the list on screen, which is all the Export menu offers. */}
+      ${tbExport({ id:'rms-export', cls:'rms-btn',
+                   excel:'exportRoomsExcel()', pdf:'exportRoomsPDF()' })}
     </div>
   </div>
 
@@ -345,7 +366,7 @@ function renderRooms() {
     ${_pg.slice.length===0
       ? `<div class="rms-empty">
            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
-           <div>No rooms match these filters.</div>
+           <div>${(DB.rooms || []).length ? 'No rooms match these filters.' : 'No rooms yet. Use Add Room to create your first.'}</div>
          </div>`
       : roomFilter.view === 'list'
         ? `<div class="rms-list"><table>
@@ -695,6 +716,8 @@ function roomModalTitle(ico, title, sub) {
   </span>`;
 }
 async function submitAddRoom() {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('A room')) return;
   if (typeof requirePerm === 'function' && !requirePerm('add')) return;
   const num=(document.getElementById('f-rnum').value||'').trim().toUpperCase();
   const floor=document.getElementById('f-rfloor').value;
@@ -985,6 +1008,8 @@ function showEditRoomModal(id) {
   syncRoomPreview();
 }
 async function submitEditRoom(id) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('A change to a room')) return;
   if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
   const r=DB.rooms.find(x=>x.id===id); if(!r) return;
   const newNum=(document.getElementById('f-rnum').value||'').trim().toUpperCase()||r.number;

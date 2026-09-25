@@ -20,9 +20,23 @@ function toggleTheme() {
   // 50ms setTimeout left the canvas grid painted in the old theme for a beat
   // after everything else had switched — redraw on the next frame instead so
   // the grid recolours in step with the rest of the UI.
+  /* EVERY CANVAS IN THE APP, not only the dashboard's two (owner, 2026-09-23:
+     "remove the grid lines bug in the financial performance card in both
+     light/dark mode").
+
+     The Reports page draws four — the financial bars, two rings and the
+     collection gauge — and none of them was in this list, so switching theme
+     on that page left the grid painted from the OTHER theme's `--border`:
+     #E6DFD8 hairlines on a near-black card, which is the bright white grid
+     cutting through the bars. The bars and the ring colours were stale with
+     it; it looked like a grid bug because the grid is what shows it.
+
+     Each call is guarded, so a page that has not defined its drawer is
+     skipped rather than throwing — this runs on every toggle, everywhere. */
   requestAnimationFrame(function() {
     if (typeof drawTrendChart === 'function') drawTrendChart();
     if (typeof drawRoomDonut === 'function') drawRoomDonut();
+    if (typeof drawReportCharts === 'function') drawReportCharts();
   });
 }
 function updateThemeUI(isLight) {

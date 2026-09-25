@@ -7,7 +7,12 @@
    under body.has-titlebar, which titlebar.js sets ONLY when the desktop bridge
    is present — so a stray browser load degrades to the old layout, not a gap.
    ═══════════════════════════════════════════════════════════════════════════ */
-:root { --titlebar-h: 40px; --titlebar-offset: var(--titlebar-h); }
+/* 40px -> 30px (owner, 2026-09-17). The bar auto-hides OVER the page, so its
+   height is how much of the header it swallows while it is down: at 40 it
+   covered the whole 40px Add Student button centred in a 56px header. At 30
+   the button's lower edge clears it, which is the point. The drag region, the
+   menus and both window buttons are unchanged - they size off this. */
+:root { --titlebar-h: 30px; --titlebar-offset: var(--titlebar-h); }
 
 #hz-titlebar {
     position: fixed; top: 0; left: 0; right: 0; height: var(--titlebar-h);
@@ -163,8 +168,7 @@ body.hz-tb-autohide.hz-tb-show #hz-titlebar {
 }
 
 
-/* Short screens — see the matching block at the end of chrome.css. 32px is the
-   Windows caption height; the drag region and both window buttons are unchanged.
-   This lives HERE rather than in chrome.css because titlebar.css loads after it
-   (index.html:40 then :42), so a `:root` override there would lose to line 10. */
-@media (max-height: 700px) { :root { --titlebar-h: 32px; } }
+/* THE SHORT-SCREEN OVERRIDE IS GONE. It set 32px, which was smaller than the
+   old 40 and is LARGER than the new 30 — so on the screens with the least
+   height to spare it would have grown the bar. 30 is already under the 32px
+   Windows caption height at every size, so there is nothing left to trim. */

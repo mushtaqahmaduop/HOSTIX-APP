@@ -1,10 +1,10 @@
 {
   "name": "hostix-app",
-  "version": "5.1.0",
+  "version": "6.0.0",
   "description": "Hostyllo Offline — Hostel Management System",
   "author": {
     "name": "MUSHTAQ AHMAD",
-    "email": "mushtaqahmadicp@gmail.com"
+    "email": "hostyllo.info@gmail.com"
   },
   "main": "main.js",
   "scripts": {
@@ -12,16 +12,16 @@
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "rebuild:ia32": "node scripts/rebuild-ia32.js",
-    "build": "electron-builder --win --x64 --ia32 && node scripts/pin-latest-yml.js",
+    "build": "electron-builder --win --x64 && node scripts/pin-latest-yml.js",
     "build:x64": "electron-builder --win nsis portable --x64",
-    "build:ia32": "electron-builder --win nsis portable --ia32",
-    "build:portable": "electron-builder --win portable --x64 --ia32",
-    "build:installer": "electron-builder --win nsis --x64 --ia32 && node scripts/pin-latest-yml.js",
-    "build:all": "electron-builder --win --x64 --ia32 && node scripts/pin-latest-yml.js",
+    "build:ia32": "node scripts/rebuild-ia32.js && electron-builder --win nsis portable --ia32",
+    "build:portable": "electron-builder --win portable --x64",
+    "build:installer": "electron-builder --win nsis --x64 && node scripts/pin-latest-yml.js",
+    "build:all": "electron-builder --win --x64 && node scripts/pin-latest-yml.js",
     "test:license": "node test-license.js",
     "test:activation": "node tests/activation-guard.test.js",
     "test:e2e": "playwright test",
-    "test:migrate": "node migrations/001-relational-schema.test.js",
+    "test:migrate": "node migrations/001-relational-schema.test.js && node migrations/003-issues-merge.test.js",
     "test:retention": "node tests/retention.test.js",
     "test:bulkrooms": "node tests/bulk-rooms.test.js",
     "test:servicemodel": "node tests/service-model.test.js",
@@ -30,11 +30,14 @@
     "test:ledger": "node tests/ledger.test.js",
     "test:handovers": "node tests/handovers.test.js",
     "test:cashevents": "node tests/cash-events.test.js",
+    "test:periods": "node tests/periods.test.js",
     "test:reporttotals": "node tests/report-totals.test.js",
     "test:feestatus": "node tests/fee-status.test.js",
     "test:services": "node tests/services.test.js",
     "test:export": "node tests/export-engine.test.js",
     "test:theme": "node tests/css-theme-hygiene.test.js",
+    "test:security": "node tests/security-hardening.test.js",
+    "test:whatsapp": "node tests/whatsapp-link.test.js",
     "test:update": "node tests/update-url.test.js && node tests/update-check.test.js",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
@@ -54,10 +57,13 @@
       "renderer/**/*",
       "main.js",
       "preload.js",
+      "pdf-window-preload.js",
       "services/**/*",
       "migrations/001-relational-schema.js",
       "migrations/002-student-ledger.js",
+      "migrations/003-issues-merge.js",
       "assets/**/*",
+      "!assets/installer.nsh",
       "package.json",
       "!keygen.js",
       "!keygen.html",
@@ -91,15 +97,13 @@
         {
           "target": "nsis",
           "arch": [
-            "x64",
-            "ia32"
+            "x64"
           ]
         },
         {
           "target": "portable",
           "arch": [
-            "x64",
-            "ia32"
+            "x64"
           ]
         }
       ],
@@ -121,7 +125,7 @@
       "installerHeaderIcon": "assets/icon.ico",
       "deleteAppDataOnUninstall": false,
       "displayLanguageSelector": false,
-      "include": null,
+      "include": "assets/installer.nsh",
       "license": null,
       "artifactName": "Hostyllo-Offline-Setup-${version}-${arch}.exe",
       "warningsAsErrors": false,
@@ -134,14 +138,14 @@
     "publish": {
       "provider": "github",
       "owner": "mushtaqahmaduop",
-      "repo": "HOSTIX-APP",
+      "repo": "hostyllo-releases",
       "releaseType": "release"
     }
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",
     "@playwright/test": "^1.61.1",
-    "electron": "^43.4.0",
+    "electron": "^43.7.5",
     "electron-builder": "^26.8.1",
     "typescript": "^5.9.3"
   },

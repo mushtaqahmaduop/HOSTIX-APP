@@ -21,6 +21,7 @@
 'use strict';
 
 const { test, expect, _electron: electron } = require('@playwright/test');
+const { settleFreshInstall } = require('./_fresh-install');
 const path = require('path');
 const { resetProfile } = require('./_profile');
 
@@ -54,12 +55,13 @@ async function launch() {
   await win.waitForFunction(
     () => typeof WARDENS !== 'undefined' && WARDENS.warden1 && WARDENS.warden1.pw,
     null, { timeout: 60000 });
-  await win.fill('#login-user', 'warden1');
+  await win.selectOption('#login-user', 'warden1');
   await win.fill('#login-input', 'admin123');
   await win.click('#login-btn');
   await win.waitForFunction(
     () => { const s = document.getElementById('login-screen'); return s && s.style.display === 'none'; },
     null, { timeout: 60000 });
+  await settleFreshInstall(win);   // setup done + the 42 rooms these specs expect
   await win.evaluate(async () => {
     const r0 = DB.rooms[0];
     for (let i = 1; i <= 6; i++) {
@@ -68,8 +70,10 @@ async function launch() {
     }
     DB.expenses = [{ id: 'e1', date: '2026-09-01', category: 'Utilities',
       description: 'Bill', amount: 5000 }];
-    DB.maintenance = [{ id: 'mt_1', seq: 1, title: 'Tap', description: 'Leak',
+    // ONE REGISTER since 2026-09-21 — DB.issues, with the kind stamped.
+    DB.issues = [{ id: 'mt_1', kind: 'maintenance', seq: 1, title: 'Tap', description: 'Leak',
       roomId: r0.id, priority: 'High', date: '2026-09-02', status: 'Open', resolvedDate: '' }];
+    DB.maintenance = [];
     DB.cancellations = [{ id: 'canc_1', seq: 1, studentId: 'p1', studentName: 'Student 1',
       roomId: r0.id, roomNumber: r0.number, requestDate: '2026-09-01',
       vacateDate: '2026-09-30', status: 'Pending', reason: '' }];

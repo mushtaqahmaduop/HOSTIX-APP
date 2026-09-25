@@ -108,6 +108,8 @@ test('suspending in the portal makes the app read-only, and lifting it restores 
   await admin.login();
 
   const app = await electron.launch(launchOpts(profile));
+  // The relaunch in step 8. Declared out here so `finally` can close it.
+  let app2 = null;
   const win = await app.firstWindow();
   let licenceId = null;
 
@@ -179,27 +181,45 @@ test('suspending in the portal makes the app read-only, and lifting it restores 
     // DeviceService sync. The real app also does this on its own timer; a test
     // should not wait six hours for a tick.
     await win.evaluate(() => window.online.checkNow());
-    await waitForState('SUSPENDED');
+    // The suspension takes the window to the licence screen, so wait on that
+    // rather than on window.online, which that page does not have.
+    await expect.poll(() => win.url(), { timeout: 120000 }).toMatch(/license\.html/i);
 
     // ── 5. And it BITES ────────────────────────────────────────────────────
+    /* SUSPENSION LOCKS THE APP (owner, 2026-09-20). It used to be read-only:
+       the app stayed open behind a banner and only the save failed, in the
+       main process, where the customer could not see it. Expiry is still
+       read-only — that reasoning is about late payment — but a suspension is
+       the control plane being used deliberately, and an install that can work
+       through it is not suspended. */
     const susp = await win.evaluate(() => window.electronAPI.licenseEnforcement());
     expect(susp.state).toBe('SUSPENDED');
-    expect(susp.readOnly, 'a suspended licence must stop new work').toBe(true);
-    expect(susp.blocked, 'suspended must not lock them out of their own records').toBe(false);
+    expect(susp.blocked, 'a suspension must lock the app').toBe(true);
+    expect(susp.readOnly, 'read-only is for expiry, not suspension').toBe(false);
 
     const blocked = await win.evaluate(() =>
       window.electronAPI.dbUpsert('students', 'cp-2', { id: 'cp-2', name: 'Blocked' }));
     expect(blocked.ok, 'a suspended licence still accepted a write').toBe(false);
-    expect(blocked.code).toBe('LICENCE_READ_ONLY');
 
-    // Nothing is held hostage.
+    // It bites NOW, not at the next launch: the window is on the licence
+    // screen already, which is also why there is no banner to read any more.
+    await expect.poll(() => win.url(), { timeout: 20000 }).toMatch(/license\.html/i);
+    await expect(win.locator('body')).toContainText(/suspend/i);
+
+    /* AND THE DATA IS STILL THEIRS. This is the half of D-3 the owner kept:
+       locked out of working, never out of their own records. The export is a
+       READ, so it answers on the licence screen itself. */
+    expect(await win.evaluate(() => window.electronAPI.dbExportFull())).toBeTruthy();
+    await expect(win.locator('text=Download my data')).toBeVisible();
     const rows = await win.evaluate(() => window.electronAPI.dbAll('students'));
     expect(rows.some((s) => s && s.id === 'cp-1'), 'existing records must remain').toBe(true);
-    expect(await win.evaluate(() => window.electronAPI.dbExportFull())).toBeTruthy();
 
-    // The customer is told why.
-    await expect(win.locator('#licence-banner')).toBeVisible();
-    expect(await win.locator('#licence-banner').innerText()).toMatch(/suspend/i);
+    /* Lifting it brings the app BACK, without a restart — the suspension is
+       reversible from the portal and so is the lock (_unlockFromLicenceScreen).
+       Everything after this point needs the app window again. */
+    await setStatus('active', 'automated test — lift the lock');
+    await expect.poll(() => win.url(), { timeout: 90000 }).toMatch(/index\.html/i);
+    await win.waitForFunction(() => typeof window.online !== 'undefined', null, { timeout: 30000 });
 
     // ── 5b. Feature flags reach the app and remove the page ────────────────
     await setStatus('active', 'restore before feature test');
@@ -243,11 +263,14 @@ test('suspending in the portal makes the app read-only, and lifting it restores 
 
     await setStatus('suspended', 're-suspend for the restore step');
     await win.evaluate(() => window.online.checkNow());
-    await waitForState('SUSPENDED');
+    // The lock takes the window with it, so from here the renderer has no
+    // window.online to drive — the app's own timer is what picks the change up.
+    await expect.poll(() => win.url(), { timeout: 90000 }).toMatch(/license\.html/i);
 
-    // ── 6. Lifting it restores full use ────────────────────────────────────
+    // ── 6. Lifting it restores full use, without a restart ─────────────────
     await setStatus('active', 'automated test — restore');
-    await win.evaluate(() => window.online.checkNow());
+    await expect.poll(() => win.url(), { timeout: 90000 }).toMatch(/index\.html/i);
+    await win.waitForFunction(() => typeof window.online !== 'undefined', null, { timeout: 30000 });
     await waitForState('ACTIVE');
 
     const restored = await win.evaluate(() =>
@@ -265,13 +288,18 @@ test('suspending in the portal makes the app read-only, and lifting it restores 
        unit tests cover that decision; nothing proved it survived the whole
        chain from the portal to a running app.
 
-       SUSPENDED is read-only. REVOKED is blocked outright — enforcement.js puts
-       it in BLOCKED_STATES with UNLICENSED. So the assertions differ: a write
-       is refused either way, but revocation is not a state the customer keeps
-       working in. */
+       Since 2026-09-20 SUSPENDED and REVOKED both block; EXPIRED is the only
+       read-only state left. The two still differ in remedy, and the screen has
+       to say WHICH — a suspension is lifted from the portal, a revocation is
+       not. */
     await setStatus('revoked', 'automated test — revocation reaches the app');
     await win.evaluate(() => window.online.checkNow());
-    await waitForState('REVOKED');
+    // waitForState() reads window.online, which the licence screen does not
+    // have — and reaching that screen IS the assertion now. licenseEnforcement()
+    // is on the preload, so it answers from either page.
+    await expect.poll(() => win.url(), { timeout: 90000 }).toMatch(/license\.html/i);
+    await expect.poll(async () => (await win.evaluate(
+      () => window.electronAPI.licenseEnforcement())).state, { timeout: 30000 }).toBe('REVOKED');
 
     const afterRevoke = await win.evaluate(() =>
       window.electronAPI.dbUpsert('students', 'cp-4', { id: 'cp-4', name: 'Must not land' }));
@@ -283,11 +311,53 @@ test('suspending in the portal makes the app read-only, and lifting it restores 
     expect(afterRows.some((s) => s && s.id === 'cp-4'),
       'a write refused under revocation must not have landed').toBe(false);
 
-    // And the customer is told which of the two it is, since the remedies differ.
-    await expect(win.locator('#licence-banner')).toBeVisible();
-    expect(await win.locator('#licence-banner').innerText()).toMatch(/revok/i);
-  } finally {
+    // And the customer is told which of the two it is, since the remedies
+    // differ. On the licence screen now, not in a banner over a usable app.
+    await expect.poll(() => win.url(), { timeout: 20000 }).toMatch(/license\.html/i);
+    await expect(win.locator('body')).toContainText(/revok/i);
+    await expect(win.locator('text=Download my data')).toBeVisible();
+
+    /* ── 8. AND IT STILL BITES ON A COLD START — THE ONLY PATH THE FIELD TAKES ──
+
+       Everything above revokes while this app still holds a device token it
+       fetched moments earlier, so it goes straight to /v1/entitlement and is
+       told. NO INSTALL IN THE FIELD IS EVER ON THAT PATH: a device token lasts
+       15 minutes and the app syncs every 6 hours, so every real sync begins by
+       exchanging the device secret at /v1/devices/token.
+
+       That is where revocation used to die. The endpoint answered 401 to a
+       revoked licence, the app read that as "my secret was rejected", wiped its
+       credentials and re-registered — and registration answered 403. The sync
+       failed, the cached ACTIVE entitlement kept answering for its full 14 days,
+       and then the local licence file took over. The customer was revoked in the
+       portal and working normally on the desk, indefinitely.
+
+       A restart is exactly that path and needs no test seam: a fresh process
+       holds no token. So close the app with the licence still revoked, open it
+       again, and require that it comes up locked. */
     await app.close();
+
+    app2 = await electron.launch(launchOpts(profile));
+    const win2 = await app2.firstWindow();
+    await expect.poll(() => win2.url(), { timeout: 120000 }).toMatch(/license\.html/i);
+    await expect.poll(async () => (await win2.evaluate(
+      () => window.electronAPI.licenseEnforcement())).state, { timeout: 60000 }).toBe('REVOKED');
+
+    const coldStart = await win2.evaluate(() => window.electronAPI.licenseEnforcement());
+    expect(coldStart.source,
+      'it fell back to the local licence file, which is revocation doing nothing')
+      .toBe('entitlement');
+    expect(coldStart.blocked).toBe(true);
+
+    const afterRestart = await win2.evaluate(() =>
+      window.electronAPI.dbUpsert('students', 'cp-5', { id: 'cp-5', name: 'Must not land either' }));
+    expect(afterRestart.ok, 'a revoked licence accepted a write after a restart').toBe(false);
+
+    // Their records are still theirs, on this screen, after a restart too.
+    await expect(win2.locator('text=Download my data')).toBeVisible();
+  } finally {
+    await app.close().catch(() => {});
+    if (app2) await app2.close().catch(() => {});
     // The portal has no delete — deliberately, since a licence is a customer
     // record. Revoke it and leave it labelled, so it cannot be reused and is
     // obviously not a real hostel.

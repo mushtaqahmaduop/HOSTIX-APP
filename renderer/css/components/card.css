@@ -6,12 +6,20 @@
 .ui-card {
   background: var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  /* 12px, from 8 (owner, 2026-09-17). The teardown puts every card-level
+     surface at 24px; that was drawn for large editorial panels, and this
+     dashboard holds fifteen cards at once. --radius-lg is the ladder's next
+     rung, so the softening costs no new token. */
+  border-radius: var(--radius-lg);
   padding: var(--space-4);
   min-width: 0;
 }
+/* THE SERIF, at weight 400 (owner, 2026-09-17). A card title is a voice, not
+   chrome — and the display face is never bold on the serif, which is the one
+   rule the teardown states twice. Weight comes off the size, not the stroke. */
 .ui-card__title {
-  font-size: var(--text-lg); font-weight: var(--weight-medium); color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--text-lg); font-weight: var(--weight-normal); color: var(--text-primary);
 }
 
 /* For a card whose content owns the edge — a table, a list. */
@@ -33,3 +41,68 @@
   color: var(--text-primary); font-variant-numeric: tabular-nums;
 }
 .ui-room__t { font-size: var(--text-xs); color: var(--text-tertiary); white-space: nowrap; }
+
+/* ── Room pill, wide ────────────────────────────────────────────────────────
+   The same fact laid out sideways: the NUMBER keeps the box, and the floor and
+   the room type stack beside it instead of under it. The cancellations
+   register has drawn it this way since it was rebuilt — "the type (2-Seater)
+   does not fit under a room number" — and the students register was asked for
+   the same card (owner, 2026-09-22).
+
+   The modifier gives the border and the ground back to `__n` rather than
+   restyling the base, so the two variants are one component with one set of
+   metrics: `--space-1 --space-2`, `--radius-sm`, `--surface-2`, `--border`.
+   `.canc-room` is the same shape under a screen file's name and can fold into
+   this when that screen is next opened. */
+.ui-room--wide {
+  flex-direction: row; align-items: center; gap: var(--space-2);
+  padding: 0; border: 0; background: none;
+  /* Never wider than the cell it was given. An inline-flex box shrink-to-fits
+     to its content, so a hostel that names a type "2-Seater (Attached)" would
+     otherwise paint straight over the column to its right. */
+  max-width: 100%;
+}
+/* THE BOX HUGS ITS DIGITS, WHATEVER THERE ARE (owner, 2026-09-23, second
+   pass: "the room number label is not auto adjusting to 2 or 3 digit room
+   number just like the cancellations page room number label do").
+
+   The first attempt gave it `min-width:3ch`, which made a one-digit room sit
+   in a three-digit box — a fixed label, not an adjusting one. `.canc-room__n`
+   simply wraps its content, and that is the behaviour asked for.
+
+   `flex:0 0 auto` IS THE WHOLE FIX, and it is what the cancellations pill
+   never needed. That one sits in a cell of its own; this one is a flex item
+   beside the floor and room-type lines, so at the default `flex-shrink:1` the
+   NUMBER was the thing that gave way when the cell ran short — a room reading
+   "21" when it is 214. It cannot shrink now, and the meta lines beside it give
+   way instead, which is right: they already carry the ellipsis and a clipped
+   floor name is a nuisance where a clipped room number is a different room.
+
+   `overflow:visible` for the same reason — an identifier either fits or widens
+   the box; it never renders as a shorter identifier. */
+.ui-room--wide .ui-room__n {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  flex: 0 0 auto; white-space: nowrap;
+  overflow: visible; text-overflow: clip;
+}
+/* The meta column: floor over type, tight, and never wider than its share of
+   the cell — `min-width:0` is what lets the two lines ellipsis instead of
+   forcing the flex row open. */
+.ui-room__m {
+  display: flex; flex-direction: column; min-width: 0;
+  line-height: var(--leading-tight); text-align: left;
+}
+/* Both lines CLIP, they never wrap. This variant exists for a fixed-layout
+   register cell, where a wrapped type name sets the height of every other
+   column in the row — so the pair ellipsises and the full value is on the
+   hover the calling screen puts there.
+
+   IT LIVES HERE, NOT IN A SCREEN FILE. `.ui-room__n` / `.ui-room__t` are the
+   shared component (issues.css already styles them too), so an unscoped rule
+   in one screen's stylesheet reaches every other screen's room cells — which
+   is exactly the "shared selector edited to fix one screen" trap governance
+   names. Scoped to `--wide`, it only reaches the variant that needs it. */
+.ui-room--wide .ui-room__n,
+.ui-room--wide .ui-room__t { overflow: hidden; text-overflow: ellipsis; }

@@ -31,7 +31,12 @@
     background: var(--card); color: var(--accent-strong);
     font-size: 11px; font-weight: 700;
 }
-.sup-hero__t { font-size: 22px; font-weight: 800; color: var(--text); line-height: 1.2; }
+/* SERIF, WEIGHT 400. A heading at --text-lg or larger is a voice rather than
+   chrome (owner, 2026-09-17), and the display face is never bold on the serif
+   — weight comes off the size. Measured 2026-09-17: this was still resolving
+   to Inter while the dashboard's card titles resolved to Georgia. */
+.sup-hero__t { font-family: var(--font-display); font-size: 22px;
+               font-weight: var(--weight-normal); color: var(--text); line-height: 1.2; }
 .sup-hero__s {
     margin-top: 7px; max-width: 62ch;
     font-size: 12.5px; line-height: 1.6; color: var(--text2);

@@ -13,6 +13,7 @@
 'use strict';
 
 const { test, expect, _electron: electron } = require('@playwright/test');
+const { settleFreshInstall } = require('./_fresh-install');
 const path = require('path');
 const { resetProfile } = require('./_profile');
 
@@ -32,12 +33,13 @@ async function login(win) {
   await win.waitForFunction(
     () => typeof WARDENS !== 'undefined' && WARDENS.warden1 && WARDENS.warden1.pw,
     null, { timeout: 30000 });
-  await win.fill('#login-user', 'warden1');
+  await win.selectOption('#login-user', 'warden1');
   await win.fill('#login-input', 'admin123');
   await win.click('#login-btn');
   await win.waitForFunction(
     () => { const s = document.getElementById('login-screen'); return s && s.style.display === 'none'; },
     null, { timeout: 30000 });
+  await settleFreshInstall(win);   // setup done + the 42 rooms these specs expect
   await win.waitForFunction(
     () => typeof _ledgerReady !== 'undefined' && _ledgerReady === true, null, { timeout: 30000 });
 }
@@ -98,7 +100,10 @@ test('collected money is locked, and only its collector or an admin may change i
     expect(saraView.text).toContain('Collected by Ali Warden');
     expect(saraView.save, 'Save is offered on a view-only form').toBe(false);
     expect(saraView.rent).toBe(true);
-    expect(saraView.receive, 'a view-only form offers to receive money').toBe(true);
+    // Receiving NEW money stays open to any account with the payments permission
+    // (owner, 2026-09-23, 9453e9e): it adds a collection in Sara's own name and
+    // changes nothing Ali collected. What stays locked is the bill — next check.
+    expect(saraView.receive, 'a warden cannot take the pending balance at the desk').toBe(false);
     const saraForced = await win.evaluate(async pid => {
       document.getElementById('f-prent').value = '1';
       await submitEditPayment(pid);
@@ -118,7 +123,9 @@ test('collected money is locked, and only its collector or an admin may change i
       return items;
     }, pid);
     expect(menu).toEqual([
-      { t: 'View payment', off: false }, { t: 'Print receipt', off: false },
+      // 'Receive payment', not 'View payment': Sara can take the pending money
+      // (9453e9e); changing Ali's collection stays locked.
+      { t: 'Receive payment', off: false }, { t: 'Print receipt', off: false },
       { t: 'Reverse a collection', off: false }, { t: 'Delete payment', off: true },
     ]);
 
@@ -170,12 +177,28 @@ test('collected money is locked, and only its collector or an admin may change i
       document.getElementById('f-pedit-reason').value = 'Rent lowered for a shared room';
       await submitEditPayment(pid);
       const adj = DB.studentLedger.filter(e => e.paymentRecordId === pid && e.type === 'adjustment').pop();
-      return { noReason, rent: p().monthlyRent, amount: p().amount, method: p().method, reason: adj && adj.reason };
+      return { noReason, rent: p().monthlyRent, amount: p().amount, method: p().method,
+               trail: (p().partialPayments || []).map(x => x.amount + ':' + x.method),
+               reason: adj && adj.reason };
     }, pid);
     expect(edit.noReason, 'a charge changed without a reason').toBe(10000);
     expect(edit.rent).toBe(9000);
     expect(edit.amount, 'the locked Amount paid was saved over').toBe(7000);
-    expect(edit.method, 'the locked method changed').toBe('JazzCash');
+
+    /* THE RECORD'S METHOD IS THE COLLECTION THAT OPENED IT (§14 Rule 1, closed
+       in `2d770c9`). This asserted 'JazzCash' — Ali's, the LATEST collection —
+       which is the behaviour applyPayment() had when this test was written and
+       which was deliberately removed 40 commits later: a month opened in cash
+       and topped up by bank transfer was retroactively becoming a bank transfer
+       on the record, on its row, and on every receipt reprinted afterwards.
+
+       Sara opened this record in cash, so the record says Cash. Ali's JazzCash
+       is not lost — it is on HIS trail entry, which is where a receipt reads it,
+       and the assertion below is what actually protects that. Neither his
+       collection nor this bill edit may move the record's own method. */
+    expect(edit.method, 'the method of the collection that OPENED the record changed').toBe('Cash');
+    expect(edit.trail, 'a later collection lost the method it came in by')
+      .toEqual(['5000:Cash', '3000:JazzCash']);
     expect(edit.reason).toContain('Rent lowered for a shared room');
 
     // ── Delete: refused for a record holding money, admin included ──────────

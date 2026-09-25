@@ -53,6 +53,9 @@ declare function isResident(t: any): boolean;
 declare function exportData(): void;
 declare function moneyValue(amount: any, opts?: any): string;
 declare function openExternalLink(url: string): void;
+declare function waLink(phone: any, text?: any): string;
+declare function waFitText(text: any, budget: number): string;
+declare function gmailLink(to: any, subject?: any, body?: any): string;
 // The room, named. roomLabel() is the boxed two-line CELL; roomText() is the
 // same fact as one line of plain text for a sentence, a badge or a modal title.
 declare function floorShort(floor: any): string;
@@ -82,6 +85,10 @@ declare function serviceModelInfo(): ServiceModelDef;
 // eight modules used to answer three different ways — see the comment above
 // the function itself, and tests/outstanding.test.js.
 declare function outstandingOf(p: any): number;
+// The part of a record's reversals that was HANDED BACK rather than
+// un-collected, and so settles the debt instead of re-opening it. Read by
+// outstandingOf() and by the ledger (owner, 2026-09-23).
+declare function refundRelief(p: any): number;
 // What this student is billed per month, from settings — the charge authority
 // outstandingOf() derives against.
 declare function resolveCharges(student: any, opts?: any): any;
@@ -196,6 +203,9 @@ declare function setPaperSize(v: string): Promise<{ ok: boolean; unchanged?: boo
 declare const HOSTEL_NAME_PLACEHOLDER: string;
 declare function hostelNameMissing(): boolean;
 declare function hostelNameGate(retry?: () => void): boolean;
+/** enforcement-ui.js — the owner's per-licence print / export switches. */
+declare function requireOutput(kind: 'printing' | 'exporting'): boolean;
+declare function canOutput(kind: 'printing' | 'exporting'): boolean;
 declare function hostelNameSave(name: string): Promise<{ ok: boolean; name?: string; reason?: string }>;
 declare function ensureHostelName(): Promise<boolean>;
 // -- undertaking.js: rules & undertaking (warden ledger spec §2.7, §3.8, step 11) --

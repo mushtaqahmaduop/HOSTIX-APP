@@ -50,7 +50,7 @@ async function openApp() {
   await win.waitForFunction(
     () => typeof WARDENS !== 'undefined' && Object.keys(WARDENS).length > 0,
     null, { timeout: 30000 });
-  await win.fill('#login-user', 'warden1');
+  await win.selectOption('#login-user', 'warden1');
   await win.fill('#login-input', 'admin123');
   await win.click('#login-btn');
   await win.waitForFunction(
@@ -318,8 +318,12 @@ test("'delete' is enforced on every register, not only on students", async () =>
     DB.cancellations = [{ id: 'c1', studentId: 's1', studentName: 'Seed', roomNumber: '901',
                           status: 'Pending', requestDate: t, vacateDate: t, reason: 'Seed' }];
     DB.expenses    = [{ id: 'e1', category: 'Utilities', amount: 500, date: t, description: 'Seed' }];
-    DB.maintenance = [{ id: 'm1', title: 'Seed', status: 'Open', date: t }];
-    DB.complaints  = [{ id: 'k1', title: 'Seed', status: 'Open', date: t }];
+    /* ONE REGISTER since 2026-09-21. Both kinds live in DB.issues; the delete
+       permission has to reach a record of either kind, which is why both are
+       still seeded and both are still called below. */
+    DB.issues = [{ id: 'm1', kind: 'maintenance', title: 'Seed', status: 'Open', date: t },
+                 { id: 'k1', kind: 'complaint',   title: 'Seed', status: 'Open', date: t }];
+    DB.maintenance = []; DB.complaints = [];
     DB.transfers   = [{ id: 'x1', amount: 100, date: t, note: 'Seed' }];
     await saveDB();
   });
@@ -329,8 +333,8 @@ test("'delete' is enforced on every register, not only on students", async () =>
       ['payment',      () => deletePayment('p1')],
       ['cancellation', () => deleteCancellationRecord('c1')],
       ['expense',      () => deleteExpense('e1')],
-      ['maintenance',  () => delMaint('m1')],
-      ['complaint',    () => delComp('k1')],
+      ['maintenance',  () => delIssue('m1')],
+      ['complaint',    () => delIssue('k1')],
       ['room',         () => confirmDeleteRoom('rEmpty')],
       ['transfer',     () => deleteTransfer('x1')],
     ];
@@ -347,8 +351,8 @@ test("'delete' is enforced on every register, not only on students", async () =>
       payment:      DB.payments.length,
       cancellation: (DB.cancellations || []).length,
       expense:      DB.expenses.length,
-      maintenance:  DB.maintenance.length,
-      complaint:    DB.complaints.length,
+      maintenance:  (DB.issues || []).filter(i => i.kind === 'maintenance').length,
+      complaint:    (DB.issues || []).filter(i => i.kind !== 'maintenance').length,
       room:         DB.rooms.length,
       transfer:     (DB.transfers || []).length,
     };

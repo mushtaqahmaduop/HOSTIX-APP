@@ -19,5 +19,55 @@
 .ui-chip--accent  { background: var(--accent-bg);  color: var(--accent-fg); }
 .ui-chip--neutral { background: var(--neutral-bg); color: var(--neutral-fg); }
 
+/* ── A CATEGORY CHIP, IN THE CATEGORY'S OWN COLOUR ──────────────────────────
+   Owner, 2026-09-23, reversing the ruling of 2026-09-16 ("categories are
+   neutral; hue is reserved for state") after their own expense reference drew
+   them coloured. The ruling is theirs to reverse, and the scanning it buys on
+   an eleven-category register is real.
+
+   IT IS OUTLINED, AND THE FIVE ROLE CHIPS ARE NOT. That is the whole safety
+   of this: hue alone no longer separates "Groceries" from "High priority", so
+   the SHAPE has to. A role chip is a solid tint with no border; a category is
+   a lighter tint inside a ruled edge. On the complaints register, where a red
+   category can sit one column from a red priority, the border is what says
+   they are different kinds of fact.
+
+   THE COLOUR ARRIVES AS `--cat`, set inline from expenseCatHue(), which keys
+   by NAME — so a hostel that drags its categories into a new order in Settings
+   does not repaint the register, and an unknown category still gets a stable
+   colour instead of a grey two of them would share. Past the tenth the palette
+   cycles; that is a repeat, not a collision, because the icon and the word
+   still differ.
+
+   `color-mix` rather than hex-with-alpha: the tint composites against the
+   CURRENT surface, so the same declaration reads correctly on the light
+   theme's ivory and the dark theme's near-black without a second palette. */
+/* `border`, not `border-color`: `.ui-chip` declares no border at all, so a
+   colour on its own computes and draws nothing — the outline that is the whole
+   point of this variant was invisible. */
+.ui-chip--cat {
+  background: color-mix(in srgb, var(--cat, var(--neutral-fg)) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cat, var(--neutral-fg)) 38%, transparent);
+  /* THE WORD IS MIXED TOWARD THE THEME'S INK, and that is a contrast
+     requirement rather than a taste. The ramp is ten saturated mid-tones
+     chosen to be told apart as FILLS on a chart; several of them fail badly as
+     12px TEXT — #06b6d4 on the light theme's ivory is about 2.4:1 against the
+     4.5 that body text needs.
+
+     Mixing the theme's own text colour into the hue darkens it on light and
+     lightens it on dark, from ONE declaration, and keeps enough of the hue for
+     the chip to read as its category. The GLYPH beside it keeps the pure
+     colour: an icon is a graphic, held to 3:1, and it is what carries the
+     identity at a glance.
+
+     50% IS MEASURED, NOT PICKED. Every hue in the ramp was checked against its
+     own 14% chip ground in both themes: at 55% hue the worst case (lime on the
+     light ivory) came to 4.45:1 and missed AA by a hair; at 50% the worst is
+     5.02 light and 7.10 dark. Lowering it further only mutes the colour the
+     owner asked for, so 50 is the most hue this can carry and still be read. */
+  color: color-mix(in srgb, var(--cat, var(--neutral-fg)) 50%, var(--text-primary));
+}
+.ui-chip--cat svg { color: var(--cat, var(--neutral-fg)); flex-shrink: 0; }
+
 /* Counts only. */
 .ui-chip--count { border-radius: var(--radius-full); }

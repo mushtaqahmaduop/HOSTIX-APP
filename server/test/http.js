@@ -96,7 +96,8 @@ function baseWorld() {
   stub.on(/INSERT INTO admin_sessions/, () => ({ rows: [] }));
   stub.on(/UPDATE admin_users SET last_login_at/, () => ({ rows: [] }));
   stub.on(/INSERT INTO audit_log/, () => ({ rows: [] }));
-  stub.on(/FROM licenses WHERE id/, () => ({ rows: [LICENSE] }));
+  stub.on(/FROM licenses WHERE id|WHERE l\.id = \$1/, () => ({ rows: [LICENSE] }));
+  stub.on(/FROM fleet_settings/, () => ({ rows: [{ features: {}, restrictions: {}, revision: 1 }] }));
   stub.on(/FROM devices WHERE license_id/, () => ({ rows: [] }));
   stub.on(/FROM audit_log/, () => ({ rows: [] }));
 }
@@ -183,11 +184,173 @@ test('register refuses unknown body fields rather than ignoring them', async (ap
   assert.strictEqual(res.json().code, 'VALIDATION_ERROR');
 });
 
+test('the portal is served with security headers (audit, 2026-09-24)', async (app) => {
+  const res = await app.inject({ method: 'GET', url: '/admin/' });
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.headers['x-frame-options'], 'DENY');
+  assert.strictEqual(res.headers['x-content-type-options'], 'nosniff');
+  assert.strictEqual(res.headers['referrer-policy'], 'no-referrer');
+  const csp = res.headers['content-security-policy'] || '';
+  assert.ok(/frame-ancestors 'none'/.test(csp), 'CSP does not forbid framing: ' + csp);
+  assert.ok(/object-src 'none'/.test(csp), 'CSP allows plugins: ' + csp);
+  assert.ok(!/script-src[^;]*https?:/.test(csp), 'CSP allows a remote script host: ' + csp);
+});
+
+test('an API answer carries the same headers', async (app) => {
+  const res = await app.inject({ method: 'GET', url: '/v1/healthz' });
+  assert.strictEqual(res.headers['x-content-type-options'], 'nosniff');
+  assert.strictEqual(res.headers['x-frame-options'], 'DENY');
+});
+
+test('/admin without the slash redirects to the portal', async (app) => {
+  const res = await app.inject({ method: 'GET', url: '/admin' });
+  assert.strictEqual(res.statusCode, 301);
+  assert.strictEqual(res.headers.location, '/admin/');
+});
+
 test('/v1/entitlement without a token is refused', async (app) => {
   baseWorld();
   const res = await app.inject({ method: 'GET', url: '/v1/entitlement' });
   assert.strictEqual(res.statusCode, 401);
   assert.strictEqual(res.json().code, 'DEVICE_UNAUTHORIZED');
+});
+
+/* ── Revocation has to be able to REACH the app ──────────────────────────────
+
+   These four are the regression guard for "I revoked a hostel and their app
+   carried on working". /v1/devices/token used to answer 401 to a revoked
+   licence and /v1/devices/register used to answer 403, so the app could never
+   obtain the SIGNED entitlement that says REVOKED — the only statement it is
+   allowed to act on. It fell back to its cached ACTIVE entitlement and then to
+   the local licence file, forever.
+
+   tests/control-plane-sync.spec.js did not catch it because it revokes while
+   the app still holds a live token. A token lasts 15 minutes and the app syncs
+   every 6 hours, so no install in the field is ever on that path. */
+
+const DEVICE = {
+  id: '33333333-3333-3333-3333-333333333333',
+  machine_id: 'a'.repeat(64)
+};
+
+/** A world where DEVICE exists, holds `secret`, and its licence has `status`. */
+function deviceWorld(secret, status, deviceStatus) {
+  const keys = require('../src/lib/keys');
+  baseWorld();
+  stub.on(/d\.secret_hash/, () => ({
+    rows: [{
+      id: DEVICE.id,
+      secret_hash: keys.hashDeviceSecret(secret),
+      device_status: deviceStatus || 'active',
+      license_status: status
+    }]
+  }));
+  stub.on(/INSERT INTO device_tokens/, () => ({ rows: [] }));
+  stub.on(/UPDATE devices SET last_seen_at/, () => ({ rows: [] }));
+  stub.on(/DELETE FROM device_tokens/, () => ({ rows: [] }));
+}
+
+test('a REVOKED licence still gets a device token — the revocation travels signed', async (app) => {
+  const secret = 's'.repeat(40);
+  deviceWorld(secret, 'revoked');
+  const res = await app.inject({
+    method: 'POST', url: '/v1/devices/token',
+    payload: { deviceId: DEVICE.id, deviceSecret: secret }
+  });
+  assert.strictEqual(res.statusCode, 200,
+    'a revoked licence was refused a token, so the app can never hear it was revoked: ' + res.body);
+  assert.ok(res.json().data.token, 'no token issued');
+});
+
+// A deactivated device is a RELEASED PC (the console's "Release PC"). It still
+// gets a token, for the same reason a revoked licence does: the released PC is
+// locked by the signed entitlement it fetches next, and a 401 here would leave
+// it running on its cache. Owner's decision, 2026-09-24. The secret is still
+// checked — see the next test.
+test('a DEACTIVATED (released) device still gets a token — its lock travels signed', async (app) => {
+  const secret = 's'.repeat(40);
+  deviceWorld(secret, 'active', 'deactivated');
+  const res = await app.inject({
+    method: 'POST', url: '/v1/devices/token',
+    payload: { deviceId: DEVICE.id, deviceSecret: secret }
+  });
+  assert.strictEqual(res.statusCode, 200,
+    'a released PC was refused a token, so it can never hear it was released: ' + res.body);
+  assert.ok(res.json().data.token, 'no token issued');
+});
+
+test('a wrong secret is still refused, revoked or not', async (app) => {
+  deviceWorld('s'.repeat(40), 'revoked');
+  const res = await app.inject({
+    method: 'POST', url: '/v1/devices/token',
+    payload: { deviceId: DEVICE.id, deviceSecret: 'w'.repeat(40) }
+  });
+  assert.strictEqual(res.statusCode, 401);
+});
+
+test('/v1/entitlement hands a revoked licence a SIGNED REVOKED entitlement', async (app) => {
+  const ent = require('../src/lib/entitlement');
+  const appVerifier = require('../../services/entitlement');
+  const pair = crypto.generateKeyPairSync('ed25519');
+  const previous = process.env.ENTITLEMENT_SIGNING_JWK;
+  process.env.ENTITLEMENT_SIGNING_JWK = JSON.stringify(Object.assign(
+    { kid: 'http-test-kid', alg: 'EdDSA', use: 'sig' },
+    pair.privateKey.export({ format: 'jwk' })
+  ));
+  ent._resetSigningKey();
+
+  try {
+    baseWorld();
+    stub.on(/FROM device_tokens t/, () => ({
+      rows: [{
+        device_id: DEVICE.id, machine_id: DEVICE.machine_id, device_status: 'active',
+        license_id: LICENSE.id, status: 'revoked', verification: 'verified',
+        expires_at: LICENSE.expires_at, features: {}
+      }]
+    }));
+    stub.on(/UPDATE devices SET last_seen_at/, () => ({ rows: [] }));
+
+    const res = await app.inject({
+      method: 'GET', url: '/v1/entitlement',
+      headers: { authorization: 'Bearer ' + 't'.repeat(40) }
+    });
+    assert.strictEqual(res.statusCode, 200, res.body);
+
+    // Verified with the APP's verifier, not by reading the payload — what
+    // matters is that the app would accept it and read REVOKED off it.
+    const seen = appVerifier.verifyEntitlement(res.json().data.entitlement, {
+      machineId: DEVICE.machine_id,
+      keys: { 'http-test-kid': pair.publicKey.export({ type: 'spki', format: 'pem' }) }
+    });
+    assert.ok(seen.valid, 'the app would reject it: ' + seen.reason);
+    assert.strictEqual(seen.claims.status, 'REVOKED');
+  } finally {
+    if (previous === undefined) delete process.env.ENTITLEMENT_SIGNING_JWK;
+    else process.env.ENTITLEMENT_SIGNING_JWK = previous;
+    ent._resetSigningKey();
+  }
+});
+
+test('register no longer refuses a revoked licence — it is how a wiped machine hears', async (app) => {
+  const keys = require('../src/lib/keys');
+  baseWorld();
+  stub.on(/INSERT INTO licenses/, () => ({
+    rows: [{
+      id: LICENSE.id, status: 'revoked', verification: 'verified',
+      max_devices: null, expires_at: LICENSE.expires_at
+    }]
+  }));
+  stub.on(/INSERT INTO devices/, () => ({ rows: [{ id: DEVICE.id }] }));
+  stub.on(/DELETE FROM device_tokens/, () => ({ rows: [] }));
+
+  const key = keys.buildLicenseKey(2027, 6, 1, CONFIG.legacyKeySecret);
+  const res = await app.inject({
+    method: 'POST', url: '/v1/devices/register',
+    payload: { licenseKey: key, machineId: DEVICE.machine_id }
+  });
+  assert.strictEqual(res.statusCode, 201,
+    'registration refused a revoked licence, which leaves the app with nothing to act on: ' + res.body);
+  assert.strictEqual(res.json().data.licenseStatus, 'revoked');
 });
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -303,8 +466,7 @@ test('a state change with a WRONG CSRF token is refused', async (app) => {
 test('a state change WITH the CSRF header goes through and is audited', async (app) => {
   baseWorld();
   const jar = await signIn(app);
-  stub.on(/UPDATE licenses SET status/, () => ({ rows: [Object.assign({}, LICENSE, { status: 'suspended' })] }));
-  stub.on(/SELECT status, verification FROM licenses/, () => ({ rows: [{ status: 'active', verification: 'unverified' }] }));
+  stub.on(/UPDATE licenses SET status/, () => ({ rows: [], rowCount: 1 }));
 
   const before = stub.calls.filter((c) => /INSERT INTO audit_log/.test(c.text)).length;
   const res = await app.inject({
@@ -359,7 +521,7 @@ test('issue-key refuses an impossible date', async (app) => {
   assert.strictEqual(res.json().code, 'INVALID_DATE');
 });
 
-test('issue-key mints a v4 key, records it, and shows it once', async (app) => {
+test('issue-key mints a key, records it, and shows it once', async (app) => {
   baseWorld();
   const jar = await signIn(app);
   stub.on(/INSERT INTO licenses/, () => ({ rows: [LICENSE] }));
@@ -399,8 +561,8 @@ test('sign-out clears both cookies', async (app) => {
 test('a 500 never leaks an internal message', async (app) => {
   baseWorld();
   const jar = await signIn(app);
-  stub.handlers = stub.handlers.filter(([p]) => !/FROM licenses WHERE id/.test(String(p)));
-  stub.on(/FROM licenses WHERE id/, () => { throw new Error('column "secret_column" does not exist'); });
+  stub.handlers = stub.handlers.filter(([p]) => !/licenses WHERE id/.test(String(p)));
+  stub.on(/WHERE l\.id = \$1/, () => { throw new Error('column "secret_column" does not exist'); });
 
   const res = await app.inject({
     method: 'GET', url: '/admin/api/licenses/' + LICENSE.id,

@@ -466,8 +466,8 @@
        Change these two lines to the real support desk when it exists. They are
        the only place these appear. */
     const SUPPORT = {
-      email: 'mushtaqahmadicp@gmail.com',
-      phone: '',                     // empty hides the row entirely
+      email: 'hostyllo.info@gmail.com',
+      whatsapp: '+92 342 8521842',    // owner, 2026-09-24 — empty hides the row
     };
 
     (function fillSupport() {
@@ -475,14 +475,37 @@
       const e = document.getElementById('help-email');
       if (SUPPORT.email) {
         document.getElementById('help-email-text').textContent = SUPPORT.email;
-        e.href = 'mailto:' + SUPPORT.email;
+        /* Gmail's compose page, not mailto: — most hostel PCs have no mail
+           program, so mailto: opened nothing useful (owner, 2026-09-24). Same
+           as the support page's gmailLink(); through openExternal for the
+           reason the WhatsApp row below gives. */
+        e.href = '#';
+        e.addEventListener('click', function (ev) {
+          ev.preventDefault();
+          if (window.electronAPI && window.electronAPI.openExternal) {
+            window.electronAPI.openExternal('https://mail.google.com/mail/?view=cm&fs=1&to=' +
+              encodeURIComponent(SUPPORT.email) + '&su=' + encodeURIComponent('Hostyllo licence help'));
+          }
+        });
       } else { e.remove(); }
       const p = document.getElementById('help-phone');
       // A row with a dash in it is worse than no row: it looks like the number
       // failed to load rather than like there is no phone line.
-      if (SUPPORT.phone) {
-        document.getElementById('help-phone-text').textContent = SUPPORT.phone;
-        p.href = 'tel:' + SUPPORT.phone.replace(/[^0-9+]/g, '');
+      //
+      // It is a WhatsApp number, so it opens a chat — a `tel:` link does nothing
+      // useful on a PC. wa.me rather than whatsapp:// so it works without
+      // WhatsApp Desktop, and through openExternal: a plain href would load
+      // wa.me INSIDE this window, replacing the licence screen.
+      if (SUPPORT.whatsapp) {
+        document.getElementById('help-phone-text').textContent = 'WhatsApp ' + SUPPORT.whatsapp;
+        const num = SUPPORT.whatsapp.replace(/[^0-9]/g, '').replace(/^0/, '92');
+        p.href = '#';
+        p.addEventListener('click', function (ev) {
+          ev.preventDefault();
+          if (window.electronAPI && window.electronAPI.openExternal) {
+            window.electronAPI.openExternal('https://wa.me/' + num);
+          }
+        });
       } else { p.remove(); }
     })();
 
@@ -504,8 +527,12 @@
           wrong_machine:{ bg: '#eef2ff', border: '#c7d2fe', color: '#4338ca' },
           time_cheat:   { bg: '#fffbeb', border: '#fde68a', color: '#b45309' },
           corrupt:      { bg: '#fef2f2', border: '#fecaca', color: '#b91c1c' },
+          // The two the control plane can do deliberately (owner, 2026-09-20).
+          suspended:    { bg: '#fef2f2', border: '#fecaca', color: '#b91c1c' },
+          revoked:      { bg: '#fef2f2', border: '#fca5a5', color: '#991b1b' },
         };
-        const c = bannerColors[reason] || bannerColors.expired;
+        const key = String(reason).toLowerCase();
+        const c = bannerColors[key] || bannerColors.expired;
         const banner = document.createElement('div');
         banner.style.cssText = `display:flex;align-items:flex-start;gap:12px;`
           + `margin-bottom:22px;padding:15px 18px;border-radius:12px;`
@@ -518,6 +545,11 @@
         // textContent, not innerHTML: `message` arrives from a query string.
         txt.textContent = message || 'License verification failed.';
         banner.appendChild(ic); banner.appendChild(txt);
+
+        /* NO DATA DOWNLOAD FROM A LOCK (owner's decision D1, 2026-09-24).
+           Suspended and revoked mean the licence screen and nothing else. This
+           screen offered "Download my data" under the 2026-09-20 ruling; D1
+           reverses it, and main.js now refuses db:exportFull while locked. */
         // Insert before machine-box
         const machineBox = document.querySelector('.machine-box');
         if (machineBox) machineBox.parentNode.insertBefore(banner, machineBox);

@@ -54,11 +54,11 @@ function showModal(size, title, body, footer='') {
   document.getElementById('modal-container').innerHTML=html;
 }
 function closeModal() {
-  // Stop any active camera streams before destroying modal
-  ['add-student-cam-video','edit-student-cam-video'].forEach(id=>{
-    const vid = document.getElementById(id);
-    if(vid?.srcObject){ vid.srcObject.getTracks().forEach(t=>t.stop()); vid.srcObject=null; }
-  });
+  /* Release the camera before the markup holding it is destroyed. This used
+     to walk the two <video> elements itself, which only works while they
+     still exist — stopStudentCamera() also holds the stream off the DOM, so
+     it frees one whose element has already gone (students.js). */
+  if (typeof stopStudentCamera === 'function') stopStudentCamera();
   document.getElementById('modal-container').innerHTML='';
   /* The student slide-over sits UNDER modals and stays open while one is up,
      so whatever the form just changed has to be re-read on the way out —
@@ -233,10 +233,6 @@ async function exportBackup(mode) {
 // ─────────────────────────────────────────────────────────────────────────────
 // (Google Drive backup functions removed — backup is now download-only)
 // Stub no-ops to avoid errors from any remaining call sites:
-function getNextBackupLabel()        { return ''; }
-function updateBackupScheduleLabel() {}
-function sendBackupToDrive()         { exportBackup('json'); }
-function sendBackupToGmail()         { exportBackup('json'); }
 function checkAutoBackupSchedule()   {}
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -265,9 +261,22 @@ function _initDBFields(d) {
   if (!Array.isArray(d.handoverItems))     d.handoverItems = [];
   if (!Array.isArray(d.concessions))       d.concessions = [];   // concessions.js (step 8)
   if (!d.settings) d.settings = {};
-  // Init roomTypes BEFORE generateRooms so rooms get correct default rents
-  // roomTypes already initialized above (before generateRooms)
-  if (!d.rooms || d.rooms.length === 0) d.rooms = generateRooms(d.settings.roomTypes);
+
+  /* ONE ISSUES REGISTER (owner, 2026-09-21).
+
+     This runs for loadDB() AND for restoreBackup(), which is the point: a
+     backup file written before the merge carries `maintenance` and
+     `complaints` and no `issues`, and without this the register comes back
+     empty with the records sitting in the file, unread. The fold is recorded
+     in settings and happens once — see issuesFoldLegacy() for why running it
+     twice would resurrect deleted records. */
+  issuesFoldLegacy(d);
+  /* NO DEMO ROOMS (owner, 2026-09-24). An empty room set used to be filled with
+     42 invented rooms across 4 floors — on first boot, on every load that found
+     none, and on restoreBackup(). A new hostel's first sight of the product was
+     42 rooms it does not have (ENTERPRISE_LIVE_STATUS §10). A hostel starts with
+     none and creates its own, on the setup rooms step or with Add Room. */
+  if (!Array.isArray(d.rooms)) d.rooms = [];
   // Core identity — previously missing from restoreBackup path
   if (!d.settings.appName) d.settings.appName = 'HOSTYLLO'; // ← Customisable system name
   if (!d.settings.hostelName) d.settings.hostelName = 'Hostel Name';

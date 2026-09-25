@@ -40,8 +40,34 @@
   background: var(--surface-hover); border-color: var(--accent); color: var(--accent-fg);
 }
 
+/* A GHOST ANSWERS THE HOVER THE WAY `--ghost-danger` DOES (owner, 2026-09-23:
+   "label wrap like appearance is still not built on In progress, Resolve and
+   Edit button just like Delete in the complaints").
+
+   Both are borderless at rest. On hover the danger one took a tint AND a
+   border; this one took only a faint ground — so in a row of four icon
+   buttons the Delete read as a control that had woken up and the other three
+   read as barely anything. The distinction was never intended: `--ghost` and
+   `--ghost-danger` are the same button in two inks, and they should confirm a
+   hover the same way.
+
+   The border is a COLOUR change only — `.ui-btn` is already `1px solid
+   transparent`, so nothing moves and no row grows. */
 .ui-btn--ghost { color: var(--text-secondary); }
-.ui-btn--ghost:hover:not(:disabled) { background: var(--surface-hover); color: var(--text-primary); }
+/* THE HOVER IS NOT NEUTRAL (owner, 2026-09-23, third pass). The first attempt
+   gave it `--border-strong` and `--surface-hover` — a grey rule on a grey
+   ground, which is what a DISABLED control looks like, so the button that was
+   supposed to have woken up read as one that had gone to sleep.
+
+   It takes the accent, which is the same shape `--ghost-danger` takes in the
+   danger role: a tint, the role's ink, and a border of the role's own colour.
+   Hue on hover is not decoration — it is the interaction STATE, which is
+   exactly what the design system reserves colour for, and it is why Delete has
+   always been allowed its red here. */
+.ui-btn--ghost:hover:not(:disabled) {
+  background: var(--accent-soft); color: var(--accent-strong);
+  border-color: var(--accent);
+}
 
 .ui-btn--danger { background: var(--danger-bg); color: var(--danger-fg); }
 .ui-btn--danger:hover:not(:disabled) { border-color: var(--danger-fg); }
