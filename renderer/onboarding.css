@@ -31,8 +31,11 @@ body.onb-open .modal-overlay { z-index:9100; }
     border-right:1px solid var(--border);
 }
 .onb-brand {
+    display:flex; align-items:center; gap:10px;
     font-size:14px; font-weight:800; letter-spacing:.06em; color:var(--accent);
 }
+/* The app's one mark (owner, 2026-09-25) — the licence screen's tile. */
+.onb-brand img { width:28px; height:28px; display:block; flex-shrink:0; }
 .onb-steps { display:flex; flex-direction:column; gap:3px; flex:1; }
 
 .onb-step {

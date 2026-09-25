@@ -169,9 +169,11 @@ body.light-theme #sidebar {
 body.sidebar-collapsed #sidebar .sb-logo { padding-left: 16px; }
 #sidebar .sb-logo::after { display: none; }
 #sidebar .sb-logo-mark { display: flex; align-items: center; gap: 11px; }
+/* The tile IS the image now (app-tile.png — the licence screen's mark, owner
+   2026-09-25), so the box behind it is transparent. */
 #sidebar .sb-logo-icon {
     width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0;
-    background: var(--sb-active);
+    background: transparent;
     display: flex; align-items: center; justify-content: center;
     border: none; box-shadow: none;
 }
