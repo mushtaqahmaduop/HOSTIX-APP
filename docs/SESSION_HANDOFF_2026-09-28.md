@@ -17,7 +17,7 @@ All eight questions decided. Everything local is done; the outward steps wait fo
 | 3 | S3 Pending vs Arrears | Red = late money: Pending/Partial amber, Arrears/Overdue red | Done `f58313a` |
 | 4 | S4 Open issue | Neutral; red = High priority | Done `f58313a` |
 | 5 | Colour scope | Phase 0 now; Phase 1 after a visual review | Phase 0 done `f58313a` |
-| 6 | Move commits to a 6.1 branch | Yes | **Blocked** — resetting the PR branch was refused by the permission check; the owner runs the 3 commands in the final report |
+| 6 | Move commits to a 6.1 branch | Yes | **Done by the owner** — all work is on local `release/6.1` (not pushed); `claude/funny-dijkstra-c68mqn` (PR #26) is back at `9200c98`, the same as origin |
 | 7 | Reverse: required choice | Yes, nothing preselected | Done `6edc296` |
 | 8 | Control-plane redeploy + installer | Redeploy first (the flag defaults off, so no hostel changes), then build 6.1.0 | **Waiting for the owner's go** — outward-facing |
 
