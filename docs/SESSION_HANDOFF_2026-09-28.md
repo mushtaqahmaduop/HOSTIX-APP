@@ -27,6 +27,12 @@ Why Owner Funds did not show in the owner's dev app: it is opt-in, and the contr
 nothing turns it on. Dev switch (DevTools): `localStorage.setItem('hx_feat_on_ownerFunds','1'); location.reload()`,
 then sign in as the Super Admin. Restart `npm start` first if it was running before these commits.
 
+**Full e2e, 2026-09-29 00:00–01:30, on release/6.1 (`de463c6`): all 90 spec files green —
+303 passed, 2 skipped (pre-existing skips).** Two launch/page timeouts under memory pressure
+(dashboard-cards, dashboard-lower) passed on a solo re-run. Run it in the FOREGROUND in batches of
+5–7: a background run reaped for low memory leaves its bash loop + Playwright + Electron alive,
+which then lock `HOSTIX-testprofile\hostix.db` (EPERM in resetProfile) for the next run.
+
 Known flake: `tests/services.test.js` "a fleet-wide nudge waits the delay the server hands out" fails
 now and then while the machine is loaded (1 of 3 runs during the full e2e); untouched code.
 
