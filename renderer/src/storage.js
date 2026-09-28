@@ -116,9 +116,23 @@ async function loadDB() {
     _loadFromLocalStorage();
   }
 
+  /* A FOLD DONE HERE MUST REACH THE DISK (bug audit BUG-013, 2026-09-28).
+     _initDBFields() folds a pre-merge maintenance/complaints shape into
+     `issues` and stamps settings.issuesMergedAt. The snapshot below is taken
+     AFTER that, so the folded rows looked already saved and were never
+     written — while the stamp, in settings, was saved by the next saveDB().
+     Restart: no issues, and the stamp stops the fold from ever running again.
+     Reproduced by restoring a pre-merge backup. Forgetting only the rows the
+     fold added (not ones already on disk, whose deletes must still be seen)
+     makes the next save write them alongside the stamp. */
+  const _foldPending = !(DB.settings && DB.settings.issuesMergedAt);
+  const _issuesOnDisk = new Set((DB.issues || []).map(r => r && r.id));
   if (typeof _initDBFields === 'function') DB = _initDBFields(DB);
   if (typeof ledgerLoaded === 'function') ledgerLoaded();
   _takeFullSnapshot();
+  if (_foldPending && _dbSnapshot.issues) {
+    for (const id of Array.from(_dbSnapshot.issues.keys())) if (!_issuesOnDisk.has(id)) _dbSnapshot.issues.delete(id);
+  }
   _checkBackupReminder();
 }
 
