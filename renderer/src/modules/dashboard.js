@@ -956,20 +956,22 @@ function renderDashboard() {
              drawn; a legend that describes something else is how a reader stops
              trusting the panel. -->
         <span class="dash-legend__k dh-blue"><i></i>Revenue</span>
-        <span class="dash-legend__k dash-legend__k--exp"><i></i>Expenses</span>
+        <span class="dash-legend__k dh-red"><i></i>Expenses</span>
       </div>
-      <!-- db3's segmented control. It replaces a static "Jan – Dec" caption:
-           the reference has a control here, and the caption only restated the
-           axis directly under it. -->
-      <div class="trend-range" role="group" aria-label="Chart range">
-        ${''/* The active state is read from _dashTrendRange, not hard-coded on
-               Year. renderPage() rebuilds this markup on every navigation while
-               the range variable survives, so a hard-coded default would light
-               "Year" over a chart still drawing a quarter. */}
-        <button class="trend-range__b ${_dashTrendRange==='quarter'?'is-on':''}" data-range="quarter" onclick="setTrendRange('quarter')">Quarter</button>
-        <button class="trend-range__b ${_dashTrendRange==='6m'?'is-on':''}"      data-range="6m"      onclick="setTrendRange('6m')">6 Months</button>
-        <button class="trend-range__b ${_dashTrendRange==='year'?'is-on':''}"    data-range="year"    onclick="setTrendRange('year')">Year</button>
-      </div>
+      ${''/* A DROPDOWN IN THE SAME PLACE (owner, 2026-09-28: "make the trend line
+             navbars into dropdown"). It replaces the three buttons where they
+             stood and keeps their words, so the header stays ONE row — it is
+             narrower than the button group was — and the chart keeps every pixel
+             of its height. (A first cut put it on its own row with a third
+             legend key and the chart visibly shrank; that is why it is here.)
+             The selected value is read from _dashTrendRange: renderPage()
+             rebuilds this markup on every navigation while the range survives. */}
+      <select class="ui-select ui-select--sm trend-range-sel" aria-label="Chart range"
+              onchange="setTrendRange(this.value)">
+        <option value="quarter" ${_dashTrendRange==='quarter'?'selected':''}>Quarter</option>
+        <option value="6m"      ${_dashTrendRange==='6m'?'selected':''}>6 Months</option>
+        <option value="year"    ${_dashTrendRange==='year'?'selected':''}>Year</option>
+      </select>
     </div>
     ${''/* The Revenue / Expenses / Net strip that sat here is REMOVED. db3.png
            does not have it, and all three figures are already on the KPI row
@@ -3252,9 +3254,7 @@ var TREND_RANGES = { quarter: 3, '6m': 6, year: 12 };
 function setTrendRange(r) {
   if (!TREND_RANGES[r]) return;
   _dashTrendRange = r;
-  document.querySelectorAll('.trend-range__b').forEach(function (b) {
-    b.classList.toggle('is-on', b.dataset.range === r);
-  });
+  document.querySelectorAll('.trend-range-sel').forEach(function (s) { s.value = r; });
   drawTrendChart();
 }
 
@@ -3326,13 +3326,21 @@ function drawTrendChart() {
      Derived from the revenue colour rather than fixed, so it follows the theme
      and any future accent change. Same +alpha idiom the faint-month bars below
      already use, which assumes --blue resolves to hex. */
-  /* EXPENSES TAKE A CONTRASTING COLOUR NOW (owner, 2026-09-28: "use a contrast
-     colour for expenses"). The pale tint of revenue above made the two bars
-     hard to tell apart. --warning-solid is what the Reports page's Financial
-     Performance chart paints its expense bars in, so the two charts agree;
-     not `--amber`, which is an INK. The owner then asked for everything else
-     on this chart to stay as it was — no net line, no dropdown. */
-  var cExpense = _cs.getPropertyValue('--warning-solid').trim() || '#e0a526';
+  /* EXPENSES ARE THE RED OF THE PENDING-PAYMENTS ROW (owner, 2026-09-28: "use a
+     red like colour for expenses just like the pending payments strip colour in
+     the need action"). That row is tone `dh-red` (ui-kit.css: #C0402F light,
+     #F0796A dark), so the colour is READ from that tone rather than restated —
+     a probe carrying the class — and the two can never drift apart. It also
+     follows the theme, which a hex written here would not. Revenue stays blue. */
+  var cExpense = (function () {
+    var probe = document.createElement('span');
+    probe.className = 'dh-red';
+    probe.style.display = 'none';
+    document.body.appendChild(probe);
+    var v = getComputedStyle(probe).getPropertyValue('--dh').trim();
+    probe.remove();
+    return /^#[0-9a-f]{6}$/i.test(v) ? v : '#C0402F';
+  })();
   var cPending = _cs.getPropertyValue('--purple').trim() || '#8b5cf6';
   var cText2  = _cs.getPropertyValue('--text2').trim()  || '#8a9ab8';
   var cText3  = _cs.getPropertyValue('--text3').trim()  || '#4a6080';

@@ -316,9 +316,15 @@
    the old `height` ladder did on the first cut, at exactly those two sizes. */
 #trend-chart-wrap { flex: 1 1 0; min-height: 0; height: 244px; }
 
-/* Expenses' legend swatch is the colour the bars are painted in
-   (--warning-solid, 2026-09-28) — see drawTrendChart. */
-.dash-legend__k--exp i { background: var(--warning-solid); }
+/* The range dropdown sits where the three buttons stood (2026-09-28), in the
+   same header row, so the chart keeps its full height. */
+.trend-range-sel {
+    flex-shrink: 0; margin-left: var(--space-2); width: auto; min-width: 104px;
+    /* The height the button group had, so the header row — and so the chart
+       under it — is exactly as tall as before. */
+    height: 28px; min-height: 28px; padding-top: 0; padding-bottom: 0;
+    font-size: var(--text-xs);
+}
 
 /* The segmented range control. Neutral in both themes, separated from its
    siblings by weight and edge rather than by colour (owner, 7 Sep: the
