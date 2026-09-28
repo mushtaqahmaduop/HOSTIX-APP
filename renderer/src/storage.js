@@ -488,55 +488,63 @@ if (window.electronAPI) {
         if (typeof toast === 'function') toast('Backup file is too large or invalid', 'error');
         return;
       }
-      const data   = JSON.parse(jsonString);
-      const dbData = data.db || data;
-
-      /* One validator, shared with Settings -> Import Data. The checks that used
-         to live here — rooms/students are arrays, every record has an id — are
-         a subset of what validateBackup() does, and having two import paths
-         disagree about what a valid backup is meant a file could be refused in
-         one place and accepted in the other. It also adds the check neither
-         path had: reserved keys such as __proto__ anywhere in the document. */
-      if (!Array.isArray(dbData.rooms) || !Array.isArray(dbData.students)) {
-        if (typeof toast === 'function') toast('Invalid backup file — it has no rooms or students', 'error');
-        return;
+      const data = JSON.parse(jsonString);
+      const r = await importBackupData(data.db || data);
+      if (r.ok) {
+        if (typeof renderPage === 'function') renderPage('dashboard');
+        if (typeof toast === 'function') toast('Backup imported successfully', 'success');
       }
-      if (typeof validateBackup === 'function') {
-        const check = validateBackup(dbData);
-        if (!check.ok) {
-          if (typeof toast === 'function') toast(check.reason, 'error', 'Backup rejected');
-          if (typeof logActivity === 'function') logActivity('Backup Import Rejected', check.reason, 'Settings');
-          return;
-        }
-      }
-
-      const MAX_STUDENTS = 10000, MAX_PAYMENTS = 100000;
-      if (Array.isArray(dbData.students) && dbData.students.length > MAX_STUDENTS) {
-        if (typeof toast === 'function') toast('Backup contains too many student records', 'error');
-        return;
-      }
-      if (Array.isArray(dbData.payments) && dbData.payments.length > MAX_PAYMENTS) {
-        if (typeof toast === 'function') toast('Backup contains too many payment records', 'error');
-        return;
-      }
-
-      const result = await window.electronAPI.dbImportFull(dbData);
-      if (!result.ok) {
-        if (typeof toast === 'function') toast('Import failed: ' + result.error, 'error');
-        return;
-      }
-      await loadDB();
-      // A backup from before the ledger restores an empty one; rebuild it from
-      // the records that were just restored.
-      if (typeof ledgerImportIfEmpty === 'function' && ledgerImportIfEmpty() > 0) await saveDB();
-      if (typeof handoverSync === 'function' && handoverSync() > 0) await saveDB();
-      if (typeof updateSidebar === 'function') updateSidebar();
-      if (typeof renderPage    === 'function') renderPage('dashboard');
-      if (typeof toast         === 'function') toast('Backup imported successfully', 'success');
-      markBackupDone();
     } catch (e) {
       console.error('[HOSTYLLO] Import failed:', e);
       if (typeof toast === 'function') toast('Import failed: ' + e.message, 'error');
     }
   });
+}
+
+/* ── ONE RESTORE (bug audit BUG-009, 2026-09-28) ───────────────────────────────
+   There were three ways to put a backup back — File → Import, the Backup
+   page's "Restore this file", and pasted JSON — and only the first went through
+   the main process's db:importFull: validate, snapshot the live database to a
+   *.pre-restore-*.bak, replace every table in one transaction. The other two
+   replaced DB in memory and saved it like any edit: no safety copy, and only a
+   rooms/students/settings presence check instead of validateBackup(). A wrong
+   or old file restored from the Backup page could not be undone.
+
+   Every path calls this now. It validates (the shared validator, plus size
+   limits), hands the document to db:importFull, and reloads from disk — so what
+   is on screen afterwards is what the database actually holds. Returns
+   {ok, reason, preRestoreBackup}; refusals are toasted here. */
+async function importBackupData(dbData) {
+  const fail = (reason, title) => {
+    if (typeof toast === 'function') toast(reason, 'error', title);
+    return { ok: false, reason: reason };
+  };
+  if (!dbData || typeof dbData !== 'object') return fail('Invalid backup file — not a Hostyllo backup');
+  if (!Array.isArray(dbData.rooms) || !Array.isArray(dbData.students)) {
+    return fail('Invalid backup file — it has no rooms or students');
+  }
+  if (typeof validateBackup === 'function') {
+    const check = validateBackup(dbData);
+    if (!check.ok) {
+      if (typeof logActivity === 'function') logActivity('Backup Import Rejected', check.reason, 'Settings');
+      return fail(check.reason, 'Backup rejected');
+    }
+  }
+  const MAX_STUDENTS = 10000, MAX_PAYMENTS = 100000;
+  if (dbData.students.length > MAX_STUDENTS) return fail('Backup contains too many student records');
+  if (Array.isArray(dbData.payments) && dbData.payments.length > MAX_PAYMENTS) {
+    return fail('Backup contains too many payment records');
+  }
+  if (!window.electronAPI || !window.electronAPI.dbImportFull) return fail('Restore is only available in the desktop app');
+
+  const result = await window.electronAPI.dbImportFull(dbData);
+  if (!result || !result.ok) return fail('Import failed: ' + ((result && result.error) || 'unknown error'));
+  await loadDB();
+  // A backup from before the ledger restores an empty one; rebuild it from
+  // the records that were just restored.
+  if (typeof ledgerImportIfEmpty === 'function' && ledgerImportIfEmpty() > 0) await saveDB();
+  if (typeof handoverSync === 'function' && handoverSync() > 0) await saveDB();
+  if (typeof updateSidebar === 'function') updateSidebar();
+  markBackupDone();
+  return { ok: true, preRestoreBackup: result.preRestoreBackup || null };
 }

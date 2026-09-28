@@ -2376,6 +2376,29 @@ function _assertWritable(table) {
  * make business sense. A restore of a real hostel's data must not fail because
  * this function had an opinion about their rent.
  */
+/* BOTH SPELLINGS OF A TABLE (bug audit BUG-010, 2026-09-28). A backup
+   downloaded from the Backup page is the renderer's DB object, whose keys are
+   camelCase (activityLog, billSplits, wardenCollections, handoverItems,
+   ownerFunds); the File-menu export writes the table names (activitylog, …).
+   The import read only table names, so a Backup-page file imported through
+   File → Import said "imported successfully" and emptied those five tables.
+   Normalised here, at the boundary, so no caller can get it wrong. A table
+   name already present wins. The ledger has its own reader that already takes
+   both (migrations/002-student-ledger.js, backupEntries). */
+const _BACKUP_KEY_ALIASES = {
+  activityLog: 'activitylog', billSplits: 'billsplits',
+  wardenCollections: 'warden_collections', handoverItems: 'handover_items',
+  ownerFunds: 'owner_funds',
+};
+function _normaliseBackupKeys(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
+  const out = Object.assign({}, data);
+  for (const [camel, table] of Object.entries(_BACKUP_KEY_ALIASES)) {
+    if (!Object.prototype.hasOwnProperty.call(out, table) && Array.isArray(out[camel])) out[table] = out[camel];
+  }
+  return out;
+}
+
 function _validateBackupPayload(data) {
   if (data === null || typeof data !== 'object' || Array.isArray(data)) {
     return { ok: false, reason: 'Not a backup document — expected a JSON object.' };
@@ -2685,7 +2708,8 @@ ipcMain.handle('db:exportFull', () => {
   } catch (e) { return { ok: false, error: e.message }; }
 });
 
-ipcMain.handle('db:importFull', (_e, data) => {
+ipcMain.handle('db:importFull', (_e, rawData) => {
+  const data = _normaliseBackupKeys(rawData);
   try { _assertDbWritable(); _assertWritable('import'); }
   catch (e) { return _writeFailure(e); }
 

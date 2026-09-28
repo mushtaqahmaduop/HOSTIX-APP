@@ -388,7 +388,13 @@ async function restoreBackup() {
           const btn = document.querySelector('.btn-danger');
           if (btn) { btn.disabled = true; btn.textContent = 'Restoring…'; }
           try {
-            DB = _initDBFields(parsed);
+            /* THROUGH THE ONE SAFE RESTORE (bug audit BUG-009): validated,
+               the live database snapshotted to a *.pre-restore-*.bak, every
+               table replaced in one transaction, then reloaded from disk —
+               importBackupData() in storage.js. This used to replace DB in
+               memory and save it like an edit, with no safety copy. */
+            const r = await importBackupData(parsed);
+            if (!r.ok) return;
             /* THE RESTORE IS RECORDED IN THE DATA IT RESTORED. A restore
                replaces everything, so the row belongs to the database that is
                here afterwards — restoring an older backup brings that backup's
@@ -396,15 +402,9 @@ async function restoreBackup() {
             if (typeof bkRecord === 'function') {
               await bkRecord('restoreHistory', {
                 at: new Date().toISOString(), file: file.name,
-                students: count, ok: true,
+                students: count, ok: true, safetyCopy: r.preRestoreBackup || null,
               });
-            } else {
-              await saveDB();
             }
-            // The backup's own ledger replaces this one; a backup from before
-            // the ledger is rebuilt from its records (ledger.js).
-            await ledgerAdopt(DB.studentLedger);
-            updateSidebar();
             navigate('dashboard');
             toast('Data restored successfully from backup!', 'success');
             closeModal();
@@ -434,17 +434,15 @@ async function restoreFromPaste() {
     showConfirm('Restore from Pasted Data?',
       `This will replace ALL current data (${count} students found in backup). This cannot be undone!`,
       async ()=>{
-        DB = _initDBFields(parsed);
+        // The one safe restore — see restoreBackup() above (BUG-009).
+        const r = await importBackupData(parsed);
+        if (!r.ok) return;
         if (typeof bkRecord === 'function') {
           await bkRecord('restoreHistory', {
             at: new Date().toISOString(), file: 'Pasted text',
-            students: count, ok: true,
+            students: count, ok: true, safetyCopy: r.preRestoreBackup || null,
           });
-        } else {
-          await saveDB();
         }
-        await ledgerAdopt(DB.studentLedger);
-        updateSidebar();
         navigate('dashboard');
         toast('Data restored from pasted backup!', 'success');
         closeModal();
