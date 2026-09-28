@@ -33,6 +33,15 @@ then sign in as the Super Admin. Restart `npm start` first if it was running bef
 5–7: a background run reaped for low memory leaves its bash loop + Playwright + Electron alive,
 which then lock `HOSTIX-testprofile\hostix.db` (EPERM in resetProfile) for the next run.
 
+**Dead features — the owner's list to rule on next.** The 21 from `SESSION_HANDOFF_2026-09-19.md` (my
+recommendation per row was given in chat on 2026-09-29; recheck each against today's code before acting).
+Two changed since: the month dialog is wired (`62b5d0a`), and `_getSession` is live again (restoreStaffAccounts).
+ADD: the whole **Room Inspection Checklist** is dead, not only `deleteInspection`: `showAddInspectionModal` +
+`saveInspection` (settings.js:195-231, a finished form: room, condition, date, inspector, 10 checks, notes;
+writes DB.inspections, which is backed up) have no caller, and the `renderPage('inspections')` it returns to does
+not exist. Recommendation: BUILD it (an Inspect button + history on the room panel; optional at checkout for
+deposit deductions); propose the screens to the owner first.
+
 Known flake: `tests/services.test.js` "a fleet-wide nudge waits the delay the server hands out" fails
 now and then while the machine is loaded (1 of 3 runs during the full e2e); untouched code.
 
