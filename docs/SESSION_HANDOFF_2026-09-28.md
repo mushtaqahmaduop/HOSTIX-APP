@@ -19,7 +19,7 @@ All eight questions decided. Everything local is done; the outward steps wait fo
 | 5 | Colour scope | Phase 0 now; Phase 1 after a visual review | Phase 0 done `f58313a` |
 | 6 | Move commits to a 6.1 branch | Yes | **Done by the owner** — all work is on local `release/6.1` (not pushed); `claude/funny-dijkstra-c68mqn` (PR #26) is back at `9200c98`, the same as origin |
 | 7 | Reverse: required choice | Yes, nothing preselected | Done `6edc296` |
-| 8 | Control-plane redeploy + installer | Redeploy first (the flag defaults off, so no hostel changes), then build 6.1.0 | **Waiting for the owner's go** — outward-facing |
+| 8 | Control-plane redeploy + installer | Redeploy first (the flag defaults off, so no hostel changes), then build 6.1.0 | **Control plane DEPLOYED 2026-09-29 01:30 PKT** (`railway up` from server/, deployment 8eb56cc7, healthz 200; only change vs live 6.0.0 = the ownerFunds catalogue entry + vendored utils). Owner turns it on per hostel: portal → the hostel → Features → Owner Funds. `release/6.1` pushed to origin. **Installer not built yet.** |
 
 Also found: a fourth restore path (`importData()` in settings.js, unreachable) still did the old unsafe restore; it now uses `importBackupData()`.
 
