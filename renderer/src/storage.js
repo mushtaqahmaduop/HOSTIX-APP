@@ -551,9 +551,23 @@ async function importBackupData(dbData) {
   }
   if (!window.electronAPI || !window.electronAPI.dbImportFull) return fail('Restore is only available in the desktop app');
 
+  /* NUMBERS ALREADY HANDED OUT STAY HANDED OUT (bug audit BUG-014, 2026-09-28).
+     A restore replaces settings wholesale, so restoring last week's file put
+     receiptCounter back to last week's value and the next receipt reused a
+     number already printed on paper. The same held for studentSeq (BUG-008's
+     counter). Each counter keeps the higher of this PC's and the file's. */
+  const _cs = (typeof DB !== 'undefined' && DB && DB.settings) || {};
+  const _highWater = { receiptCounter: Number(_cs.receiptCounter) || 0, studentSeq: Number(_cs.studentSeq) || 0 };
   const result = await window.electronAPI.dbImportFull(dbData);
   if (!result || !result.ok) return fail('Import failed: ' + ((result && result.error) || 'unknown error'));
   await loadDB();
+  if (DB.settings) {
+    let raised = false;
+    for (const k of Object.keys(_highWater)) {
+      if ((Number(DB.settings[k]) || 0) < _highWater[k]) { DB.settings[k] = _highWater[k]; raised = true; }
+    }
+    if (raised) await saveDB();
+  }
   // A backup from before the ledger restores an empty one; rebuild it from
   // the records that were just restored.
   if (typeof ledgerImportIfEmpty === 'function' && ledgerImportIfEmpty() > 0) await saveDB();
