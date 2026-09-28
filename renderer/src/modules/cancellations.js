@@ -37,6 +37,15 @@ const CANC_REASONS = [CANC_DEFAULT_REASON,
                       'Transferred to another city', 'Financial reasons', 'Family reasons',
                       'Discipline', 'Other'];
 
+/** The Pending cancellations, every month: what the dashboard's Needs Action
+    row counts, so its View button lands on exactly those rows. */
+function openCancellationsPending() {
+  navigate('cancellations_Pending');
+  cancelFilter.month = '';
+  cancelFilter.page = 1;
+  renderPage('cancellations_Pending');
+}
+
 let cancelFilter = { status:'All', search:'', type:'All',
                      month:thisMonth(), page:1, pageSize:10, sortKey:'room', sortDir:'asc' };   // 10, per cancellations2.png
 /* A fresh visit starts here. `month` is evaluated on every reset, not captured

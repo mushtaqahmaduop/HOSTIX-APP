@@ -316,6 +316,10 @@
    the old `height` ladder did on the first cut, at exactly those two sizes. */
 #trend-chart-wrap { flex: 1 1 0; min-height: 0; height: 244px; }
 
+/* Expenses' legend swatch is the colour the bars are painted in
+   (--warning-solid, 2026-09-28) — see drawTrendChart. */
+.dash-legend__k--exp i { background: var(--warning-solid); }
+
 /* The segmented range control. Neutral in both themes, separated from its
    siblings by weight and edge rather than by colour (owner, 7 Sep: the
    selection is not an accent action). */
@@ -382,8 +386,17 @@
     color: var(--text-primary); line-height: var(--leading-tight);
     font-variant-numeric: tabular-nums;
 }
-.seat-inline__k.is-free b   { color: var(--accent); }
-.seat-inline__k.is-filled b { color: var(--text-primary); }
+/* THREE FIGURES, THREE COLOURS (owner, 2026-09-28: "contrast colours for the
+   seat availability total seats, filled and free"). Total stays neutral — the
+   other two are read against it. Filled is the success role; Free is the
+   accent, because the room tiles directly below mark a room with a free bed in
+   the accent ("Has free beds"), so the chip and the tiles say one thing. */
+.seat-inline__k.is-filled { background: var(--success-bg); border-color: color-mix(in srgb, var(--success-fg) 30%, transparent); }
+.seat-inline__k.is-filled b,
+.seat-inline__k.is-filled span { color: var(--success-fg); }
+.seat-inline__k.is-free { background: var(--accent-bg); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+.seat-inline__k.is-free b,
+.seat-inline__k.is-free span { color: var(--accent-fg, var(--accent)); }
 .seat-inline__k:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 /* The room grid. Six across, scrolling inside its own card, with the last row
@@ -600,18 +613,20 @@
 }
 .dash-row-c > .dash-sec { display: flex; flex-direction: column; min-width: 0; }
 
-/* ── The accent ladder ──────────────────────────────────────────────────── */
-/* Six steps, because six is the most room types any install has. A seventh
-   cycles back to the first rather than inventing a step - the rows are also
-   labelled, and two identical swatches eight rows apart is a smaller lie than
-   a colour the ladder does not contain. */
+/* ── The fallback ladder ────────────────────────────────────────────────── */
+/* A room type is drawn in the colour the owner gave it in Settings (see
+   _rtColor in dashboard.js). This is only for a type that has none, and it is
+   six DIFFERENT hues now, not six tints of the accent (owner, 2026-09-28:
+   "contrast colours for occupancy by room type") — tints of one blue could not
+   be told apart once there were more than two types. A seventh cycles back to
+   the first; the rows are also labelled. */
 .dash-row-c .rt-card {
     --rt-1: var(--accent);
-    --rt-2: color-mix(in srgb, var(--accent) 80%, var(--surface-1));
-    --rt-3: color-mix(in srgb, var(--accent) 62%, var(--surface-1));
-    --rt-4: color-mix(in srgb, var(--accent) 46%, var(--surface-1));
-    --rt-5: color-mix(in srgb, var(--accent) 32%, var(--surface-1));
-    --rt-6: color-mix(in srgb, var(--accent) 22%, var(--surface-1));
+    --rt-2: var(--purple);
+    --rt-3: var(--teal);
+    --rt-4: var(--warning-solid);
+    --rt-5: var(--success-fg);
+    --rt-6: var(--danger-fg);
 }
 
 /* ── Occupancy card: head ───────────────────────────────────────────────── */

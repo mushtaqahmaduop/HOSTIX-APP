@@ -625,6 +625,15 @@ function renderDashboard() {
   const _rtBed = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg>`;
 
   let seatBreakdown = '';
+  /* EACH ROOM TYPE IN ITS OWN COLOUR (owner, 2026-09-28: "contrast colours for
+     occupancy by room type"). The rows and the ring drew six steps of ONE blue,
+     so 3-Seater and 4-Seater were two near-identical tints. Every room type
+     already carries the colour the owner picked for it in Settings — the same
+     one Settings, Rooms and Reports paint it in — so the dashboard uses that.
+     Only a stored hex is trusted into a style attribute; a type without one
+     takes the categorical fallback ladder in dashboard.css (--rt-1..6). */
+  const _rtColor = (type, i) => /^#[0-9a-f]{3,8}$/i.test(String((type && type.color) || ''))
+    ? type.color : 'var(--rt-' + ((i % 6) + 1) + ')';
   DB.settings.roomTypes.forEach((type, i) => {
     const tRooms = DB.rooms.filter(r=>r.typeId===type.id);
     const typeTotalSeats = tRooms.length * type.capacity;
@@ -632,7 +641,7 @@ function renderDashboard() {
     const typeAvail = typeTotalSeats - typeFilledSeats;
     const typePct = typeTotalSeats>0?Math.round(typeFilledSeats/typeTotalSeats*100):0;
     seatBreakdown += `
-      <div class="rt-row" style="--rt-c:var(--rt-${(i % 6) + 1})" title="${escHtml(type.name)} — ${typeFilledSeats} of ${typeTotalSeats} seats filled, ${typeAvail} free">
+      <div class="rt-row" style="--rt-c:${_rtColor(type, i)}" title="${escHtml(type.name)} — ${typeFilledSeats} of ${typeTotalSeats} seats filled, ${typeAvail} free">
         <span class="rt-row__sw"></span>
         <span class="rt-row__name">${escHtml(type.name)}</span>
         <span class="rt-row__meter">
@@ -947,7 +956,7 @@ function renderDashboard() {
              drawn; a legend that describes something else is how a reader stops
              trusting the panel. -->
         <span class="dash-legend__k dh-blue"><i></i>Revenue</span>
-        <span class="dash-legend__k dh-slate"><i></i>Expenses</span>
+        <span class="dash-legend__k dash-legend__k--exp"><i></i>Expenses</span>
       </div>
       <!-- db3's segmented control. It replaces a static "Jan – Dec" caption:
            the reference has a control here, and the caption only restated the
@@ -1129,7 +1138,7 @@ function renderDashboard() {
               const tR = DB.rooms.filter(r => r.typeId === t.id);
               const filled = DB.students.filter(s => s.status==='Active' && !s.isForced
                                 && tR.some(r => r.id === s.roomId)).length;
-              return { value: filled, color: 'var(--rt-' + ((i % 6) + 1) + ')', name: t.name,
+              return { value: filled, color: _rtColor(t, i), name: t.name,
                        amount: filled,
                        label: t.name + ' — ' + filled + ' of ' + (tR.length * t.capacity) + ' seats filled',
                        onclick: "navigate('rooms')" };
@@ -1573,13 +1582,13 @@ function _dashLedgerRow(mo, pending, pendingCount) {
      than the rule that would get them right. */
   const needs = [
     { k:'cancel', tone:'amber',  n:(DB.cancellations||[]).filter(c=>c.status==='Pending').length,
-      one:'pending cancellation', many:'pending cancellations', verb:'View',    page:'cancellations' },
+      one:'pending cancellation', many:'pending cancellations', verb:'View',    go:'openCancellationsPending()' },
     { k:'card',   tone:'red',    n:pendingCount,
-      one:'pending payment',      many:'pending payments',      verb:'Collect', page:'payments' },
+      one:'pending payment',      many:'pending payments',      verb:'Collect', go:'openPaymentsPending()' },
     { k:'issue',  tone:'violet', n:(DB.issues||[]).filter(c=>c.kind!=='maintenance'&&c.status==='Open').length,
-      one:'open complaint',       many:'open complaints',       verb:'Resolve', page:'issues' },
+      one:'open complaint',       many:'open complaints',       verb:'Resolve', go:"openIssuesOpen('complaint')" },
     { k:'wrench', tone:'blue',   n:(DB.issues||[]).filter(m=>m.kind==='maintenance'&&m.status==='Open').length,
-      one:'open maintenance',     many:'open maintenance jobs', verb:'Assign',  page:'issues' },
+      one:'open maintenance',     many:'open maintenance jobs', verb:'Assign',  go:"openIssuesOpen('maintenance')" },
   ];
   // The pill counts the rows that still want something, not the rows on screen —
   // four is now always the number of rows, and a badge that always reads 4 is
@@ -1612,7 +1621,11 @@ function _dashLedgerRow(mo, pending, pendingCount) {
         '<button class="dl-need dh-' + r.tone + (r.n === 0 ? ' is-done' : '') + '"'
         + (r.n === 0
             ? ' disabled aria-disabled="true" title="Nothing waiting — this is clear"'
-            : ' onclick="navigate(\'' + r.page + '\')"')
+            /* Each verb lands on EXACTLY the rows it counted (owner,
+               2026-09-28): View opens the pending cancellations, Collect the
+               "Still owing" payments, Resolve the open complaints, Assign the
+               open maintenance jobs, not the whole register. */
+            : ' onclick="' + r.go + '"')
         + '>'
         + '<span class="dl-need__ic dh-' + r.tone + '">' + _dlIco(r.k) + '</span>'
         + '<span class="dl-need__n">' + fmtNum(r.n) + '</span>'
@@ -3313,7 +3326,13 @@ function drawTrendChart() {
      Derived from the revenue colour rather than fixed, so it follows the theme
      and any future accent change. Same +alpha idiom the faint-month bars below
      already use, which assumes --blue resolves to hex. */
-  var cExpense = cRevenue + '4D';
+  /* EXPENSES TAKE A CONTRASTING COLOUR NOW (owner, 2026-09-28: "use a contrast
+     colour for expenses"). The pale tint of revenue above made the two bars
+     hard to tell apart. --warning-solid is what the Reports page's Financial
+     Performance chart paints its expense bars in, so the two charts agree;
+     not `--amber`, which is an INK. The owner then asked for everything else
+     on this chart to stay as it was — no net line, no dropdown. */
+  var cExpense = _cs.getPropertyValue('--warning-solid').trim() || '#e0a526';
   var cPending = _cs.getPropertyValue('--purple').trim() || '#8b5cf6';
   var cText2  = _cs.getPropertyValue('--text2').trim()  || '#8a9ab8';
   var cText3  = _cs.getPropertyValue('--text3').trim()  || '#4a6080';
@@ -3342,7 +3361,7 @@ function drawTrendChart() {
     var isR=real[idx];
     badge.innerHTML='<div style="font-size:12px;font-weight:700;color:'+cText2+';margin-bottom:8px">'+months[idx].full+'</div>'+(isR?[
       '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cRevenue+';display:inline-block"></span>Revenue</span><span style="font-weight:700;color:'+cRevenue+'">'+fmtPKR(rev)+'</span></div>',
-      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cRevenue+'80;display:inline-block"></span>Expenses</span><span style="font-weight:700;color:'+cText2+'">'+fmtPKR(exp)+'</span></div>',
+      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cExpense+';display:inline-block"></span>Expenses</span><span style="font-weight:700;color:'+cText2+'">'+fmtPKR(exp)+'</span></div>',
       '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cPending+';display:inline-block"></span>Pending</span><span style="font-weight:700;color:'+cPending+'">'+fmtPKR(pend)+'</span></div>',
       '<hr style="border:none;border-top:1px solid '+cBorder+';margin:6px 0"/>',
       /* EARNED, not Net: this chart plots revenue by the month it was billed

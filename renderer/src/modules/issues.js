@@ -38,8 +38,21 @@
    nav.js from the /maintenance and /complaints routes and by a three-tab strip
    above the table. Both routes now land on the same register, unfiltered, and
    the toolbar's Category is what narrows it. */
-let issueFilter = { search:'', status:'All', priority:'All', category:'All',
+let issueFilter = { search:'', status:'All', priority:'All', category:'All', kind:'All',
                     month:thisMonth(), sort:'newest', page:1, pageSize:30 };
+
+/** Open issues of one kind, every month: what the dashboard's Needs Action
+    rows count, so Resolve and Assign land on exactly those rows. `kind` has no
+    toolbar control of its own; it counts in the active-filter number and the
+    export header, and Reset clears it like any other filter. */
+function openIssuesOpen(kind) {
+  navigate('issues');
+  issueFilter.kind   = kind === 'maintenance' ? 'maintenance' : 'complaint';
+  issueFilter.status = 'open';
+  issueFilter.month  = '';
+  issueFilter.page   = 1;
+  renderPage('issues');
+}
 
 /* A fresh visit starts here — see FILTER_REGISTRY in nav.js.
 
@@ -56,7 +69,7 @@ let issueFilter = { search:'', status:'All', priority:'All', category:'All',
    things are open and can widen to All months to find them. Raised with the
    owner; reversing it is `month:''` in both places here. */
 registerFilter('issues', issueFilter, () => ({
-  search:'', status:'All', priority:'All', category:'All',
+  search:'', status:'All', priority:'All', category:'All', kind:'All',
   month:thisMonth(), sort:'newest', page:1,
 }));
 
@@ -234,6 +247,7 @@ function issuesFiltered() {
     if (issueFilter.status   !== 'All' && _issBucket(i.status) !== issueFilter.status) return false;
     if (issueFilter.priority !== 'All' && i.priority !== issueFilter.priority) return false;
     if (issueFilter.category !== 'All' && i.category !== issueFilter.category) return false;
+    if (issueFilter.kind && issueFilter.kind !== 'All' && i.kind !== issueFilter.kind) return false;
     /* One month, or a whole year. Both are a string prefix of the ISO date, so
        '2026-09' and '2026' need no separate branch — the same trick the
        Cancellations month filter uses. This replaced a From/To range and a
@@ -292,6 +306,8 @@ function _issExportDef(list) {
       ['Status',   issueFilter.status   !== 'All' ? _issExportBucketLabel(issueFilter.status) : null],
       ['Priority', issueFilter.priority !== 'All' ? issueFilter.priority : null],
       ['Category', issueFilter.category !== 'All' ? issueFilter.category : null],
+      ['Kind',     issueFilter.kind && issueFilter.kind !== 'All'
+                     ? (issueFilter.kind === 'maintenance' ? 'Maintenance' : 'Complaints') : null],
       ['Month',    issueFilter.month ? tbMonthLabel(issueFilter.month) : null],
       ['Search',   issueFilter.search || null],
       ['Sorted',   issueFilter.sort === 'oldest' ? 'Oldest first'
@@ -372,7 +388,8 @@ function renderIssues() {
   const _pg = paginate(feed, issueFilter);
   const rooms    = DB.rooms || [];
   const nActive  = [issueFilter.status!=='All', issueFilter.priority!=='All',
-                    issueFilter.category!=='All', !!issueFilter.month, !!q]
+                    issueFilter.category!=='All', !!(issueFilter.kind && issueFilter.kind!=='All'),
+                    !!issueFilter.month, !!q]
                    .filter(Boolean).length;
 
   const SH = { open:'ui-chip--danger', progress:'ui-chip--warning', resolved:'ui-chip--success' };
