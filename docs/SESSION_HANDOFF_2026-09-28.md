@@ -1,0 +1,135 @@
+# Session handoff — 2026-09-28 (evening)
+
+Written 19:45 PST. The next session resumes automatically at 20:20 with the
+work order in **§4**. Read §1–§3 first; they say what is on disk and what is
+only on this machine.
+
+---
+
+## 1. Where the code is
+
+- Repo `C:\HOSTIX-APP`, branch **`claude/funny-dijkstra-c68mqn`** — this is the
+  **open 6.0.0 release PR #26**.
+- **11 commits today, all LOCAL, none pushed** (on top of `9200c98`):
+
+  | Commit | What |
+  |---|---|
+  | `edd38af` | feat(display): the app fits the screen it is on (auto-fit, fit-figures, header subtitle, expenses table floor, stale tooltip) |
+  | `d6ac423` | feat(expenses): optional receipt / reference number |
+  | `07e2a7f` | fix(payments): a refund is never put back on the month as unpaid (`settledTotal`) |
+  | `d1b435d` | feat(dashboard): Needs Action lands on its rows; room-type and seat colours |
+  | `6ffccd9` | feat(owner-funds): steps 1–2, rules + opt-in control-plane flag + permission |
+  | `dac363c` | feat(dashboard): trend range as a dropdown; expenses in the pending red |
+  | `9e260b4` | feat(owner-funds): step 3, the Owner Funds page |
+  | `d3094ab` | feat(expenses): no "Fund Transfer" where Owner Funds is on |
+  | `ebdb357` | feat(owner-funds): step 4, Owner Funds in the Reports |
+  | (this doc) | docs: session handoff |
+
+- Untracked and **not ours — leave alone**: `docs/design/shots/`,
+  `tests/_tmp-cam.spec.js`.
+- **Pushing would add all of this to the 6.0.0 release PR.** The owner has not
+  decided; offered to move the commits onto a `6.1` branch first. Do not push.
+
+## 2. What was agreed today (the owner's rulings)
+
+- **Screen fit.** Client desktop is 1680×1050 @150% = 1120×660 CSS px, less
+  room than the owner's 1366×768 laptop. `services/display-scale.js` auto-fits
+  to a 1366 layout; View → Auto-fit to Screen switches it off.
+- **Refunds.** A refund must never come back as unpaid. Every recompute uses
+  `settledTotal(p)` (finance.js). The Reverse window still preselects
+  *Correction* — suggested making the choice mandatory; **not answered**.
+- **Revenue Trend.** Keep the original chart; range is a dropdown in the same
+  place (same height, chart stays 192px); expenses in the **dh-red** of the
+  pending-payments row; revenue blue. No net line.
+- **Owner Funds** (client feature, one hostel, per-hostel switch):
+  never revenue/expense; profit/loss unchanged, owner lines beside it; no
+  carry-over between months; "paying a bill" = the owner's OWN bill; Available
+  Fund unchanged with an "After owner" line (step 5); "Fund Transfer" expense
+  category hidden where Owner Funds is on (done). Plan and rules in
+  `renderer/src/owner-funds.js` header.
+
+## 3. Things that exist only on this machine / need someone
+
+- **Control plane deploy.** `server/src/lib/features.js` has the new opt-in
+  flag `ownerFunds` (`default:false, optIn:true, since:'6.1.0'`). The portal
+  will not show the switch until the control plane is **redeployed**. Not done.
+- **No installer built.** The client gets none of today's work until a build
+  (6.0.1 / 6.1.0) is made — the owner said "we will build later".
+- **Vendored copy.** `server/src/lib/vendor/app-utils.js` must equal
+  `renderer/src/utils.js`; after any utils.js edit run `npm run sync-shared`
+  in `server/` or `server/test/run.js` fails.
+
+## 4. WORK ORDER FOR THE 20:20 RESUME
+
+### 4a. FIRST — the colour audit (owner, 2026-09-28)
+
+Brief: `C:\Users\PCS\Downloads\Hostyllo_Cross_Theme_Color_Consistency_Audit.md`.
+It asks for an AUDIT before changes ("Do not blindly replace all colors. First
+determine what the color means.") — so the first deliverable is a report, and
+fixes follow owner approval (memory: follow an owner spec literally, propose
+before applying).
+
+Inventory taken at 19:45 (raw `#hex` / `rgb(` / `hsl(` counts):
+
+- CSS outside `css/tokens.css`: **622**. `style.css` 403, `chrome.css` 62,
+  `ui-kit.css` 41 (the `dh-*` hue families, hex per theme), `login.css` 36,
+  `dashboard.css` 12, `whatsapp.css` 11, `rooms.css` 9, `components.css` 9,
+  `reports.css` 8. The newer `css/components/*` and `css/screens/*` are nearly
+  clean.
+- JS inline colours: `students.js` 186, `dashboard.js` 90, `receipt.js` 40,
+  `reports.js` 37, `license.js` 31, `utils.js` 30, `modals.js` 28.
+- Known structural issue (memory): `style.css` loads after `tokens.css` and
+  wins on 5 tokens; legacy aliases `--green/--red/--amber/--blue` sit beside
+  the role tokens `--success-fg/--danger-fg/--warning-fg/--accent`, and
+  `ui-kit.css` `.dh-*` is a THIRD system with its own hex.
+
+**A CONFLICT TO PUT TO THE OWNER FIRST:** the audit's §7 says
+*expenses/outflow = muted amber; red = owed/overdue/danger only*. Today the
+owner asked for the dashboard trend's expense bars in **red** (commit
+`dac363c`). The Reports chart and Owner Funds "took" use amber
+(`--warning-solid` / warning role). One of the two has to give — ask; do not
+decide.
+
+Deliverable for 4a: `docs/COLOR_AUDIT_2026-09-28.md` with
+1. the inventory, classified (semantic / structural / decorative / chart /
+   legacy / accidental / duplicate / invalid-for-dark);
+2. the three token systems and how they map to one (existing role tokens in
+   `tokens.css` are the target — no new naming scheme);
+3. the regression matrix of §22 filled from real screenshots, light + dark,
+   every major screen (capturePage method below), with contrast measured;
+4. a phased fix plan. Then stop for approval.
+
+### 4b. THEN — Owner Funds step 5 (after 4a is delivered)
+
+- Dashboard: a small "After owner: Rs. X" line under the Available Fund card,
+  only where `ofAllowed()`; Available Fund itself unchanged.
+- Owner Funds page: Excel / PDF export buttons using `ofExportColumns()`
+  (already shared by Reports) and the export engine (`EXPORT.pdf/excel`).
+
+### 4c. Owner Funds step 6 — final pass
+
+Full Owner Funds e2e, both themes, 1366×728 and the client's 1120×660
+(`setContentSize(1120,660)`), switched off → nothing visible anywhere.
+
+## 5. How to run things
+
+- Unit: `for f in tests/*.test.js; do node $f; done` — 665 checks passed.
+- Typecheck: `npm run -s typecheck`.
+- E2E: `HOSTIX_TEST_PROFILE=/c/Users/PCS/HOSTIX-testprofile NODE_OPTIONS="--max-old-space-size=512 --max-semi-space-size=2" npx playwright test <files>` — 6-8 files at a time.
+- Owner Funds needs the opt-in flag in tests:
+  `localStorage.setItem('hx_feat_on_ownerFunds','1')`.
+- Screenshots of the real window (zoom-correct): in a temp spec,
+  `app.evaluate(async ({BrowserWindow}) => (await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64'))`;
+  write to `C:/Users/PCS/AppData/Local/Temp/hostyllo-fit/`. Playwright
+  deletes `test-results/` on each run — never keep inputs there.
+- Traps hit today: repo files are CRLF — a heredoc/`cat >>` appends LF and
+  breaks string-replace patches (normalise first); Python heredocs lose
+  backslashes in JS `\'` — use the Edit tool for those lines; `sed -i` is
+  CRLF-safe.
+
+## 6. Open questions for the owner (in order)
+
+1. Expenses colour: red (today's request) or amber (the audit)?
+2. Move today's commits to a `6.1` branch before anything is pushed?
+3. Reverse window: make Correction/Refund a required choice (no preselect)?
+4. When to redeploy the control plane and build the installer.
