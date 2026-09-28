@@ -285,3 +285,61 @@ test('edit payment: a part-paid month shows ITS pending, after an Add Payment fo
     await app.close();
   }
 });
+
+/* THE REFUND STAYS A REFUND (owner, 2026-09-28): "a student came on 1st October
+   and on the 10th went home and was refunded 4,500 of what he paid — the 4,500
+   should not go back to the unpaid." The Reverse window recorded it right; the
+   Edit Payment form then showed it as pending and its Save wrote it back. */
+test('a refund is not put back on the month as unpaid — not by the Edit form, not by its Save', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  try {
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1366, 768));
+    await login(win);
+    const pid = await win.evaluate(async () => {
+      DB.settings.serviceModel = 'rent_mess_optional';
+      const rt = DB.settings.roomTypes.find(x => x.id === '2s');
+      rt.defaultRent = 10000; rt.defaultMess = 4500;
+      DB.rooms = [{ id: 'rmR', number: 'R1', floor: 'Ground', typeId: '2s',
+                    studentIds: [], amenities: [], notes: '', rent: 10000 }];
+      DB.students = [{ id: 'stuR', name: 'Refund Student', fatherName: 'G', phone: '0300-1112224',
+                       roomId: 'rmR', status: 'Active', messOptIn: true, joinDate: '2026-01-01', paymentMethod: 'Cash' }];
+      DB.payments = []; DB.cancellations = []; DB.concessions = [];
+      if (DB.settings.security) DB.settings.security.pinOn = false;
+      await saveDB();
+      await generateMonthlyRents();
+      const p = DB.payments.find(x => x.studentId === 'stuR');
+      applyPayment(p, { amount: 14500, method: 'Cash' });
+      await saveDB();
+      return p.id;
+    });
+
+    // Refund 4,500 through the Reverse window, as a warden would.
+    await win.evaluate(id => { navigate('payments'); showReversePaymentModal(id); }, pid);
+    await win.waitForSelector('#f-prev-amt', { timeout: 10000 });
+    await win.check('input[name="prev-kind"][value="refund"]');
+    await win.fill('#f-prev-amt', '4500');
+    await win.fill('#f-prev-reason', 'Went home on the 10th');
+    await win.evaluate(id => submitReversePayment(id), pid);
+    await win.waitForTimeout(400);
+    const afterRefund = await win.evaluate(id => { const p = DB.payments.find(x => x.id === id); return { amount: p.amount, unpaid: p.unpaid, status: p.status }; }, pid);
+    expect(afterRefund).toEqual({ amount: 10000, unpaid: 0, status: 'Paid' });
+
+    // The Edit form must not show the refund as pending…
+    await win.evaluate(id => showEditPaymentModal(id), pid);
+    await win.waitForSelector('#f-precv', { timeout: 15000 });
+    await win.waitForFunction(() => document.getElementById('pef-pend').textContent !== '-', null, { timeout: 5000 });
+    expect(await txt(win, 'pef-pend')).toBe('Rs. 0');
+    expect(await txt(win, 'pef-already')).toBe('Rs. 14,500');
+
+    // …and saving it must not write the refund back as unpaid.
+    const reason = await win.$('#f-pedit-reason');
+    if (reason) await win.fill('#f-pedit-reason', 'Checking the record');
+    await win.evaluate(id => submitEditPayment(id), pid);
+    await win.waitForTimeout(400);
+    const afterSave = await win.evaluate(id => { const p = DB.payments.find(x => x.id === id); return { amount: p.amount, unpaid: p.unpaid, status: p.status, overpaid: p.overpaid || 0 }; }, pid);
+    expect(afterSave).toEqual({ amount: 10000, unpaid: 0, status: 'Paid', overpaid: 0 });
+  } finally {
+    await app.close();
+  }
+});

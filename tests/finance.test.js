@@ -46,7 +46,7 @@ const F = vm.runInContext(`({
   applyPayment, reversePayment, calculateRefund,
   calculateSettlement, calculateReportTotals,
   refundPolicy, calculateMidMonthRefund, refundPolicyLabel,
-  billSnapshot, billFreeze, billDrift, newReceiptId
+  billSnapshot, billFreeze, billDrift, newReceiptId, settledTotal
 })`, sandbox);
 const { DB } = F;
 
@@ -488,6 +488,36 @@ ok('CASE refund — a derived balance agrees with the stored one', () => {
      layer exists to prevent. */
   const derived = Object.assign({}, p); delete derived.unpaid;
   assert.strictEqual(F.calculateOutstanding(derived), 0);
+});
+
+/* THE OWNER'S CASE, 2026-09-28: "a student came on 1st October and on the 10th
+   went home, and was refunded 4,500 of the 14,500 he paid. The 4,500 should not
+   go back to unpaid." reversePayment() already recorded it right; what put it
+   back was every LATER recompute of the balance — the Edit Payment save, a
+   concession, a mess exemption, a rent change in Settings — each of which wrote
+   `unpaid = bill − p.amount`. They all read settledTotal() now. */
+ok('CASE refund — 14,500 paid, 4,500 handed back: nothing owed, and a re-save keeps it so', () => {
+  setup();
+  const p = bill();
+  F.applyPayment(p, { amount: 14500, date: '2026-10-01' });
+  F.reversePayment(p, { amount: 4500, kind: 'refund', reason: 'Went home on the 10th', date: '2026-10-10' });
+  assert.strictEqual(p.amount, 10000, 'the 4,500 left the drawer');
+  assert.strictEqual(p.unpaid, 0);
+  assert.strictEqual(F.settledTotal(p), 14500, 'but all of the bill is settled');
+  // What the Edit Payment save (and the other recomputes) now write:
+  const unpaidAfterResave = Math.max(0, F.calculateBill(p) - F.settledTotal(p));
+  assert.strictEqual(unpaidAfterResave, 0, 'a re-save must not re-open the refund');
+  assert.strictEqual(Math.max(0, F.settledTotal(p) - F.calculateBill(p)), 0, 'nor invent a credit');
+});
+
+ok('CASE correction — the same 4,500 as a mis-key DOES re-open, on a re-save too', () => {
+  setup();
+  const p = bill();
+  F.applyPayment(p, { amount: 14500, date: '2026-10-01' });
+  F.reversePayment(p, { amount: 4500, kind: 'correction', reason: 'Keyed twice', date: '2026-10-02' });
+  assert.strictEqual(p.unpaid, 4500);
+  assert.strictEqual(F.settledTotal(p), 10000, 'money that never arrived settles nothing');
+  assert.strictEqual(Math.max(0, F.calculateBill(p) - F.settledTotal(p)), 4500);
 });
 
 ok('CASE refund — the split is recorded, so it cannot be guessed at later', () => {

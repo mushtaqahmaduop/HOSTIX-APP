@@ -3017,7 +3017,8 @@ function _applyChargesToStudent(student, newRent, newMess, messOptIn) {
     p.totalRent    = newRent;
     p.messCharge   = mess;
     p.messIncluded = student.messOptIn !== false;
-    const alreadyPaid = Number(p.amount) || 0;
+    // Refunds count as settled — settledTotal() in finance.js.
+    const alreadyPaid = settledTotal(p);
     const extras = Number(p.extraTotal || 0) + Number(p.admissionFee || p.fee || 0);
     p.unpaid = Math.max(0, due + extras - alreadyPaid - (Number(p.concession || p.discount) || 0));
     ledgerTrack(p, { why: 'Rent & mess changed in Settings' });
@@ -3290,7 +3291,9 @@ async function updateRoomType(id, field, val) {
           DB.payments.forEach(function(p) {
             if(p.studentId === s.id && p.status === 'Pending' && !p.prorate) {   // by-days months keep their charge (step 9)
               p.monthlyRent = newRent; p.totalRent = newRent;
-              p.unpaid = Math.max(0, newRent - (p.amount||0));
+              /* The whole bill, not the rent alone — mess, extras and a concession
+                 were dropped here — and refunds count as settled (finance.js). */
+              p.unpaid = Math.max(0, calculateBill(p) - settledTotal(p));
               ledgerTrack(p, { why: 'Room type rent changed in Settings' });
             }
           });

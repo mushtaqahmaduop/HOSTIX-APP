@@ -291,8 +291,10 @@ function cnApplyToRecord(p) {
   p.concessionDesc = [p.concessionManualDesc || ''].concat(names).filter(Boolean).join(' · ');
 
   const bill = calculateBill(p);
-  p.unpaid   = Math.max(0, bill - money(p.amount));
-  p.overpaid = Math.max(0, money(p.amount) - bill);
+  // settledTotal, not p.amount: a refund given back must not re-open (finance.js).
+  const settled = settledTotal(p);
+  p.unpaid   = Math.max(0, bill - settled);
+  p.overpaid = Math.max(0, settled - bill);
   p.status   = p.unpaid > 0 ? 'Pending' : 'Paid';
   if (p.status === 'Paid' && !p.paidDate) p.paidDate = typeof today === 'function' ? today() : '';
   if (typeof ledgerTrack === 'function') ledgerTrack(p);

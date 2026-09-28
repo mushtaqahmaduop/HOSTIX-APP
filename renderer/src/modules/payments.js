@@ -2630,7 +2630,8 @@ async function submitPaymentForStudent() {
            The box is now "Money received now" and the collection goes through
            applyPayment(), which is the one place money is added to a record. */
         const received       = money(parseFloat(document.getElementById('f-ps-paid')?.value) || 0);
-        const prevPaid       = money(alreadyPending.amount);
+        // What counts against the bill, refunds included (settledTotal, finance.js).
+        const prevPaid       = settledTotal(alreadyPending);
         /* THE BUG. This computed `newMonthlyRent - newPaid` and dropped the mess
            charge, the extras, the admission fee and the concession outright — so
            at a bundled hostel, merging a payment into an existing pending record
@@ -3517,7 +3518,8 @@ async function submitAddPayment() {
           // ── UPDATE existing pending record in-place ──────────────────
           // Step 10: asked here, once — the posting happens on this OK.
           if (pinNeeded() && !(await pinConfirm({ what: 'posting a payment' }))) { window._updatePendingAP = false; return; }
-          const prevPaid       = Number(alreadyPending2.amount || 0);
+          // What counts against the bill, refunds included (settledTotal, finance.js).
+          const prevPaid       = settledTotal(alreadyPending2);
           const newMonthlyRent = _pro ? _pro.days * _pro.rate : (pfRentAmount() || alreadyPending2.monthlyRent || 0);
           const newMessOn      = _pro ? false : document.getElementById('f-pmess-on')?.checked !== false;
           const newMess        = pfMessAmount();
@@ -3874,7 +3876,7 @@ function showEditPaymentModal(id) {
           ${secHead(2, 'Pending / receiving', 'Collect the pending amount for this month.')}
           <div class="pef-rcv">
             <div class="pef-rcv__c"><span>Expected amount</span><b id="pef-exp">-</b></div>
-            <div class="pef-rcv__c"><span>Already paid</span><b class="is-paid" id="pef-already">${fmtPKR(money(p.amount))}</b></div>
+            <div class="pef-rcv__c"><span>Already paid</span><b class="is-paid" id="pef-already">${fmtPKR(settledTotal(p))}</b></div>
             <div class="pef-rcv__c"><span>Pending amount</span><b class="is-due" id="pef-pend">-</b></div>
             ${''/* THE BOX GETS THE WHOLE CELL (owner, 2026-09-19: "the receiving
                    money field is very small"). It used to share one row with the
@@ -3924,7 +3926,10 @@ function showEditPaymentModal(id) {
                    <span class="pef-back__m">${escHtml(why)}</span>`}
             </div>`;
           })()}
-          <input type="hidden" id="f-ppaid" value="${money(p.amount)}">
+          ${''/* What counts against the bill: collected plus anything REFUNDED to
+                 the student (settledTotal, finance.js). recalcUnpaid() reads this,
+                 so the Pending figure on this form cannot re-open a refund. */}
+          <input type="hidden" id="f-ppaid" value="${settledTotal(p)}">
         </div>
 
         <div class="pef-sec">
@@ -4041,6 +4046,8 @@ function showEditPaymentModal(id) {
           })()}
           <div class="pef-sum__row"><span>Total due (this month)</span><b id="pef-due">-</b></div>
           <div class="pef-sum__row is-paid"><span>Total paid</span><b id="pef-paid">-</b></div>
+          ${refundRelief(p) > 0 ? `<div class="pef-sum__row" title="Handed back to the student. It does not make the month owe anything again.">
+              <span>Refunded to student</span><b>${fmtPKR(money(refundRelief(p)))}</b></div>` : ''}
           <div class="pef-sum__row" id="pef-rem-row"><span>Pending amount</span><b id="pef-rem">-</b></div>
           <div class="pef-sum__row"><span>Receiving now</span><b id="pef-now">-</b></div>
           <div class="pef-newbal is-clear" id="pef-newbal">
@@ -4312,7 +4319,13 @@ async function submitEditPayment(id) {
     rent: monthlyRent, messCharge, messIncluded: true,   // pfMessAmount() is 0 when off
     extraTotal, admissionFee, concession,
   });
-  const unpaid       = Math.max(0, totalDue - paidAmount);
+  /* Against the bill counts what was collected AND anything refunded to the
+     student since — settledTotal() in finance.js. With p.amount alone, saving
+     this form after a refund put the refunded money back on the month as
+     unpaid (owner, 2026-09-28: a student paid 14,500, was given 4,500 back for
+     the days he did not stay, and the month then showed 4,500 owing). */
+  const settled      = settledTotal(p);
+  const unpaid       = Math.max(0, totalDue - settled);
 
   // RECEIVE PENDING — whole rupees, never more than this form leaves pending.
   const rcvEl  = document.getElementById('f-precv');
@@ -4377,7 +4390,7 @@ async function submitEditPayment(id) {
   p.extraTotal     = extraTotal;
   p.unpaid         = unpaid;
   // §14 overpayment, from this form's own figures.
-  p.overpaid       = Math.max(0, paidAmount - totalDue);
+  p.overpaid       = Math.max(0, settled - totalDue);
   // A record holding money keeps its month. Before any money, the record's own
   // month, date and method follow the form.
   if (!held) {

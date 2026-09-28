@@ -467,6 +467,29 @@ function reversePayment(p, opts) {
   };
 }
 
+/* ── §14 · settledTotal ───────────────────────────────────────────────────────
+   WHAT COUNTS AGAINST THE BILL: what the record still holds, PLUS money that was
+   handed back to the student as a REFUND (owner, 2026-09-28).
+
+   A refund lowers `p.amount` — the money left the drawer — but the obligation
+   left with it: a student who paid 14,500 and was given 4,500 back for the days
+   they did not stay owes nothing. reversePayment() gets that right when it is
+   recorded. What kept getting it wrong was every LATER recompute of the
+   balance — the Edit Payment save, its live "Pending amount", a concession, a
+   mess exemption — each wrote `unpaid = bill − p.amount` and put the 4,500
+   straight back on the month as unpaid.
+
+   So there is one expression for it, and every recompute uses it:
+       unpaid   = bill − settledTotal(p)
+       overpaid = settledTotal(p) − bill
+   refundRelief() (utils.js) is the refunded part that came out of APPLIED
+   money; a correction adds nothing, because that money never arrived. */
+function settledTotal(p) {
+  if (!p) return 0;
+  const relief = typeof refundRelief === 'function' ? refundRelief(p) : 0;
+  return money(p.amount) + money(relief);
+}
+
 /* ── §14 · calculateRefund ────────────────────────────────────────────────────
    Money owed BACK on one record: what was collected beyond the bill.
 
