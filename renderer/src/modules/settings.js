@@ -3729,6 +3729,7 @@ async function confirmExcelImport() {
     if (getRoomOccupancy(room) >= rtype.capacity) { skipped++; return; }
 
     const studentId = nextStudentId();
+    noteStudentId(studentId);   // taken now, never re-issued (BUG-008)
     const unpaid = Math.max(0, r.rent - r.paidAtAdmission);
     const mo = new Date(r.joinDate).toLocaleString('default',{month:'long',year:'numeric'});
 

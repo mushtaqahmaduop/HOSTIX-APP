@@ -42,6 +42,7 @@
     "test:ownerfunds": "node tests/owner-funds.test.js",
     "test:featureoptin": "node tests/feature-optin.test.js",
     "test:submitonce": "node tests/submit-once.test.js",
+    "test:studentid": "node tests/student-id.test.js",
     "test:update": "node tests/update-url.test.js && node tests/update-check.test.js",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

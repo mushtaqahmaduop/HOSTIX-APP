@@ -3537,7 +3537,7 @@ async function _submitAddStudent(presetRoomId='', addAnother=false, saveOnly=fal
         `Room #${escHtml(String(selectedRoom.number))} (${escHtml(roomType.name)}) already has ${currentOcc}/${roomType.capacity} students. Do you want to force-add ${escHtml(name)} anyway? Room capacity display will remain at ${roomType.capacity} but this room will show as over-capacity.`,
         async () => {
           t.isForced = true; // FIX: force-added students don't count against available seats
-          DB.students.push(t);
+          DB.students.push(t); noteStudentId(t.id);   // never re-issued (BUG-008)
           const room2 = DB.rooms.find(r=>r.id===roomId);
           logActivity('Student Force-Added', name + ' force-added to full Room #' + (room2?.number||'?') + ' ('+currentOcc+'/'+roomType.capacity+' cap)', 'Student');
           await saveDB();
@@ -3557,7 +3557,7 @@ async function _submitAddStudent(presetRoomId='', addAnother=false, saveOnly=fal
       return;
     }
   }
-  DB.students.push(t);
+  DB.students.push(t); noteStudentId(t.id);   // never re-issued (BUG-008)
   const room = DB.rooms.find(r=>r.id===roomId);
   logActivity('Student Added', name + ' admitted to Room #' + (room?.number||'?'), 'Student');
   await saveDB();

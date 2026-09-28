@@ -121,13 +121,53 @@ function submitOnce(key, fn) {
   return tracked;
 }
 
-function nextStudentId() {
-  var maxNum = 0;
-  DB.students.forEach(function (s) {
-    var n = parseInt(String(s.id), 10);
+/* ── A STUDENT NUMBER IS NEVER HANDED OUT TWICE (bug audit BUG-008) ──────────
+   The next number was "highest number among the students on file + 1". But
+   deleting a student removes them from DB.students and — deliberately — keeps
+   their payments, which still carry their id. So deleting the top student
+   freed their number while their records still pointed at it, and the next
+   person admitted was given it and inherited them: reproduced, the new #003
+   owed the deleted #003's pending 5,000 (docs/BUG_AUDIT_2026-09-28.md).
+
+   The next number is now one past the highest that has EVER been used:
+     · every student on file,
+     · every record that still names a student (STUDENT_REF_TABLES — the same
+       list the renumbering below walks, plus the ledger and concessions),
+     · and DB.settings.studentSeq, a counter that only ever goes up, so a
+       number is not re-issued even after every record naming it is gone.
+   nextStudentId() only LOOKS — the Add Student form shows it as a preview —
+   and noteStudentId() records a number once a student is actually saved. */
+var STUDENT_REF_TABLES = ['payments', 'cancellations', 'roomShifts', 'checkinlog', 'fines',
+  'archive', 'complaints', 'issues', 'billSplits', 'studentLedger', 'concessions'];
+
+function _highestStudentNumber() {
+  var maxNum = Number(DB.settings && DB.settings.studentSeq) || 0;
+  (DB.students || []).forEach(function (s) {
+    var n = parseInt(String(s && s.id), 10);
     if (!isNaN(n) && n > maxNum) maxNum = n;
   });
-  return String(maxNum + 1).padStart(3, '0');
+  STUDENT_REF_TABLES.forEach(function (col) {
+    (DB[col] || []).forEach(function (r) {
+      if (!r) return;
+      [r.studentId, r.raisedById].forEach(function (sid) {
+        if (sid == null || !_isStudentCode(String(sid))) return;
+        var n = parseInt(String(sid), 10);
+        if (n > maxNum) maxNum = n;
+      });
+    });
+  });
+  return maxNum;
+}
+
+function nextStudentId() {
+  return String(_highestStudentNumber() + 1).padStart(3, '0');
+}
+
+/** Record that a student number is now taken, so it is never issued again. */
+function noteStudentId(sid) {
+  if (!DB.settings || !_isStudentCode(String(sid))) return;
+  var n = parseInt(String(sid), 10);
+  if (n > (Number(DB.settings.studentSeq) || 0)) DB.settings.studentSeq = n;
 }
 
 // A student code is a plain number, zero-padded to at least three digits —
@@ -172,7 +212,9 @@ function migrateStudentIdsToNumeric() {
     }
   });
 
-  // Pass 2 — everyone else takes the next free number, in roster order.
+  // Pass 2 — everyone else takes the next free number, in roster order — free
+  // meaning never used by ANY record either (BUG-008), not only by a student.
+  maxNum = Math.max(maxNum, _highestStudentNumber());
   students.forEach(function (s) {
     if (keeps.indexOf(s) !== -1) return;
     var sid = String(s.id);
@@ -181,6 +223,7 @@ function migrateStudentIdsToNumeric() {
     taken[next] = true;
     if (!(sid in idMap)) idMap[sid] = next;   // first claimant of an ambiguous old id
     s.id = next;
+    noteStudentId(next);
   });
 
   if (!Object.keys(idMap).length) return;
@@ -188,8 +231,7 @@ function migrateStudentIdsToNumeric() {
   // Every table that stores a studentId. DB.archive holds the payments that
   // retention moved out of DB.payments — miss it and the older half of the
   // ledger is re-pointed at the wrong people.
-  ['payments', 'cancellations', 'roomShifts', 'checkinlog', 'fines',
-   'archive', 'complaints', 'issues', 'billSplits'].forEach(function (col) {
+  STUDENT_REF_TABLES.forEach(function (col) {
     (DB[col] || []).forEach(function (r) {
       if (!r) return;
       if (r.studentId && idMap[r.studentId]) r.studentId = idMap[r.studentId];
