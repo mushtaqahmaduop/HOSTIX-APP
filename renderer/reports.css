@@ -275,10 +275,11 @@
 .rpt-k   { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; color:var(--text2); white-space:nowrap; }
 .rpt-k i { width:8px; height:8px; border-radius:50%; background:var(--k); flex-shrink:0; }
 .rpt-k--rev i { background:var(--accent); }
-/* The dot marks the bars, so it takes the bars' own colour: `--warning-solid`,
-   the warning role at fill weight (owner, 2026-09-23). `--amber` aliases
-   `--warning-fg`, an ink, and both the dot and the bars read olive under it. */
-.rpt-k--exp i { background:var(--warning-solid); }
+/* The dot marks the bars, so it takes the bars' own colour. Expenses are RED
+   everywhere since 2026-09-28 (owner) — the `dh-red` tone the markup carries,
+   the same one expenseColor() (utils.js) gives the bars. It was
+   `--warning-solid` (amber) from 2026-09-23. */
+.rpt-k--exp i { background:var(--dh); }
 .rpt-k--net i { background:var(--green); }
 /* The grain is STATED, not offered — one option in a select is not a control.
    See the chart's own note in reports.js. */

@@ -3332,15 +3332,7 @@ function drawTrendChart() {
      #F0796A dark), so the colour is READ from that tone rather than restated —
      a probe carrying the class — and the two can never drift apart. It also
      follows the theme, which a hex written here would not. Revenue stays blue. */
-  var cExpense = (function () {
-    var probe = document.createElement('span');
-    probe.className = 'dh-red';
-    probe.style.display = 'none';
-    document.body.appendChild(probe);
-    var v = getComputedStyle(probe).getPropertyValue('--dh').trim();
-    probe.remove();
-    return /^#[0-9a-f]{6}$/i.test(v) ? v : '#C0402F';
-  })();
+  var cExpense = expenseColor();   // utils.js — the one expense red
   var cPending = _cs.getPropertyValue('--purple').trim() || '#8b5cf6';
   var cText2  = _cs.getPropertyValue('--text2').trim()  || '#8a9ab8';
   var cText3  = _cs.getPropertyValue('--text3').trim()  || '#4a6080';

@@ -1475,7 +1475,7 @@ function renderReports() {
       </div>
       <div class="rpt-fin__legend">
         <span class="rpt-k rpt-k--rev"><i></i>Revenue</span>
-        <span class="rpt-k rpt-k--exp"><i></i>Expenses</span>
+        <span class="rpt-k rpt-k--exp dh-red"><i></i>Expenses</span>
         <span class="rpt-k rpt-k--net"><i></i>Net Result</span>
       </div>
       ${''/* The design draws a "Monthly" select here. It is STATED, not
@@ -1990,7 +1990,9 @@ function drawReportCharts() {
        `--warning-fg`, which is an INK — #7A5309 in the light theme — and the
        bars painted as dark olive. The solid is the same role at fill weight.
        See tokens.css for what a solid is and when to add another. */
-    const expHex = _rptCss('--warning-solid', _rptCss('--amber', '#f0a030'));
+    /* RED, NOT AMBER, since 2026-09-28 (owner: "use red everywhere" for
+       expenses) — the same colour the dashboard trend draws them in. */
+    const expHex = expenseColor();
     const netHex = _rptCss('--green',  '#16a34a');
     const revVals = _rptTrendData.map(m => m.rev);
     const expVals = _rptTrendData.map(m => m.exp);

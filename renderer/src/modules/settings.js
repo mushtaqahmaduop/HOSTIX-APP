@@ -945,7 +945,7 @@ function renderDataManagementPanel() {
   const parts = [
     tbl('Students', 'dh-violet', DB.students),
     tbl('Payments', 'dh-blue',   DB.payments),
-    tbl('Expenses', 'dh-amber',  DB.expenses),
+    tbl('Expenses', 'dh-red',    DB.expenses),
     tbl('Rooms',    'dh-green',  DB.rooms)
   ];
   const counted = parts.reduce((s, p) => s + p.n, 0);
@@ -967,7 +967,7 @@ function renderDataManagementPanel() {
     ['home',  'dh-blue',   'Total Rooms',    String((DB.rooms || []).length),    'Active rooms'],
     ['users', 'dh-violet', 'Total Students', String((DB.students || []).length), 'Registered students'],
     ['card',  'dh-green',  'Total Payments', String((DB.payments || []).length), 'Payment records'],
-    ['trend', 'dh-amber',  'Total Expenses', String((DB.expenses || []).length), 'Expense records'],
+    ['trend', 'dh-red',    'Total Expenses', String((DB.expenses || []).length), 'Expense records'],
     ['drive', 'dh-slate',  'Storage Used',   _setBytes(total),                   'Database payload']
   ].map(([ic, hue, label, val, sub]) => `
     <div class="set-strip__c ${hue}" title="${sub}">
@@ -1045,7 +1045,7 @@ function renderDataManagementPanel() {
           ${stat('home',  'dh-blue',   'Rooms',    (DB.rooms || []).length)}
           ${stat('users', 'dh-green',  'Students', (DB.students || []).length)}
           ${stat('card',  'dh-violet', 'Payments', (DB.payments || []).length)}
-          ${stat('trend', 'dh-amber',  'Expenses', (DB.expenses || []).length)}
+          ${stat('trend', 'dh-red',    'Expenses', (DB.expenses || []).length)}
 
           <div class="set-store">
             <div class="set-store__top">
@@ -1559,7 +1559,7 @@ function _setStoreParts() {
   const parts = [
     tbl('Students', 'dh-violet', DB.students),
     tbl('Payments', 'dh-blue',   DB.payments),
-    tbl('Expenses', 'dh-amber',  DB.expenses),
+    tbl('Expenses', 'dh-red',    DB.expenses),
     tbl('Rooms',    'dh-green',  DB.rooms)
   ];
   const counted = parts.reduce((s, p) => s + p.n, 0);

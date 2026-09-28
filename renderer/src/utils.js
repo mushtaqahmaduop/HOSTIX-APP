@@ -159,6 +159,25 @@ function _highestStudentNumber() {
   return maxNum;
 }
 
+/* ── EXPENSES ARE RED, EVERYWHERE (owner, 2026-09-28) ─────────────────────────
+   One colour for "money spent", read from the `dh-red` tone — the pending-
+   payments row of Needs Action, which the owner named — so every chart that
+   draws expenses (the dashboard trend, the Reports financial chart) and every
+   legend key agrees, in both themes, and cannot drift from that tone. A probe
+   carrying the class is how a CSS custom property set by a class is read. */
+function expenseColor() {
+  try {
+    const probe = document.createElement('span');
+    probe.className = 'dh-red';
+    probe.style.display = 'none';
+    document.body.appendChild(probe);
+    const v = getComputedStyle(probe).getPropertyValue('--dh').trim();
+    probe.remove();
+    if (/^#[0-9a-f]{6}$/i.test(v)) return v;
+  } catch (_) { /* headless: fall through */ }
+  return '#C0402F';
+}
+
 function nextStudentId() {
   return String(_highestStudentNumber() + 1).padStart(3, '0');
 }
