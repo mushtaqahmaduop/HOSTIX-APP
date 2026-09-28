@@ -393,7 +393,12 @@ function renderIssues() {
                     !!issueFilter.month, !!q]
                    .filter(Boolean).length;
 
-  const SH = { open:'ui-chip--danger', progress:'ui-chip--warning', resolved:'ui-chip--success' };
+  /* OPEN IS NOT RED (colour audit S4, 2026-09-28 — owner delegated the call).
+     Open is where every ticket starts, a workflow state, not danger; red on
+     every new row plus red High priority left the register with nothing to
+     tell the urgent apart. Open keeps its warning glyph, in the neutral role;
+     red belongs to High priority alone. */
+  const SH = { open:'ui-chip--neutral', progress:'ui-chip--warning', resolved:'ui-chip--success' };
   /* Low was blue. Blue is the ACCENT in this system and the accent means "act",
      so a low-priority ticket was the most action-coloured thing on its row.
      Success, not neutral: neutral is what a CATEGORY chip wears, and a Low

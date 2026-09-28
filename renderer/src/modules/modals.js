@@ -458,7 +458,8 @@ async function restoreFromPaste() {
 // HELPERS
 // ════════════════════════════════════════════════════════════════════════════
 function statusBadge(s) {
-  const map={Paid:'badge-green',Pending:'badge-gold',Active:'badge-green',Left:'badge-gray',Blacklisted:'badge-red',Cancelling:'badge-red'};
+  // Partial is amber like Pending (colour audit S1): it fell through to grey.
+  const map={Paid:'badge-green',Pending:'badge-gold',Partial:'badge-gold',Active:'badge-green',Left:'badge-gray',Blacklisted:'badge-red',Cancelling:'badge-red'};
   const icons={Active:MODAL_ICONS.statusActive,Left:MODAL_ICONS.statusLeft,Blacklisted:MODAL_ICONS.statusX,Cancelling:MODAL_ICONS.statusBan,Paid:MODAL_ICONS.statusCheck,Pending:MODAL_ICONS.statusClock};
   return `<span class="badge ${map[s]||'badge-gray'}">${icons[s]||''} ${escHtml(s||'—')}</span>`;
 }

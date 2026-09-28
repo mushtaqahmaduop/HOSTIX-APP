@@ -342,6 +342,10 @@ const SHARED_ON_PURPOSE = {
   '--accent-100': 'translucent — composites correctly on either ground',
   '--accent-soft': 'alias of --accent-100',
   '--brand-primary-soft': 'alias of --accent-100',
+  // Ink measured ON a solid, not on a ground: the solids differ per theme and
+  // were each picked so the same ink clears AA on both (colour audit C1/C2).
+  '--text-on-danger': 'ink on --danger-solid — 6.57:1 light, 5.44:1 dark',
+  '--text-on-warning': 'ink on --warning-solid — 6.80:1 light, 8.49:1 dark',
   // Someone else's brand. WhatsApp green is WhatsApp green in both themes.
   '--wa-green': 'third-party brand', '--wa-green-2': 'third-party brand',
   // Disabled text is exempt from AA by the standard, and reads as "off" on

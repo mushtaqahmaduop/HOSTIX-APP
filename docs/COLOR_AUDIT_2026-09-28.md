@@ -200,3 +200,25 @@ libraries. The script is kept at
 
 The sweep harness is kept at `C:\Users\PCS\HOSTIX-backups\tools\contrast-sweep.spec.js`;
 Phase 0 turns it into a real spec.
+
+## 8. Decisions and what was done (2026-09-28, owner delegated the calls)
+
+| Item | Decision | Done |
+|---|---|---|
+| S3 | Red is for money that is LATE: Pending and Partial amber, Overdue and Arrears red. | `payStatusRole()` + the Arrears chip (payments.js). |
+| S1 | Partial is amber everywhere. | `statusBadge()` gained Partial (modals.js) — it fell through to grey. |
+| S4 | Open is neutral (keeps its warning glyph); red is High priority alone. | issues.js status map. |
+| Phase scope | Phase 0 now; Phase 1 (one palette) waits for a visual review — it would also move the dashboard red the owner approved today. | — |
+| C1 | Toned nav badges are classes (`nav-badge--danger/--warn`), fill and ink together, on the active row too. | 1.6 / 1.9 → 6.8 / 8.5 :1 |
+| C2 | New role pair `--danger-solid` + `--text-on-danger` (and `--text-on-warning` for the existing warning solid). | Header count 3.76 → 6.57 / 5.44 :1 |
+| C3 | Room-type chips: page ink + a dot in the type's hue. Found in 4 places, not 1 (Reports overview table, Reports rooms tab, two dashboard month tables). | ≥ 7:1 |
+| C4 | Light `dh-green` ink `#1F8A5A` → `#17744B`. | 3.87 → 5.15 :1 |
+| C5 | Dark `--danger-fg` `#F08A7A` → `#F29486`. | 4.49 → 4.90 :1 |
+| C6 | Zero rows lose the .55 opacity; tertiary ink alone. | ≥ AA |
+| C7 | Status summary sub-line uses `--text2`. | 4.35 → 8.0 :1 |
+| Separators | `aria-hidden="true"`; decorative, exempt. | — |
+
+Re-measured after the change: every failure left in the sweep is either a decorative
+separator or the nav badge's pulse animation (measured static: 6.80 / 8.49 :1).
+`theme-parity.spec.js` lists the two new inks as deliberately shared (each is
+measured on a per-theme solid).

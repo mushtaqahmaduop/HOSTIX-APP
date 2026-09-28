@@ -537,8 +537,8 @@ function _dashFooter() {
   <footer class="dash-foot">
     <div class="dash-foot__l">
       <span class="dash-foot__brand">Hostyllo <span id="dash-foot-ver">&mdash;</span></span>
-      ${hostel ? `<span class="dash-foot__sep">|</span><span>${escHtml(hostel)}</span>` : ''}
-      ${tag ? `<span class="dash-foot__sep">|</span><span class="dash-foot__tag">&ldquo;${escHtml(tag)}&rdquo;</span>` : ''}
+      ${hostel ? `<span class="dash-foot__sep" aria-hidden="true">|</span><span>${escHtml(hostel)}</span>` : ''}
+      ${tag ? `<span class="dash-foot__sep" aria-hidden="true">|</span><span class="dash-foot__tag">&ldquo;${escHtml(tag)}&rdquo;</span>` : ''}
     </div>
     <div class="dash-foot__r">
       <span class="dash-foot__state ${ok ? 'is-ok' : 'is-warn'}">
@@ -546,7 +546,7 @@ function _dashFooter() {
           : alerts.length === 1 ? '1 item needs attention'
           : alerts.length + ' items need attention'}
       </span>
-      <span class="dash-foot__sep">|</span>
+      <span class="dash-foot__sep" aria-hidden="true">|</span>
       <span class="dash-foot__stamp">Last updated: ${escHtml(stamp)}</span>
       <button class="dash-foot__refresh" onclick="renderPage('dashboard')" title="Refresh the dashboard" aria-label="Refresh the dashboard">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
@@ -2644,7 +2644,7 @@ function showOccupiedRoomsModal() {
     const cap=type.capacity;
     return `<tr>
       <td><span style="font-size:16px;font-weight:900;color:var(--accent-strong)">#${escHtml(String(r.number))}</span></td>
-      <td><span class="badge" style="background:${type.color}22;border-color:${type.color}44;color:${type.color}">${escHtml(type.name)}</span></td>
+      <td><span class="badge" style="background:${type.color}22;border-color:${type.color}44;color:var(--text-primary)"><i class="rt-dot" style="background:${type.color}"></i>${escHtml(type.name)}</span></td>
       <td class="text-muted">${escHtml(r.floor)} Floor</td>
       <td><span class="badge badge-gray">${occ}/${cap} beds</span></td>
       <td class="fw-700">${fmtPKR(r.rent)}/mo</td>
@@ -2696,7 +2696,7 @@ function showVacantRoomsModal() {
     const students=DB.students.filter(t=>t.roomId===r.id&&t.status==='Active');
     return `<tr>
       <td><span style="font-size:16px;font-weight:900;color:var(--accent-strong)">#${escHtml(String(r.number))}</span></td>
-      <td><span class="badge" style="background:${type.color}22;border-color:${type.color}44;color:${type.color}">${escHtml(type.name)}</span></td>
+      <td><span class="badge" style="background:${type.color}22;border-color:${type.color}44;color:var(--text-primary)"><i class="rt-dot" style="background:${type.color}"></i>${escHtml(type.name)}</span></td>
       <td class="text-muted">${escHtml(r.floor)} Floor</td>
       <td><span class="badge badge-gray">${occ}/${type.capacity} occupied</span></td>
       <td><span class="badge badge-gray" style="font-size:13px;padding:5px 12px">${avail} seat${avail!==1?'s':''} free</span></td>

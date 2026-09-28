@@ -226,12 +226,16 @@ function payMonthShort(m) {
   return bits[0].slice(0, 3) + ' ' + bits[1];
 }
 
-/* The four payment states as chip roles (design spec Part 4). Pending — nothing
-   received yet — is the reference's red pill, so the caller gives it the danger
-   role; Overdue takes it here. The shapes in payStatusIcon() below carry the
-   same meaning without the colour. */
+/* The payment states as chip roles. RED IS FOR MONEY THAT IS LATE (colour
+   audit S3, 2026-09-28 — owner delegated the call): this month's Pending and
+   Partial are amber, owed but not yet late; Overdue and Arrears (an earlier
+   month still unpaid) are red. Pending used to be the design reference's red
+   pill while Arrears was amber, so older debt read calmer than newer, and the
+   dashboard already drew Pending amber. The shapes in payStatusIcon() below
+   carry the same meaning without the colour. */
 function payStatusRole(s) {
-  return s === 'Paid' ? 'ui-chip--success' : s === 'Partial' ? 'ui-chip--warning'
+  return s === 'Paid' ? 'ui-chip--success'
+       : (s === 'Partial' || s === 'Pending') ? 'ui-chip--warning'
        : s === 'Overdue' ? 'ui-chip--danger' : 'ui-chip--neutral';
 }
 
@@ -944,8 +948,7 @@ function renderPayments() {
              for Rent Only. Anything else (no charge recorded) stays neutral. */
           const covCls = (chg.messIncluded && Number(chg.mess) > 0) ? ' pay-cov--mess'
                        : (Number(chg.rent) > 0 ? ' pay-cov--rent' : '');
-          /* Pending — nothing received yet — is the reference's red pill. */
-          const sCls   = sLabel === 'Pending' ? 'ui-chip--danger' : payStatusRole(sLabel);
+          const sCls   = payStatusRole(sLabel);
           return `<tr class="${picked ? 'is-picked' : ''}${arrear ? ' is-arrear' : ''}">
             <td><input type="checkbox" ${picked ? 'checked' : ''} onclick="payToggleRow('${p.id}')" aria-label="Select the record for ${escHtml(nm)}"></td>
             <td class="pay-col-no">${_pg.from + i}</td>
@@ -977,7 +980,7 @@ function renderPayments() {
             </td>
             <td class="pay-col-mo">
               <span data-tip="${escHtml(monthLabel(p.month) || '')}" data-tip-label="Month" data-tip-always>${escHtml(payMonthTick(p))}</span>
-              ${arrear ? '<div><span class="ui-chip ui-chip--warning" title="Unpaid balance carried over from an earlier month — collect it here">Arrears</span></div>' : ''}
+              ${arrear ? '<div><span class="ui-chip ui-chip--danger" title="Unpaid balance carried over from an earlier month — collect it here">Arrears</span></div>' : ''}
             </td>
             ${''/* THE CHARGE IS THE REFERENCE, NOT THE EVENT. It used to be
                    .pay-num--strong — 700, full-strength ink, the same weight
@@ -2872,7 +2875,7 @@ function renderAddPayment() {
       </button>
       <nav class="tsk-crumb" aria-label="Breadcrumb">
         <a href="#" onclick="event.preventDefault();navigate('payments')">Payments</a>
-        <span class="sep">/</span>
+        <span class="sep" aria-hidden="true">/</span>
         <b aria-current="page">New Entry</b>
       </nav>
     </div>

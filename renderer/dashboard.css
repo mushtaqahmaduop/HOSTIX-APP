@@ -1612,7 +1612,9 @@ body.light-theme .dash-rp thead th { background: transparent; }
 /* A configured method nobody used this month. It is listed because its absence
    is a reading, and muted because it is not a figure to compare against the
    others - see _dlMethods() for why it is drawn at all. */
-.dl-meth__row.is-zero { opacity: .55; }
+.dl-meth__row.is-zero .dl-meth__name, .dl-meth__row.is-zero .dl-meth__pct { color: var(--text3); }
+/* No opacity (colour audit C6): .55 on top of --text3 took an empty method's
+   "Rs. 0.00" to 2.4:1. The tertiary ink alone reads as "nothing here". */
 .dl-meth__row.is-zero .dl-meth__amt { font-weight: 600; color: var(--text3); }
 
 /* ══ THE SLICE TOOLTIP ═════════════════════════════════════════════════════

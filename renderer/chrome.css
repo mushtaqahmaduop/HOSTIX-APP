@@ -498,7 +498,7 @@ body.light-theme #header {
 .hdr-btn__count {
     position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px;
     padding: 0 4px; border-radius: 999px;
-    background: #ef4444; color: #fff;
+    background: var(--danger-solid); color: var(--text-on-danger);
     font-size: 10px; font-weight: 800; line-height: 17px; text-align: center;
     border: 2px solid var(--card);
 }
@@ -891,6 +891,15 @@ body.light-theme #sidebar .nav-item.active { box-shadow: 0 1px 3px rgba(15, 23, 
 #sidebar .nav-item.active::before { display: none; }
 #sidebar .nav-item.active .nav-icon { color: var(--text-primary); opacity: 1; }
 #sidebar .nav-item.active .nav-badge { background: var(--neutral-bg); color: var(--neutral-fg); }
+/* TONED COUNTS KEEP THEIR TONE ON THE ACTIVE ROW (colour audit C1, 2026-09-28).
+   The two toned badges carried their fill as an inline style, which beat the
+   active-row rule above while its ink did not — so on the Issues page the
+   Issues count was #3D3D3A on #7A5309, 1.6:1, exactly when it was being read.
+   The tone is a class now, fill and ink together, on every row. */
+#sidebar .nav-badge.nav-badge--danger,
+#sidebar .nav-item.active .nav-badge.nav-badge--danger { background: var(--danger-solid);  color: var(--text-on-danger); }
+#sidebar .nav-badge.nav-badge--warn,
+#sidebar .nav-item.active .nav-badge.nav-badge--warn   { background: var(--warning-solid); color: var(--text-on-warning); }
 
 /* THE SECTION LABELS. 1.4px of tracking at 10px on --sb-fg3 is five words of
    near-invisible grey, and there are five of them down the rail — the same

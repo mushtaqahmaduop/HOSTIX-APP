@@ -40,7 +40,7 @@
    icon-container tint is --dh-bg, the icon/graph colour is --dh, and --dh-2 is
    the lighter end used for progress-bar gradients. */
 body.light-theme .dh-blue   { --dh:#2451D6; --dh-2:#3A63DE; --dh-bg:#EAF0FE; }
-body.light-theme .dh-green  { --dh:#1F8A5A; --dh-2:#2FA36D; --dh-bg:#E8F5EE; }
+body.light-theme .dh-green  { --dh:#17744B; --dh-2:#2FA36D; --dh-bg:#E8F5EE; }
 body.light-theme .dh-red    { --dh:#C0402F; --dh-2:#D95F50; --dh-bg:#FBEBE8; }
 body.light-theme .dh-violet { --dh:#5B4BC4; --dh-2:#7B6AE0; --dh-bg:#EDEBFA; }
 body.light-theme .dh-amber  { --dh:#AD7A1E; --dh-2:#BE8A2C; --dh-bg:#FBF2E2; }
@@ -116,3 +116,8 @@ input.is-invalid:focus {
    added to what the filter listed. Only the Expenses screen used it, and that
    screen now uses .ui-btn--secondary --sm (design spec Part 4). Deleted
    2026-09-16 with the screen it belonged to. */
+
+/* A room type's own hue, as a mark (colour audit C3, 2026-09-28). The hue is
+   data the owner picks in Settings and pale ones cannot carry text (1.75:1),
+   so a chip's words take the page's ink and the hue sits in this dot. */
+.rt-dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; vertical-align:1px; flex-shrink:0; }

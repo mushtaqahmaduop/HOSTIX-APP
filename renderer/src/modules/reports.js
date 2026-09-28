@@ -311,7 +311,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <div style="background:var(--blue-dim);border:1px solid rgba(74,156,240,0.3);border-radius:10px;padding:16px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--blue);font-weight:700">Total</div><div style="font-size:28px;font-weight:900;color:var(--blue)">${DB.rooms.length}</div></div>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Room</th><th>Type</th><th>Floor</th><th>Occupancy</th><th>Students</th><th>Status</th><th>Rent</th></tr></thead><tbody>
-      ${_pg.slice.map(r=>{const type=getRoomType(r);const sts=_activeStudentsByRoom.get(r.id)||[];const occ2=sts.length;return `<tr style="cursor:pointer" onclick="showRoomDetail('${r.id}')"><td class="fw-700 text-gold">#${r.number}</td><td><span class="badge" style="background:${type.color}22;color:${type.color};border-color:${type.color}44">${escHtml(type.name)}</span></td><td class="text-muted">${escHtml(r.floor)} Floor</td><td class="text-muted">${occ2}/${type.capacity}</td><td style="font-size:12px">${sts.map(t=>escHtml(t.name)).join(', ')||'<span style="color:var(--text3)">Empty</span>'}</td><td><span class="badge ${occ2>0?'badge-green':'badge-gray'}">${occ2>0?'Occupied':'Vacant'}</span></td><td class="text-green fw-700">${fmtPKR(r.rent)}/mo</td></tr>`;}).join('')}
+      ${_pg.slice.map(r=>{const type=getRoomType(r);const sts=_activeStudentsByRoom.get(r.id)||[];const occ2=sts.length;return `<tr style="cursor:pointer" onclick="showRoomDetail('${r.id}')"><td class="fw-700 text-gold">#${r.number}</td><td><span class="badge" style="background:${type.color}22;color:var(--text-primary);border-color:${type.color}44"><i class="rt-dot" style="background:${type.color}"></i>${escHtml(type.name)}</span></td><td class="text-muted">${escHtml(r.floor)} Floor</td><td class="text-muted">${occ2}/${type.capacity}</td><td style="font-size:12px">${sts.map(t=>escHtml(t.name)).join(', ')||'<span style="color:var(--text3)">Empty</span>'}</td><td><span class="badge ${occ2>0?'badge-green':'badge-gray'}">${occ2>0?'Occupied':'Vacant'}</span></td><td class="text-green fw-700">${fmtPKR(r.rent)}/mo</td></tr>`;}).join('')}
       </tbody></table></div>
       ${renderPager(_pg,'reportDetailFilter','reports')}
     </div>`;
@@ -910,7 +910,7 @@ function renderReports() {
              `type.color` is DATA: a hue the owner picked per room type in
              Settings, not a design token, which is why it is composed here
              rather than named in the stylesheet. */}
-      <td><span class="rpt-tbl__chip" style="background:${type.color}33;border:1px solid ${type.color}55;color:${type.color}">${escHtml(type.name)}</span></td>
+      <td><span class="rpt-tbl__chip" style="background:${type.color}33;border:1px solid ${type.color}55"><i class="rpt-tbl__dot" style="background:${type.color}"></i>${escHtml(type.name)}</span></td>
       <td>${tRooms.length}</td>
       <td class="${tOcc?'':'rpt-tbl__z'}">${tOcc}</td>
       <td class="${vac?'':'rpt-tbl__z'}">${vac}</td>

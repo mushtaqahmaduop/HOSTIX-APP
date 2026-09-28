@@ -201,6 +201,12 @@ body.light-theme {
      three roles' inks already sit at fill weight; add a solid here when one
      of them is measured to need it, not before. */
   --warning-solid: #D9931F;
+  /* Danger gets its solid now (colour audit C1/C2, 2026-09-28): the header's
+     count badge was a literal #ef4444 under white, 3.76:1. White on this is
+     6.57:1. Each solid names the ink that is measured on it. */
+  --danger-solid:    #B42318;
+  --text-on-danger:  #FFFFFF;
+  --text-on-warning: #231708;   /* 6.80:1 on --warning-solid */
 
   /* Addition 1 — the spec's light shadows, restated so the dark block below
      cannot leak into light mode. */
@@ -239,13 +245,16 @@ body.light-theme {
 
   --success-bg: rgba(95, 215, 155, 0.16);  --success-fg: #5FD79B;
   --warning-bg: rgba(232, 184, 75, 0.16);  --warning-fg: #E8B84B;
-  --danger-bg:  rgba(240, 138, 122, 0.16); --danger-fg:  #F08A7A;
+  --danger-bg:  rgba(240, 138, 122, 0.16); --danger-fg:  #F29486;   /* was #F08A7A: 4.49:1 on its own tint over a card (audit C5) */
   --neutral-bg: rgba(162, 170, 182, 0.14); --neutral-fg: #A2AAB6;
 
   /* The fill weight of the warning role — see the light block for what a
      solid is for. Lifted off the dark ground rather than reusing light's
      #D9931F, which goes muddy against #1A1917; the hue is the same. */
   --warning-solid: #E8A93B;
+  --danger-solid:    #C0392B;   /* white 5.44:1 */
+  --text-on-danger:  #FFFFFF;
+  --text-on-warning: #231708;   /* 8.49:1 on --warning-solid */
 
   --shadow-menu:  0 4px 12px rgba(0, 0, 0, 0.40);
   --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.55);
