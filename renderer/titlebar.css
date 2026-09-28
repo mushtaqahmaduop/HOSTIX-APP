@@ -12,9 +12,20 @@
    covered the whole 40px Add Student button centred in a 56px header. At 30
    the button's lower edge clears it, which is the point. The drag region, the
    menus and both window buttons are unchanged - they size off this. */
-:root { --titlebar-h: 30px; --titlebar-offset: var(--titlebar-h); }
+/* --hz-zoom is the page's display scale (services/display-scale.js), pushed by
+   titlebar.js. The page shrinks or grows to fit the screen; the title bar does
+   NOT — it is window chrome, and a native caption does not change size when an
+   app zooms. `zoom: 1 / scale` holds it at a constant 30 physical pixels, and
+   --titlebar-offset is written in PAGE pixels so everything the bar pushes
+   down moves by what the bar really occupies. */
+:root {
+    --hz-zoom: 1;
+    --titlebar-h: 30px;
+    --titlebar-offset: calc(var(--titlebar-h) / var(--hz-zoom));
+}
 
 #hz-titlebar {
+    zoom: calc(1 / var(--hz-zoom));
     position: fixed; top: 0; left: 0; right: 0; height: var(--titlebar-h);
     display: flex; align-items: stretch;
     /* The rail's colour, not the card's (owner, 2026-09-06). The title bar and
@@ -172,3 +183,42 @@ body.hz-tb-autohide.hz-tb-show #hz-titlebar {
    old 40 and is LARGER than the new 30 — so on the screens with the least
    height to spare it would have grown the bar. 30 is already under the 32px
    Windows caption height at every size, so there is nothing left to trim. */
+
+/* ── DISPLAY SCALE: Auto-fit tick and the zoom indicator ────────────────────
+   services/display-scale.js fits the page to the screen; titlebar.js paints
+   the result. The View menu's Auto-fit item carries a tick when on and the
+   current % on its right. The indicator shows ONLY when the user zoomed —
+   the automatic fit is meant to be invisible — and it is counter-zoomed like
+   the bar, so "Zoom 90%" is not itself drawn at 90%. */
+.hz-drop .hz-checkitem > span:first-child { position: relative; padding-left: 20px; }
+.hz-drop .hz-checkitem > span:first-child::before {
+    content: ''; position: absolute; left: 3px; top: 50%;
+    width: 9px; height: 5px; margin-top: -4px;
+    border-left: 2px solid currentColor; border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg); opacity: 0;
+}
+.hz-drop .hz-checkitem[aria-checked="true"] > span:first-child::before { opacity: 1; color: var(--accent-strong, var(--accent)); }
+
+#hz-zoom-hud {
+    zoom: calc(1 / var(--hz-zoom, 1));
+    position: fixed; top: 44px; left: 50%; z-index: 100002;
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 6px 6px 14px; border-radius: 10px;
+    background: var(--card); color: var(--text);
+    border: 1px solid var(--border);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .24);
+    font: 600 12.5px/1 var(--font, 'Inter', 'Segoe UI', system-ui, sans-serif);
+    font-variant-numeric: tabular-nums;
+    opacity: 0; pointer-events: none;
+    transform: translate(-50%, -6px);
+    transition: opacity .14s ease, transform .14s ease;
+}
+#hz-zoom-hud.is-on { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
+#hz-zoom-hud button {
+    border: 1px solid var(--border); background: none; color: var(--text);
+    font: inherit; font-weight: 600; padding: 5px 10px; border-radius: 7px; cursor: pointer;
+}
+#hz-zoom-hud button:hover { background: var(--dash-sunk); }
+#hz-zoom-hud button[hidden] { display: none; }
+#hz-zoom-hud:not(:has(button:not([hidden]))) { padding-right: 14px; }
+@media (prefers-reduced-motion: reduce) { #hz-zoom-hud { transition: none; } }

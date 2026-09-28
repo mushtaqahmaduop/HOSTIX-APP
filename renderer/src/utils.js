@@ -2007,6 +2007,11 @@ function uiTipHide() {
   };
   document.addEventListener('mouseover', e => {
     const el = trigger(e);
+    /* A re-render removes the trigger from under the cursor, and a removed
+       element never fires mouseout — so the card stayed floating over the next
+       page ("PAID ON" over Expenses, 2026-09-28). Whatever the cursor reaches
+       next, a tip whose trigger is gone closes. navigate() also closes it. */
+    if (_uiTipFor && !_uiTipFor.isConnected) uiTipHide();
     if (!el || el === _uiTipFor) return;
     clearTimeout(_uiTipTimer);
     // Long enough not to flash while the cursor crosses a row on its way

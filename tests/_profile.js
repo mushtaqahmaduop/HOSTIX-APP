@@ -50,6 +50,9 @@ function resetProfile() {
     fs.rmSync(full, { force: true });
   }
   fs.rmSync(path.join(p, 'Local Storage'), { recursive: true, force: true });
+  // The remembered zoom (services/display-scale.js) — a spec that zoomed must
+  // not hand the next one a page at 110%.
+  fs.rmSync(path.join(p, 'display.json'), { force: true });
   return p;
 }
 

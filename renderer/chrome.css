@@ -406,7 +406,17 @@ body.light-theme #header {
     font-size: 12.5px; font-weight: 400; letter-spacing: 0;
     text-transform: none;
     color: var(--text3); margin-top: 3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* A TITLE WITH A SUBTITLE IS TWO LINES IN A ONE-LINE HEADER (2026-09-28).
+   26px x 1.15 + 3 + a 15px sentence is 48px of text in a header that is 56 —
+   and 50 on a short window, which is exactly the client desktop at 150%
+   Windows scaling: Payments, Reports and Help had the top of their title cut
+   off by the header's own edge. With a subtitle the title steps to 22px and
+   the sentence holds one line (full text on hover), so the block is 42px and
+   fits either height. A page with no subtitle keeps the full 26px. */
+#header .hdr-title-wrap.has-sub .page-title { font-size: 22px; line-height: 1.1; }
+#header .hdr-title-wrap.has-sub .page-sub   { margin-top: 2px; }
 
 /* The hamburger (#sidebar-toggle) and the Back button (#hdr-back-btn) were
    removed from the header on the owner's call, so their rules are gone too.

@@ -21,7 +21,7 @@
 
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
@@ -215,6 +215,7 @@ let _schemaMigrated = false;
 const onlineServices = require('./services');
 const appLogger = require('./services/logger');
 const enforcement = require('./services/enforcement');
+const { attachDisplayScale } = require('./services/display-scale');
 /* Shown to a customer who cannot use the app, so it must be somewhere they can
    actually reach. Matches the SUPPORT constant on the activation screen. */
 const SUPPORT_CONTACT = 'hostyllo.info@gmail.com';
@@ -1279,13 +1280,19 @@ function doLicenseInfo() {
   });
 }
 
-// View actions — used by the custom title bar. The application menu keeps its
-// own role-based items (below) for the keyboard accelerators.
-function doZoom(delta) {
-  if (!mainWindow) return;
-  const wc = mainWindow.webContents;
-  if (delta === 0) { wc.setZoomLevel(0); return; }
-  wc.setZoomLevel(wc.getZoomLevel() + delta);
+// View actions — used by the custom title bar AND the application menu's
+// accelerators. Zoom goes through the display-scale controller, never through
+// Chromium's own zoom roles: those set an absolute level and would silently
+// throw away the auto-fit (services/display-scale.js).
+let displayScale = null;
+function doZoom(direction) {
+  if (!displayScale) return;
+  if (direction > 0) displayScale.zoomIn();
+  else if (direction < 0) displayScale.zoomOut();
+  else displayScale.reset();
+}
+function doToggleAutoFit() {
+  if (displayScale) displayScale.toggleAutoFit();
 }
 function doToggleFullScreen() {
   if (!mainWindow) return;
@@ -1313,8 +1320,9 @@ const TITLEBAR_ACTIONS = {
   checkUpdates:  doCheckUpdates,
   licenseInfo:   doLicenseInfo,
   resetZoom:     () => doZoom(0),
-  zoomIn:        () => doZoom(0.5),
-  zoomOut:       () => doZoom(-0.5),
+  zoomIn:        () => doZoom(1),
+  zoomOut:       () => doZoom(-1),
+  autoFit:       doToggleAutoFit,
   fullScreen:    doToggleFullScreen,
   reload:        () => doReload(false),
   forceReload:   () => doReload(true),
@@ -1412,6 +1420,10 @@ function createWindow() {
   mainWindow.on('maximize', _sendMaxState);
   mainWindow.on('unmaximize', _sendMaxState);
 
+  // The page fits the screen it is on — see services/display-scale.js.
+  displayScale = attachDisplayScale(mainWindow, { screen, userDataDir: app.getPath('userData') });
+  mainWindow.on('closed', () => { displayScale = null; });
+
   // checkLicenseValidity() still runs, because it is what advances the
   // anti-clock-rollback watermark. What it no longer decides on its own is
   // whether the app opens.
@@ -1471,9 +1483,10 @@ function createWindow() {
   });
 
   const viewSubmenu = [
-    { role: 'resetZoom' },
-    { role: 'zoomIn',  accelerator: 'CmdOrCtrl+=' },
-    { role: 'zoomOut', accelerator: 'CmdOrCtrl+-' },
+    { label: 'Actual Size (Fit to Screen)', accelerator: 'CmdOrCtrl+0', click: () => doZoom(0) },
+    { label: 'Zoom In',  accelerator: 'CmdOrCtrl+=', click: () => doZoom(1) },
+    { label: 'Zoom In',  accelerator: 'CmdOrCtrl+Plus', click: () => doZoom(1), visible: false },
+    { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: () => doZoom(-1) },
     { type: 'separator' },
     { role: 'togglefullscreen', label: 'Full Screen', accelerator: 'F11' }
   ];
@@ -1544,6 +1557,11 @@ ipcMain.on('titlebar:menu', (_e, action) => {
 // Lets the title bar show the dev-only View items (reload / devtools) exactly
 // when the native menu does.
 ipcMain.handle('app:isDev', () => !IS_PROD);
+// The title bar's View menu shows the current scale and the auto-fit tick.
+ipcMain.handle('display:getScale', (e) => {
+  const w = BrowserWindow.fromWebContents(e.sender);
+  return (displayScale && w === mainWindow) ? displayScale.state() : null;
+});
 
 ipcMain.handle('license:check', () => {
   const result = checkLicenseValidity();

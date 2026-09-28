@@ -205,6 +205,12 @@ contextBridge.exposeInMainWorld('titlebar', {
     if (typeof cb === 'function') ipcRenderer.on('window:maximized', (_e, v) => cb(!!v));
   },
   isDev:            () => ipcRenderer.invoke('app:isDev'),
+  // Display scale (services/display-scale.js): the current fit, and a push
+  // whenever it changes, so View can show the % and the auto-fit tick.
+  getScale:         () => ipcRenderer.invoke('display:getScale'),
+  onScale:          (cb) => {
+    if (typeof cb === 'function') ipcRenderer.on('display:scale', (_e, v) => cb(v || null));
+  },
   menu:             (action) => {
     if (typeof action === 'string') ipcRenderer.send('titlebar:menu', action);
   }

@@ -38,8 +38,13 @@
       { sep: true }
     );
   }
+  /* Zoom is relative to the auto-fit (services/display-scale.js): Reset goes
+     back to the fit, not to Chromium's 100%, and the auto-fit itself can be
+     switched off by anyone who wants Windows' own scale left alone. */
   viewItems.push(
-    { label: 'Reset Zoom',  action: 'resetZoom' },
+    { label: 'Auto-fit to Screen', action: 'autoFit', check: true },
+    { sep: true },
+    { label: 'Reset Zoom',  acc: 'Ctrl 0', action: 'resetZoom' },
     { label: 'Zoom In',     acc: 'Ctrl +', action: 'zoomIn' },
     { label: 'Zoom Out',    acc: 'Ctrl −', action: 'zoomOut' },
     { sep: true },
@@ -75,6 +80,11 @@
     var itemsHtml = m.items.map(function (it) {
       if (it.sep) return '<hr role="separator">';
       var acc = it.acc ? '<span class="hz-acc">' + it.acc + '</span>' : '';
+      if (it.check) {
+        return '<button type="button" role="menuitemcheckbox" aria-checked="false" tabindex="-1" data-action="' +
+               it.action + '" class="hz-checkitem"><span>' + it.label + '</span>' +
+               '<span class="hz-acc hz-scale-pct" aria-hidden="true"></span></button>';
+      }
       // tabindex="-1": items are reached with the arrow keys once the menu is
       // open, not by tabbing through every hidden item on the page.
       return '<button type="button" role="menuitem" tabindex="-1" data-action="' + it.action +
@@ -286,7 +296,9 @@
     var hideTimer = null;
     document.addEventListener('mousemove', function (e) {
       var shown = document.body.classList.contains('hz-tb-show');
-      var h = bar.offsetHeight || 40;
+      // The rect, not offsetHeight: the bar is counter-zoomed against the page
+      // scale, and only the rect is in the page's own pixels, like clientY.
+      var h = bar.getBoundingClientRect().height || 30;
       // 2px, not 4: the bar slides down OVER the page, and at 4 it was coming
       // down on the way to the header's own primary action rather than on the
       // way to the window buttons (owner, 2026-09-17).
@@ -326,6 +338,48 @@
   }
   try { api.isMaximized().then(paintMaxState); } catch (_) {}
   api.onMaximizeChange(paintMaxState);
+
+  // ── Display scale (services/display-scale.js) ─────────────────────────────
+  // Main fits the page to the screen and tells us the factor. We hand it to
+  // CSS (the bar counter-zooms on it), tick Auto-fit in View, show the current
+  // % beside it, and — only when the USER zoomed — flash the % briefly with a
+  // way back, so Ctrl+wheel is never a mystery.
+  var hud = null, hudTimer = null;
+  function showHud(s) {
+    if (!hud) {
+      hud = document.createElement('div');
+      hud.id = 'hz-zoom-hud';
+      hud.setAttribute('role', 'status');
+      hud.innerHTML = '<span class="hz-zoom-hud__pct"></span>' +
+                      '<button type="button" class="hz-zoom-hud__reset">Reset</button>';
+      hud.querySelector('button').addEventListener('click', function () { api.menu('resetZoom'); });
+      hud.addEventListener('mouseenter', function () { clearTimeout(hudTimer); });
+      hud.addEventListener('mouseleave', function () { armHud(); });
+      document.body.appendChild(hud);
+    }
+    hud.querySelector('.hz-zoom-hud__pct').textContent =
+      'Zoom ' + Math.round(s.factor * 100) + '%' + (s.autoFit ? '' : ' · auto-fit off');
+    hud.querySelector('button').hidden = (s.user === 1);
+    hud.classList.add('is-on');
+    armHud();
+  }
+  function armHud() {
+    clearTimeout(hudTimer);
+    hudTimer = setTimeout(function () { if (hud) hud.classList.remove('is-on'); }, 1800);
+  }
+  function paintScale(s) {
+    if (!s || !s.factor) return;
+    document.documentElement.style.setProperty('--hz-zoom', String(s.factor));
+    var item = bar.querySelector('[data-action="autoFit"]');
+    if (item) {
+      item.setAttribute('aria-checked', s.autoFit ? 'true' : 'false');
+      var pct = item.querySelector('.hz-scale-pct');
+      if (pct) pct.textContent = Math.round(s.factor * 100) + '%';
+    }
+    if (s.reason === 'user') showHud(s);
+  }
+  if (api.getScale) { try { api.getScale().then(paintScale); } catch (_) {} }
+  if (api.onScale) api.onScale(paintScale);
 })();
 
 

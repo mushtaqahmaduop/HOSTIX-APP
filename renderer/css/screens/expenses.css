@@ -124,6 +124,14 @@
    the browser felt like. The ellipsis on `.exp-desc__t` is what truncates now,
    which is where truncation belonged all along. */
 .exp-table { table-layout: fixed; width: 100%; }
+/* DESCRIPTION HAS A FLOOR (2026-09-28). The eight fixed columns add up to
+   944px and Description takes whatever is left — so in a narrower panel it was
+   left NOTHING, and its heading overflowed onto "Amount" ("DescripAmount" on a
+   client's 1120px screen). The table now refuses to go below the fixed columns
+   plus 96px of description; under that the wrapper scrolls sideways, which is
+   the register's existing behaviour, instead of the headings colliding. */
+.exp-table { min-width: 1040px; }
+.exp-table thead th { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Each width was then MEASURED against its own longest real value and raised
    where the cell was clipping — a date and an amount are values that must
    never shorten, and a category chip that ellipsises says the wrong category.

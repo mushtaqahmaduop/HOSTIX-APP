@@ -218,6 +218,8 @@ function filtersAreSet(key) {
 function navigate(page, isBack=false) {
   // Auto-close sidebar on navigation (mobile)
   closeSidebar();
+  // A hover card belongs to the page it was opened on (utils.js, uiTipHide).
+  if (typeof uiTipHide === 'function') uiTipHide();
   // The month picked on the dashboard is the dashboard's alone (owner,
   // 2026-09-17): leaving it goes back to the real month.
   if (page !== 'dashboard') {
@@ -325,7 +327,11 @@ function applyHeaderChrome(page) {
   if (_s) {
     const txt = cfg.sub || '';
     _s.textContent = txt;
+    _s.title = txt;
     _s.style.display = txt ? 'block' : 'none';
+    // A two-line title block needs the compact title size to fit the header
+    // (chrome.css, .hdr-title-wrap.has-sub).
+    if (_s.parentElement) _s.parentElement.classList.toggle('has-sub', !!txt);
   }
 
   /* THE DASHBOARD GREETING rides in the header's spare width, and only there -
@@ -497,6 +503,8 @@ function renderPage(p, resetScroll=false) {
     if(_s) {
       const _hostel = (typeof DB !== 'undefined' && DB.settings && DB.settings.hostelName) || '';
       _s.textContent = [_hostel, cfg?.sub].filter(Boolean).join(' · ');
+      _s.title = _s.textContent;
+      if (_s.parentElement) _s.parentElement.classList.toggle('has-sub', _s.style.display !== 'none' && !!_s.textContent);
     }
     const actionBtn=document.getElementById('hdr-action');
     const _mayAdd2 = typeof canDo !== 'function' || canDo('add');
