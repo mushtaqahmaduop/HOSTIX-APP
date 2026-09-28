@@ -558,6 +558,7 @@ async function importBackupData(dbData) {
      counter). Each counter keeps the higher of this PC's and the file's. */
   const _cs = (typeof DB !== 'undefined' && DB && DB.settings) || {};
   const _highWater = { receiptCounter: Number(_cs.receiptCounter) || 0, studentSeq: Number(_cs.studentSeq) || 0 };
+  const _refHigh = Object.assign({}, (_cs.refSeq && typeof _cs.refSeq === 'object') ? _cs.refSeq : {});
   const result = await window.electronAPI.dbImportFull(dbData);
   if (!result || !result.ok) return fail('Import failed: ' + ((result && result.error) || 'unknown error'));
   await loadDB();
@@ -565,6 +566,11 @@ async function importBackupData(dbData) {
     let raised = false;
     for (const k of Object.keys(_highWater)) {
       if ((Number(DB.settings[k]) || 0) < _highWater[k]) { DB.settings[k] = _highWater[k]; raised = true; }
+    }
+    // The reference series (BUG-011) follow the same rule, each on its own.
+    for (const k of Object.keys(_refHigh)) {
+      if (!DB.settings.refSeq || typeof DB.settings.refSeq !== 'object') DB.settings.refSeq = {};
+      if ((Number(DB.settings.refSeq[k]) || 0) < (Number(_refHigh[k]) || 0)) { DB.settings.refSeq[k] = Number(_refHigh[k]); raised = true; }
     }
     if (raised) await saveDB();
   }

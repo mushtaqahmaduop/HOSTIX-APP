@@ -187,6 +187,19 @@ function expenseColor() {
   return '#C0402F';
 }
 
+/* DISPLAY REFERENCE SERIES THAT NEVER REUSE A NUMBER (bug audit BUG-011).
+   CAN-####, MA-#### and CO-#### were max(existing)+1, so deleting the newest
+   record freed its number for the next one. `highestOnFile` is the caller's
+   max over live records; the stored mark covers the ones since deleted. Takes
+   the number: call it once, when the record is created. */
+function refSeqTake(series, highestOnFile) {
+  if (!DB.settings) DB.settings = {};
+  if (!DB.settings.refSeq || typeof DB.settings.refSeq !== 'object') DB.settings.refSeq = {};
+  const next = Math.max(Number(DB.settings.refSeq[series]) || 0, Number(highestOnFile) || 0) + 1;
+  DB.settings.refSeq[series] = next;
+  return next;
+}
+
 function nextStudentId() {
   return String(_highestStudentNumber() + 1).padStart(3, '0');
 }

@@ -44,7 +44,8 @@
     "test:submitonce": "node tests/submit-once.test.js",
     "test:studentid": "node tests/student-id.test.js",
     "test:update": "node tests/update-url.test.js && node tests/update-check.test.js",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:refseq": "node tests/ref-seq.test.js"
   },
   "build": {
     "appId": "com.zeerak.hostix",

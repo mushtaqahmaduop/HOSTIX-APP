@@ -152,9 +152,10 @@ function _issKindOf(rec) {
   return (rec && rec.kind) === 'maintenance' ? 'maintenance' : 'complaint';
 }
 /** The next number in ONE series. The two series are independent and stay so. */
+/* One past the highest EVER issued in that series (BUG-011) — see refSeqTake(). */
 function _issNextSeq(kind) {
-  return (DB.issues || []).reduce(
-    (m, x) => (_issKindOf(x) === kind ? Math.max(m, Number(x.seq) || 0) : m), 0) + 1;
+  return refSeqTake(kind, (DB.issues || []).reduce(
+    (m, x) => (_issKindOf(x) === kind ? Math.max(m, Number(x.seq) || 0) : m), 0));
 }
 
 /* ONE COLLECTION (owner, 2026-09-21). This used to normalise DB.maintenance

@@ -111,8 +111,13 @@ function _cancSeq(c, list) {
   const n = c.seq || (list.indexOf(c) + 1);
   return 'CAN-' + String(n).padStart(4, '0');
 }
+/* Called once per new request. The number is one past the highest EVER issued
+   (bug audit BUG-011): max(existing) alone handed CAN-0002 out again after the
+   request holding it was deleted, and a printed reference then named two
+   different requests. refSeqTake() keeps the high-water mark in settings. */
 function _cancNextSeq() {
-  return (DB.cancellations || []).reduce((m, c) => Math.max(m, Number(c.seq) || 0), 0) + 1;
+  return refSeqTake('cancellation',
+    (DB.cancellations || []).reduce((m, c) => Math.max(m, Number(c.seq) || 0), 0));
 }
 
 /* Room types carry their own colour in settings — that is data, not styling, so
