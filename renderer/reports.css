@@ -947,3 +947,33 @@
     border-top: 1px solid var(--border2); border-bottom: none;
 }
 .rpt-tbl tbody tr.rpt-tbl__tot:hover td { background: var(--dash-sunk); }
+
+/* ── Owner Funds in the reports (step 4, 2026-09-28) ─────────────────────────
+   Beside the profit and loss, never inside it — see _rptOwnerLines() and
+   _rptOwnerPanel() in reports.js. In = success, out = warning, loss = danger:
+   the same roles the Owner Funds page uses. */
+.rpt-owner {
+  display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; justify-content: center;
+  border: 1px dashed var(--border); border-radius: var(--radius-sm);
+  padding: 10px 14px; margin: -4px 0 16px; font-size: var(--text-sm); color: var(--text-secondary);
+}
+.rpt-owner b { font-variant-numeric: tabular-nums; }
+.rpt-owner a { color: var(--accent-fg, var(--accent)); text-decoration: none; font-weight: var(--weight-medium); }
+.rpt-owner .is-in, .rpt-of__tiles .is-in, .rpt-of__amt.is-in  { color: var(--success-fg); }
+.rpt-owner .is-out, .rpt-of__tiles .is-out, .rpt-of__amt.is-out { color: var(--warning-fg); }
+.rpt-owner .is-neg, .rpt-of__tiles .is-neg { color: var(--danger-fg); }
+
+.rpt-of__tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.rpt-of__t { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; min-width: 0; }
+.rpt-of__l { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--text-tertiary); font-weight: var(--weight-strong); }
+.rpt-of__v { font-size: var(--text-xl); font-weight: var(--weight-strong); font-variant-numeric: tabular-nums; margin: 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rpt-of__sl { color: var(--text-tertiary); font-weight: var(--weight-normal); }
+.rpt-of__s { font-size: var(--text-xs); color: var(--text-tertiary); }
+.rpt-of__cats { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px; }
+.rpt-of__ch { font-size: var(--text-sm); font-weight: var(--weight-strong); margin-bottom: 4px; color: var(--text-primary); }
+.rpt-of__cr { display: flex; justify-content: space-between; font-size: var(--text-sm); padding: 3px 0; color: var(--text-secondary); }
+.rpt-of__cr b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.rpt-of__none { font-size: var(--text-sm); color: var(--text-tertiary); }
+.rpt-of__amt { font-weight: var(--weight-strong); white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 1000px) { .rpt-of__tiles { grid-template-columns: 1fr; } .rpt-of__cats { grid-template-columns: 1fr; } }
+

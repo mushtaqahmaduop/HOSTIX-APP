@@ -198,6 +198,28 @@ const _dOwnerFunds = debounce(() => {
   if (inp) { inp.focus(); const n = inp.value.length; try { inp.setSelectionRange(n, n); } catch (_) {} }
 });
 
+/* ══ EXPORT COLUMNS ════════════════════════════════════════════════════════
+   One definition for every document that lists movements — the Reports tab,
+   the whole-period report, and (step 5) this page's own export — so no two of
+   them can describe a movement differently. Amount is SIGNED (owner took is
+   negative) so the column sums to the net owner funding in a workbook. */
+function ofExportColumns() {
+  return [
+    { label: 'Date',        type: 'date',  width: 12, value: r => r.date || '' },
+    { label: 'Direction',   type: 'text',  width: 13, value: r => r.direction === OF_IN ? 'Owner gave' : 'Owner took' },
+    { label: 'Reason',      type: 'text',  width: 20, value: r => ofCategoryLabel(r.category) },
+    { label: 'Method',      type: 'text',  width: 13, value: r => r.method || '' },
+    { label: 'Reference',   type: 'text',  width: 14, value: r => r.refNo || '' },
+    { label: 'Note',        type: 'wrap',  width: 28, value: r => r.note || '' },
+    { label: 'Recorded by', type: 'text',  width: 14, value: r => r.createdByName || '' },
+    { label: 'Amount',      type: 'money', width: 15, total: 'sum',
+      value: r => r.direction === OF_IN ? Number(r.amount || 0) : -Number(r.amount || 0),
+      get:   r => r.direction === OF_IN
+               ? '<span class="pos">+' + fmtPKR(r.amount) + '</span>'
+               : '<span class="neg">-' + fmtPKR(r.amount) + '</span>' },
+  ];
+}
+
 /* ══ RECORD A MOVEMENT ════════════════════════════════════════════════════ */
 
 let _ofProof = null;

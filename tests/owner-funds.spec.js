@@ -197,3 +197,82 @@ test('the page: hidden when switched off; with it on, record, reverse and the st
   }
 });
 
+/* ── step 4: the reports ──────────────────────────────────────────────────── */
+test('reports: an Owner funds tab, owner lines under Available Fund, and both exports — only where it is on', async () => {
+  const app = await launch();
+  const win = await app.firstWindow();
+  const errors = [];
+  win.on('pageerror', e => errors.push(e.message));
+  try {
+    await login(win);
+    const r = await win.evaluate(async () => {
+      const mo = thisMonth();
+      DB.ownerFunds = []; DB.payments = [];
+      DB.expenses = [{ id: 'e1', date: mo + '-10', category: 'Electricity', amount: 30000, description: 'Bill', method: 'Cash' }];
+      localStorage.setItem('hx_feat_on_ownerFunds', '1');
+      ofAdd({ direction: 'in', amount: 100000, date: mo + '-05', category: 'emergency', method: 'Bank Transfer' });
+      ofAdd({ direction: 'out', amount: 40000, date: mo + '-06', category: 'pocket' });
+      await saveDB();
+      const tabs = () => [...document.querySelectorAll('.rpt-tab')].map(t => t.textContent.trim());
+      reportMonth = mo; reportYearly = false; reportDetail = null;
+      navigate('reports');
+      await new Promise(res => setTimeout(res, 900));
+      const onTabs = tabs();
+      reportDetail = 'netprofit'; renderPage('reports');
+      await new Promise(res => setTimeout(res, 700));
+      const lines = (document.querySelector('.rpt-owner') || {}).textContent || '';
+      reportDetail = 'ownerfunds'; renderPage('reports');
+      await new Promise(res => setTimeout(res, 700));
+      const tiles = [...document.querySelectorAll('.rpt-of__v')].map(e => e.textContent.replace(/\s+/g, ' ').trim());
+      const rows = document.querySelectorAll('#content tbody tr').length;
+      const tabDef = _rptDetailDef('ownerfunds');
+      const whole = _rptOverviewDef();
+      const on = {
+        onTabs, lines, tiles, rows,
+        tabRows: tabDef.rows.length, tabGrand: tabDef.grand.value,
+        tabSummary: tabDef.summary.map(x => x.label),
+        wholeSection: whole.sections.some(x => x.title === 'Owner funds'),
+        wholeSummary: whole.summary.map(x => x.label),
+        fund: calcAvailableFund(mo),
+      };
+      // The documents themselves build — the PDF's HTML and the workbook.
+      const tabHtml = exDocument(tabDef).html, wholeHtml = exDocument(whole).html;
+      on.docs = {
+        tabHtml: /Owner took/.test(tabHtml) && /Net owner funding/.test(tabHtml),
+        wholeHtml: /Owner funds/.test(wholeHtml),
+        tabBook: !!exWorkbook(_rptDetailDef('ownerfunds')),
+        wholeBook: !!exWorkbook(_rptOverviewDef()),
+      };
+      // Switched off: none of it.
+      localStorage.removeItem('hx_feat_on_ownerFunds');
+      reportDetail = null; renderPage('reports');
+      await new Promise(res => setTimeout(res, 700));
+      const off = { tabs: tabs(), wholeSection: _rptOverviewDef().sections.some(x => x.title === 'Owner funds') };
+      reportDetail = 'netprofit'; renderPage('reports');
+      await new Promise(res => setTimeout(res, 700));
+      off.lines = !!document.querySelector('.rpt-owner');
+      return { on, off };
+    });
+    expect(r.on.onTabs).toContain('Owner funds');
+    expect(r.on.lines).toMatch(/Owner gave \+Rs\. 100,000/);
+    expect(r.on.lines).toMatch(/Hostel money after owner \+Rs\. 30,000/);   // -30,000 + 100,000 - 40,000
+    expect(r.on.tiles[0]).toBe('−Rs. 30,000');
+    expect(r.on.tiles[2]).toBe('+Rs. 30,000');
+    expect(r.on.rows).toBe(2);
+    expect(r.on.tabRows).toBe(2);
+    expect(r.on.tabGrand).toBe('Rs. 60,000');
+    expect(r.on.tabSummary).toEqual(['Revenue', 'Expenses', 'Profit / loss', 'Owner gave', 'Owner took', 'After owner']);
+    expect(r.on.wholeSection).toBe(true);
+    expect(r.on.wholeSummary).toContain('After owner');
+    expect(r.on.wholeSummary).toContain('Available fund');
+    expect(r.on.fund, 'Available Fund must not move').toBe(-30000);
+    expect(r.on.docs).toEqual({ tabHtml: true, wholeHtml: true, tabBook: true, wholeBook: true });
+    expect(r.off.tabs).not.toContain('Owner funds');
+    expect(r.off.wholeSection).toBe(false);
+    expect(r.off.lines).toBe(false);
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});
+

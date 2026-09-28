@@ -230,6 +230,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <div style="font-size:44px;font-weight:900;color:${net>=0?'var(--green)':'var(--red)'};letter-spacing:-1px">${fmtPKR(net)}</div>
         <div style="font-size:12px;color:var(--text3);margin-top:6px">${fmtPKR(rev)} revenue − ${fmtPKR(totalExp)} expenses</div>
       </div>
+      ${_rptOwnerLines(rev, totalExp)}
       <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Amount</th></tr></thead><tbody>
       ${_pg.slice.map(item=>`<tr>
         <td class="text-muted" style="font-size:12px">${fmtDate(item.date)}</td>
@@ -240,6 +241,15 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
       </tbody></table></div>
       ${renderPager(_pg,'reportDetailFilter','reports')}
     </div>`;
+  }
+
+  // ── OWNER FUNDS ────────────────────────────────────────────────────────────
+  /* The period's owner money, beside its profit and loss — never inside it.
+     The statement is built from THIS page's revenue and expense figures (the
+     same `rev`/`totalExp` every other tab shows), so the two cannot disagree. */
+  if (id === 'ownerfunds') {
+    if (typeof ofAllowed !== 'function' || !ofAllowed()) return '';
+    return _rptOwnerPanel(rev, totalExp, periodLabel, csvBtn('ownerfunds','var(--accent)') + pdfBtn);
   }
 
   // ── STUDENTS ───────────────────────────────────────────────────────────────
@@ -1188,7 +1198,10 @@ function renderReports() {
        ['students','Students','users'],
        ['rooms','Rooms','bed'],
        ['cancellations','Cancellations','transfer'],
-       ['complaints','Complaints','tool']]
+       ['complaints','Complaints','tool'],
+       /* Owner Funds (2026-09-28): only where the hostel has the opt-in feature
+          and the account holds the permission — the same two gates as its page. */
+       ...(typeof ofAllowed === 'function' && ofAllowed() ? [['ownerfunds','Owner funds','wallet']] : [])]
       .map(([k,label,ico])=>`
         <button role="tab" class="rpt-tab${(reportDetail||'')===k?' is-on':''}"
                 aria-selected="${(reportDetail||'')===k}"
@@ -2202,6 +2215,7 @@ const RPT_DETAIL_TITLES = {
   netprofit: 'Available Fund Summary',
   students:  'Student Directory',
   rooms:     'Room Occupancy',
+  ownerfunds: 'Owner Funds',
 };
 
 /* The payment columns every finance report in this module shares. Defined once
@@ -2481,6 +2495,18 @@ function _rptDetailDef(type) {
     });
   }
 
+  if (type === 'ownerfunds') {
+    const st = ofStatement(keys[0], { revenue: T.rev, expenses: T.totalExp });
+    return Object.assign(def, {
+      sheet: 'Owner Funds',
+      summary: _rptOwnerSummary(st, true),
+      columns: ofExportColumns(),
+      rows: ofListFor(keys[0]),
+      grand: { label: 'Net owner funding', value: fmtPKR(st.ownerNet) },
+      empty: 'No owner fund movements in this period.',
+    });
+  }
+
   if (type === 'students') {
     return Object.assign(def, _rptStudentsSection(keys, pays, def));
   }
@@ -2585,6 +2611,9 @@ function _rptOverviewDef() {
   // export, so this document and theirs cannot name two rosters.
   const stu   = _rptStudentsSection(keys, T.pays, null, { all: true });
   const rooms = _rptRoomsSection(keys);
+  // Owner Funds, only where the hostel has it (and this account may see it).
+  const _ofOn = typeof ofAllowed === 'function' && ofAllowed();
+  const _ofSt = _ofOn ? ofStatement(keys[0], { revenue: T.rev, expenses: T.totalExp }) : null;
 
   return {
     module: 'Report',
@@ -2602,6 +2631,7 @@ function _rptOverviewDef() {
       { label: 'Payments',       value: String(paid.length) },
       { label: 'Rooms occupied', value: occ + ' / ' + DB.rooms.length },
       { label: 'Residents',      value: String(stu.rows.length) },
+      ...(_ofOn ? _rptOwnerSummary(_ofSt, false) : []),
     ],
 
     sections: [
@@ -2659,6 +2689,15 @@ function _rptOverviewDef() {
         rows: _rptIssues(),
         empty: 'No issues were raised in this period.',
       },
+      ...(_ofOn ? [{
+        title: 'Owner funds',
+        meta: _ofSt.count + ' movement' + (_ofSt.count === 1 ? '' : 's') +
+              ' · shown beside profit and loss, not inside it',
+        columns: ofExportColumns(),
+        rows: ofListFor(keys[0]),
+        grand: { label: 'Net owner funding', value: fmtPKR(_ofSt.ownerNet) },
+        empty: 'No owner fund movements in this period.',
+      }] : []),
       {
         title: 'Room occupancy',
         meta: rooms.meta,
@@ -2893,5 +2932,92 @@ function _archiveClassify(r) {
     ? (r.category || 'Expense') + (r.description ? ' — ' + r.description : '')
     : (r.studentName || '—') + (r.month ? ' · ' + r.month : '');
   return { isExpense, date, year, label, amount: Number((r && r.amount) || 0) };
+}
+
+/* ══ OWNER FUNDS IN THE REPORTS (step 4, 2026-09-28) ══════════════════════════
+   Owner money sits BESIDE the period's profit and loss, never inside it: the
+   Available Fund and Net Result figures on this page are unchanged, and these
+   lines follow them. Shown only where the hostel has Owner Funds switched on
+   and the account holds the permission. */
+
+function _rptSigned(n) { return (n > 0 ? '+' : n < 0 ? '−' : '') + fmtPKR(Math.abs(n)); }
+
+/** The owner lines under the Available Fund figure on its tab. */
+function _rptOwnerLines(rev, totalExp) {
+  if (typeof ofAllowed !== 'function' || !ofAllowed()) return '';
+  const st = ofStatement(_rptKeys()[0], { revenue: rev, expenses: totalExp });
+  return '<div class="rpt-owner">'
+    + '<span>Owner gave <b class="is-in">+' + fmtPKR(st.ownerIn) + '</b></span>'
+    + '<span>Owner took <b class="is-out">−' + fmtPKR(st.ownerOut) + '</b></span>'
+    + '<span>Hostel money after owner <b class="' + (st.afterOwner < 0 ? 'is-neg' : 'is-in') + '">'
+    +   _rptSigned(st.afterOwner) + '</b></span>'
+    + '<a href="#" onclick="reportDetail=\'ownerfunds\';renderPage(\'reports\');return false">Owner funds ›</a>'
+    + '</div>';
+}
+
+/** The Owner funds tab. */
+function _rptOwnerPanel(rev, totalExp, periodLabel, buttons) {
+  const key = _rptKeys()[0];
+  const st  = ofStatement(key, { revenue: rev, expenses: totalExp });
+  const _pg = paginate(ofListFor(key), reportDetailFilter);
+  const tile = (label, value, cls, sub) =>
+    '<div class="rpt-of__t"><div class="rpt-of__l">' + label + '</div>'
+    + '<div class="rpt-of__v ' + cls + '">' + value + '</div>'
+    + '<div class="rpt-of__s">' + sub + '</div></div>';
+  const cats = dir => {
+    const rows = OF_CATEGORIES[dir].map(c => ({ c, v: st.byCategory[c.key] || 0 })).filter(x => x.v > 0);
+    return rows.length
+      ? rows.map(x => '<div class="rpt-of__cr"><span>' + escHtml(x.c.label) + '</span><b>' + fmtPKR(x.v) + '</b></div>').join('')
+      : '<div class="rpt-of__none">Nothing in this period</div>';
+  };
+  const row = r => '<tr style="cursor:pointer" onclick="showOwnerFundDetail(\'' + escHtml(r.id) + '\')">'
+    + '<td class="text-muted" style="font-size:12px">' + fmtDate(r.date) + '</td>'
+    + '<td>' + (r.direction === OF_IN ? '<span class="ui-chip ui-chip--success">Owner gave</span>'
+                                      : '<span class="ui-chip ui-chip--warning">Owner took</span>') + '</td>'
+    + '<td>' + escHtml(ofCategoryLabel(r.category)) + '</td>'
+    + '<td class="text-muted">' + escHtml(r.method || '—') + '</td>'
+    + '<td class="text-muted" style="font-size:12px">' + escHtml(r.refNo || '—') + '</td>'
+    + '<td class="text-muted" style="font-size:12px">' + escHtml(r.note || '—') + '</td>'
+    + '<td class="rpt-of__amt ' + (r.direction === OF_IN ? 'is-in' : 'is-out') + '">'
+    +   (r.direction === OF_IN ? '+' : '−') + fmtPKR(r.amount) + '</td>'
+    + '</tr>';
+  return '<div class="card" style="margin-bottom:20px">'
+    + '<div class="card-header"><div class="card-title">' + icon('wallet') + ' Owner Funds — ' + escHtml(periodLabel) + '</div>'
+    +   '<div style="display:flex;gap:8px;align-items:center">' + buttons + '</div></div>'
+    + '<div class="rpt-of__tiles">'
+    +   tile('Profit / loss', _rptSigned(st.result), st.result < 0 ? 'is-neg' : 'is-in',
+             fmtPKR(rev) + ' revenue − ' + fmtPKR(totalExp) + ' expenses')
+    +   tile('Owner gave · took', '<span class="is-in">+' + fmtPKR(st.ownerIn) + '</span> <span class="rpt-of__sl">/</span> '
+             + '<span class="is-out">−' + fmtPKR(st.ownerOut) + '</span>', '', 'Net owner funding ' + _rptSigned(st.ownerNet))
+    +   tile('Hostel money after owner', _rptSigned(st.afterOwner), st.afterOwner < 0 ? 'is-neg' : 'is-in',
+             'Profit / loss + owner gave − owner took')
+    + '</div>'
+    + '<div class="rpt-of__cats">'
+    +   '<div><div class="rpt-of__ch">Owner gave — by reason</div>' + cats(OF_IN) + '</div>'
+    +   '<div><div class="rpt-of__ch">Owner took — by reason</div>' + cats(OF_OUT) + '</div>'
+    + '</div>'
+    + '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Direction</th><th>Reason</th><th>Method</th>'
+    +   '<th>Reference</th><th>Note</th><th>Amount</th></tr></thead><tbody>'
+    +   (_pg.slice.map(row).join('')
+         || '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px">No owner fund movements in this period</td></tr>')
+    + '</tbody></table></div>'
+    + renderPager(_pg, 'reportDetailFilter', 'reports')
+    + '</div>';
+}
+
+/** Summary tiles for a document. `withResult` adds revenue/expenses/profit
+    first, for the Owner Funds tab's own export; the whole report already
+    states those three. */
+function _rptOwnerSummary(st, withResult) {
+  const out = [];
+  if (withResult) {
+    out.push({ label: 'Revenue',  value: EXPORT.fmt.money(st.revenue), tone: 'pos' });
+    out.push({ label: 'Expenses', value: EXPORT.fmt.money(st.expenses), tone: 'neg' });
+    out.push({ label: 'Profit / loss', value: EXPORT.fmt.money(st.result), tone: st.result >= 0 ? 'pos' : 'neg' });
+  }
+  out.push({ label: 'Owner gave', value: EXPORT.fmt.money(st.ownerIn), tone: 'pos' });
+  out.push({ label: 'Owner took', value: EXPORT.fmt.money(st.ownerOut), tone: st.ownerOut > 0 ? 'neg' : '' });
+  out.push({ label: 'After owner', value: EXPORT.fmt.money(st.afterOwner), tone: st.afterOwner >= 0 ? 'pos' : 'neg' });
+  return out;
 }
 

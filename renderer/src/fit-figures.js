@@ -23,6 +23,8 @@
     '.rpt-stat__val',    // Reports KPI strip
     '.rpt-mv__v',        // Reports movement tiles
     '.bkp-stat__v',      // Backup
+    '.rpt-of__v',        // Reports → Owner funds
+    '.ui-stat__v',       // every register's stat strip (Owner Funds, Issues, …)
     '[data-fit]'         // anything else that opts in
   ].join(',');
   var FIT_MIN = 0.6;
