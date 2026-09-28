@@ -331,3 +331,10 @@ declare function tbClear(page: string, o?: any): string;
 declare function tbClearAll(page: string): void;
 declare function tbToggleMenu(id: string, ev?: any): void;
 declare function tbCloseMenus(): void;
+
+// auth-nev.js — staff accounts in backups (bug audit BUG-012)
+declare function staffAccountsForBackup(): { v: number; users: Record<string, any> };
+declare function validateStaffAccounts(sa: any): { ok: boolean; reason?: string };
+declare function restoreStaffAccounts(sa: any): { restored: number; signedOut: boolean; reason: string };
+declare function logout(): void;
+declare function applyPermissionsToChrome(): void;

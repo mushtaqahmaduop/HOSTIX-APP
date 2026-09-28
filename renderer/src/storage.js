@@ -466,7 +466,8 @@ if (window.electronAPI) {
       return;
     }
     const exportData = {
-      db:         result.data,
+      db:         Object.assign({}, result.data,
+                    typeof staffAccountsForBackup === 'function' ? { staffAccounts: staffAccountsForBackup() } : {}),
       exportedAt: new Date().toISOString(),
       version:    '4.0'
     };
@@ -528,6 +529,14 @@ if (window.electronAPI) {
    limits), hands the document to db:importFull, and reloads from disk — so what
    is on screen afterwards is what the database actually holds. Returns
    {ok, reason, preRestoreBackup}; refusals are toasted here. */
+/* What a backup file holds: the database, and the staff accounts that live
+   outside it (BUG-012). Every "download a backup" button writes this. */
+function backupDocument() {
+  const doc = Object.assign({}, DB);
+  if (typeof staffAccountsForBackup === 'function') doc.staffAccounts = staffAccountsForBackup();
+  return doc;
+}
+
 async function importBackupData(dbData) {
   const fail = (reason, title) => {
     if (typeof toast === 'function') toast(reason, 'error', title);
@@ -559,6 +568,9 @@ async function importBackupData(dbData) {
   const _cs = (typeof DB !== 'undefined' && DB && DB.settings) || {};
   const _highWater = { receiptCounter: Number(_cs.receiptCounter) || 0, studentSeq: Number(_cs.studentSeq) || 0 };
   const _refHigh = Object.assign({}, (_cs.refSeq && typeof _cs.refSeq === 'object') ? _cs.refSeq : {});
+  // The accounts are not database tables; they are put back after it (BUG-012).
+  const _staff = dbData.staffAccounts;
+  if (_staff !== undefined) { dbData = Object.assign({}, dbData); delete dbData.staffAccounts; }
   const result = await window.electronAPI.dbImportFull(dbData);
   if (!result || !result.ok) return fail('Import failed: ' + ((result && result.error) || 'unknown error'));
   await loadDB();
@@ -580,5 +592,19 @@ async function importBackupData(dbData) {
   if (typeof handoverSync === 'function' && handoverSync() > 0) await saveDB();
   if (typeof updateSidebar === 'function') updateSidebar();
   markBackupDone();
-  return { ok: true, preRestoreBackup: result.preRestoreBackup || null };
+  let staff = { restored: 0, signedOut: false, reason: 'none in file' };
+  if (_staff !== undefined && typeof restoreStaffAccounts === 'function') {
+    staff = restoreStaffAccounts(_staff);
+    if (staff.reason && staff.reason !== 'none in file' && typeof toast === 'function') {
+      toast('The records were restored, but not the staff accounts: ' + staff.reason +
+            '. The accounts on this PC were kept.', 'warning', 'Accounts not restored');
+    }
+    if (staff.signedOut) {
+      if (typeof toast === 'function') toast('Your account is not in this backup — sign in with one that is.', 'info', 'Signed out');
+      setTimeout(() => { if (typeof logout === 'function') logout(); }, 1800);
+    } else if (staff.restored && typeof applyPermissionsToChrome === 'function') {
+      applyPermissionsToChrome();
+    }
+  }
+  return { ok: true, preRestoreBackup: result.preRestoreBackup || null, staff };
 }

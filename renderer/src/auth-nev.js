@@ -282,6 +282,62 @@ function saveWardenConfig() {
   _setJSON(_key('wardens'), WARDENS);
 }
 
+/* STAFF ACCOUNTS TRAVEL WITH THE BACKUP (bug audit BUG-012, 2026-09-28).
+   The accounts live in this profile's localStorage, not in hostix.db, so no
+   backup carried them: restoring onto a new PC brought back every record and
+   no staff logins, and handovers named account ids that pointed at nobody.
+
+   Decided 2026-09-28 (owner delegated the call): include them. Passwords are
+   only ever the salted PBKDF2 {hash, salt, v} — never plain — and the file
+   already holds every resident's name, phone and payment, so the hashes add
+   little to what a lost backup exposes. A backup without the section (older
+   files) leaves this PC's accounts alone. */
+function staffAccountsForBackup() {
+  return { v: 1, users: JSON.parse(JSON.stringify(WARDENS || {})) };
+}
+
+/** { ok } or { ok:false, reason } — reason is shown to the warden. */
+function validateStaffAccounts(sa) {
+  const plain = x => x !== null && typeof x === 'object' && !Array.isArray(x);
+  if (!plain(sa) || !plain(sa.users)) return { ok: false, reason: 'the staff accounts section is damaged' };
+  const ids = Object.keys(sa.users);
+  if (!ids.length || ids.length > 200) return { ok: false, reason: 'the staff accounts section is damaged' };
+  let admin = false;
+  for (const id of ids) {
+    const u = sa.users[id];
+    if (!/^[\w.@-]{1,64}$/.test(id) || !plain(u)) return { ok: false, reason: 'a staff account in it is damaged' };
+    const pw = u.pw;
+    const pwOk = (typeof pw === 'string' && pw.length > 0 && pw.length <= 512) ||
+      (plain(pw) && typeof pw.hash === 'string' && /^[0-9a-f]{16,256}$/i.test(pw.hash) &&
+       typeof pw.salt === 'string' && /^[0-9a-f]{8,256}$/i.test(pw.salt));
+    if (!pwOk) return { ok: false, reason: 'a staff account in it has no usable password' };
+    if (u.perms !== undefined && !plain(u.perms)) return { ok: false, reason: 'a staff account in it is damaged' };
+    if (u.active !== false && (!u.perms || u.perms.users === true)) admin = true;
+  }
+  // A restore must never leave the hostel with nobody who can manage users.
+  if (!admin) return { ok: false, reason: 'it has no account that can manage users' };
+  return { ok: true };
+}
+
+/**
+ * Put a backup's accounts on this PC. Returns { restored, signedOut, reason }.
+ * The account signed in now is signed out when the backup does not have it
+ * (or has it switched off) — its permissions came from accounts that are gone.
+ */
+function restoreStaffAccounts(sa) {
+  if (sa === undefined || sa === null) return { restored: 0, signedOut: false, reason: 'none in file' };
+  const check = validateStaffAccounts(sa);
+  if (!check.ok) return { restored: 0, signedOut: false, reason: check.reason };
+  const users = JSON.parse(JSON.stringify(sa.users));
+  _migrateUsers(users);
+  WARDENS = users;
+  saveWardenConfig();
+  const s = _getSession();
+  const me = s && WARDENS[s.role];
+  const signedOut = !!s && (!me || me.active === false);
+  return { restored: Object.keys(users).length, signedOut, reason: '' };
+}
+
 /** Find a user id by username, case-insensitively. Returns the id or null. */
 function findUserByUsername(username) {
   const want = String(username || '').trim().toLowerCase();

@@ -3462,7 +3462,7 @@ async function removeFloor(f) {
   await saveDB(); renderPage('settings');
 }
 function exportData() {
-  const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
+  const blob=new Blob([JSON.stringify(backupDocument(),null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download=`${DB.settings.hostelName.replace(/\s+/g,'_')}_backup_${today()}.json`;
   a.click();
@@ -3501,15 +3501,11 @@ async function importData(input) {
       // The in-memory DB is only replaced once the write has SUCCEEDED. The old
       // order set DB first and saved after, so a failed write left memory and
       // disk disagreeing with no way back.
-      const prev = DB;
-      DB = _initDBFields(data);
-      const okSave = await saveDB();
-      if (okSave === false) {
-        DB = prev;
-        toast('The backup could not be written — nothing was changed', 'error');
-        return;
-      }
-      await ledgerAdopt(DB.studentLedger);
+      // The one restore (bug audit BUG-009): validated, a safety copy first,
+      // one transaction, reloaded from disk. This path used to set DB and save
+      // it like an edit.
+      const r = await importBackupData(data);
+      if (!r.ok) return;
       logActivity('Backup Imported', file.name || 'backup.json', 'Settings');
       navigate('dashboard'); toast('Data imported successfully','success');
     });

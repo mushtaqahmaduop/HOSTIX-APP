@@ -231,7 +231,7 @@ async function showBackupRestoreModal() {
 }
 
 async function exportBackup(mode) {
-  const json = JSON.stringify(DB, null, 2);
+  const json = JSON.stringify(backupDocument(), null, 2);
   const now = new Date();
   const filename = 'Hostyllo_Backup_' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + '.json';
   if(mode==='json') {
