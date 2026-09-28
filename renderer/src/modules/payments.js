@@ -2586,7 +2586,12 @@ function recalcUnpaidPS() {
 }
 /* One press, one save (submitOnce, utils.js — bug audit BUG-006). */
 async function submitPaymentForStudent(...a) { return submitOnce('payment:student-form', () => _submitPaymentForStudent(...a)); }
-async function _submitPaymentForStudent() {
+async function _submitPaymentForStudent(opts) {
+  /* "Charge this paid month again" is an ANSWER passed to this call, not a
+     global left set for the next one (bug audit BUG-001, 2026-09-28). The
+     old window._forcePayPS stayed true when the question was closed with ×,
+     so the next save silently charged a paid month a second time. */
+  const _forcePaid = !!(opts && opts.force === true);
   // The licence gate, before anything is read or written (see enforcement-ui.js).
   if (typeof requireWritable === 'function' && !requireWritable('A payment')) return;
   if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
@@ -2600,13 +2605,11 @@ async function _submitPaymentForStudent() {
 
   // Case 1 — already fully Paid (hard block, offer override)
   const alreadyPaid = DB.payments.find(p => p.studentId === studentId && p.status === 'Paid' && p.month === enteredMonth);
-  if (alreadyPaid && !window._forcePayPS) {
-    window._forcePayPS = true;
+  if (alreadyPaid && !_forcePaid) {
     showConfirm(
       '⚠️ Already Paid',
       `${escHtml(t.name)} already has a <strong>Paid</strong> record for <strong>${escHtml(enteredMonth)}</strong> (${fmtPKR(alreadyPaid.amount)}).<br><br>Adding another entry will charge this student twice. Are you absolutely sure?`,
-      function(){ submitPaymentForStudent(); window._forcePayPS = false; },
-      function(){ window._forcePayPS = false; }
+      function(){ submitPaymentForStudent({ force: true }); }
     );
     return;
   }
@@ -2615,8 +2618,12 @@ async function _submitPaymentForStudent() {
   // (common scenario: payment auto-created at admission is still Pending,
   // then warden accidentally opens Add Payment again for the same month)
   const alreadyPending = DB.payments.find(p => p.studentId === studentId && p.status === 'Pending' && p.month === enteredMonth);
-  if (alreadyPending && !window._updatePendingPS) {
-    window._updatePendingPS = true;
+  /* ALWAYS ASKED. A global flag used to skip this check on the next call, and
+     it stayed set when the question was closed with × — so a later save made
+     a duplicate month record instead of asking (BUG-001). OK updates the
+     record in place below and never calls this function again, so the flag
+     never had a legitimate job. */
+  if (alreadyPending) {
     const existingPaidAmt = Number(alreadyPending.amount || 0);
     const existingUnpaid  = outstandingOf(alreadyPending);
     showConfirm(
@@ -2628,7 +2635,7 @@ async function _submitPaymentForStudent() {
       + `<strong>Update the existing record</strong> instead of creating a duplicate?<br><small style="color:var(--text3)">Click <em>OK</em> to update · <em>Cancel</em> to abort</small>`,
       async function() {
         // ── UPDATE existing pending record in-place ──────────────────
-        if (pinNeeded() && !(await pinConfirm({ what: 'posting a payment' }))) { window._updatePendingPS = false; return; }   // step 10
+        if (pinNeeded() && !(await pinConfirm({ what: 'posting a payment' }))) return;   // step 10
         const newMonthlyRent = parseFloat(document.getElementById('f-ps-amt')?.value)  || alreadyPending.monthlyRent || 0;
         /* MONEY RECEIVED NOW, NOT A RUNNING TOTAL (finance spec Rule 3, §19).
            This read the box as the month's CUMULATIVE paid figure and wrote it
@@ -2720,14 +2727,10 @@ async function _submitPaymentForStudent() {
           ? fmtPKR(received) + ' received — ' + (money(alreadyPending.unpaid) > 0
               ? fmtPKR(alreadyPending.unpaid) + ' still outstanding' : 'this month is fully paid')
           : `Payment updated for ${t.name} — no duplicate created`, 'success');
-        window._updatePendingPS = false;
-      },
-      function() { window._updatePendingPS = false; }
+      }
     );
     return;
   }
-  window._forcePayPS  = false;
-  window._updatePendingPS = false;
   // Step 10: confirmed with the PIN before anything is written (pin.js).
   if (pinNeeded() && !(await pinConfirm({ what: 'posting ' + fmtPKR(money(parseFloat(document.getElementById('f-ps-paid')?.value) || 0)) }))) return;
   const room        = DB.rooms.find(r => r.id === t.roomId);
@@ -3514,8 +3517,13 @@ async function _submitAddPayment() {
     // (happens when warden records a payment at admission and then accidentally
     // opens Add Payment again for the same student & month)
     const alreadyPending2 = DB.payments.find(p => p.studentId === studentIdRaw && p.status === 'Pending' && p.month === enteredMonth2);
-    if (alreadyPending2 && !window._updatePendingAP) {
-      window._updatePendingAP = true;
+    /* ALWAYS ASKED (bug audit BUG-001, 2026-09-28). `window._updatePendingAP`
+       used to skip this check on the next call; the question set it and only
+       its Cancel button cleared it, so closing the question with × left it set
+       and the next ordinary click on Post payment created a DUPLICATE month
+       record. OK updates the record in place and never re-enters, so there is
+       nothing for a flag to do. */
+    if (alreadyPending2) {
       // Build a friendly detail line showing what already exists
       const existingPaidAmt = Number(alreadyPending2.amount || 0);
       const existingUnpaid  = outstandingOf(alreadyPending2);
@@ -3529,7 +3537,7 @@ async function _submitAddPayment() {
         async function() {
           // ── UPDATE existing pending record in-place ──────────────────
           // Step 10: asked here, once — the posting happens on this OK.
-          if (pinNeeded() && !(await pinConfirm({ what: 'posting a payment' }))) { window._updatePendingAP = false; return; }
+          if (pinNeeded() && !(await pinConfirm({ what: 'posting a payment' }))) return;
           // What counts against the bill, refunds included (settledTotal, finance.js).
           const prevPaid       = settledTotal(alreadyPending2);
           const newMonthlyRent = _pro ? _pro.days * _pro.rate : (pfRentAmount() || alreadyPending2.monthlyRent || 0);
@@ -3618,13 +3626,10 @@ async function _submitAddPayment() {
           toast(arrearsUDesc
             ? `Payment updated for ${tName} · arrears posted to ${arrearsU.length} earlier month(s)`
             : `Payment updated for ${tName} — no duplicate created`, 'success');
-          window._updatePendingAP = false;
-        },
-        function() { window._updatePendingAP = false; }
+        }
       );
       return;
     }
-    window._updatePendingAP = false;
   }
   window._forcePayAP = false;
   // Step 10: confirmed with the PIN before anything is written (pin.js).

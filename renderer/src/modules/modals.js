@@ -54,6 +54,18 @@ function showModal(size, title, body, footer='') {
   document.getElementById('modal-container').innerHTML=html;
 }
 function closeModal() {
+  /* CLOSING A QUESTION IS ANSWERING IT "NO" (bug audit BUG-001, 2026-09-28).
+     showConfirm() ran its Cancel callback only from its Cancel button; ×,
+     Escape and a click outside closed the dialog through here and skipped it.
+     Code that set state when it asked and cleared it in Cancel was left with
+     that state set for the whole session — which is how one ordinary click on
+     Post payment came to create a duplicate month record. The Confirm and
+     Cancel buttons take their callback before closing (_confirmYes/_confirmNo),
+     so a question still open when anything else closes the dialog was
+     dismissed, and its Cancel runs. */
+  const _dismissed = (_pendingConfirmCb || _pendingConfirmCancelCb) ? _pendingConfirmCancelCb : undefined;
+  _pendingConfirmCb = null;
+  _pendingConfirmCancelCb = null;
   /* Release the camera before the markup holding it is destroyed. This used
      to walk the two <video> elements itself, which only works while they
      still exist — stopStudentCamera() also holds the stream off the DOM, so
@@ -67,9 +79,26 @@ function closeModal() {
   if (typeof refreshStudentPanel === 'function') refreshStudentPanel();
   // The account slide-over (users.js) follows an edit made in a dialog over it.
   if (typeof refreshAccountPanel === 'function') setTimeout(refreshAccountPanel, 0);
+  if (typeof _dismissed === 'function') {
+    try { _dismissed(); } catch (e) { console.error('[confirm] cancel on dismiss:', e); }
+  }
 }
 let _pendingConfirmCb = null;
 let _pendingConfirmCancelCb = null;
+/* The two buttons of showConfirm(). Each takes its callback and clears BOTH
+   before closing, so closeModal() does not also treat it as a dismissal. */
+function _confirmYes() {
+  const cb = _pendingConfirmCb;
+  _pendingConfirmCb = null; _pendingConfirmCancelCb = null;
+  closeModal();
+  if (typeof cb === 'function') cb();
+}
+function _confirmNo() {
+  const cb = _pendingConfirmCancelCb;
+  _pendingConfirmCb = null; _pendingConfirmCancelCb = null;
+  closeModal();
+  if (typeof cb === 'function') cb();
+}
 /* A <div>, NOT A <p>. Callers pass HTML — confirmDeleteStudent() passes a whole
    <div> explaining what happens to the payment records — and a <div> inside a
    <p> implicitly CLOSES the paragraph. The dialog still looked right, because
@@ -86,7 +115,7 @@ function showConfirm(title, text, onConfirm, onCancel) {
   _pendingConfirmCancelCb = onCancel || null;
   showModal('modal-sm', title,
     `<div class="confirm-text">${text}</div>`,
-    `<button class="btn btn-secondary" onclick="closeModal();if(_pendingConfirmCancelCb){_pendingConfirmCancelCb();_pendingConfirmCancelCb=null;}">Cancel</button><button class="btn btn-danger" onclick="closeModal();if(_pendingConfirmCb){_pendingConfirmCb();_pendingConfirmCb=null;}">Confirm</button>`
+    `<button class="btn btn-secondary" onclick="_confirmNo()">Cancel</button><button class="btn btn-danger" onclick="_confirmYes()">Confirm</button>`
   );
 }
 // ════════════════════════════════════════════════════════════════════════════
