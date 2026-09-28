@@ -59,7 +59,24 @@ only on this machine.
   `renderer/src/utils.js`; after any utils.js edit run `npm run sync-shared`
   in `server/` or `server/test/run.js` fails.
 
-## 4. WORK ORDER FOR THE 20:20 RESUME
+## 3b. SUPERSEDED BY THE OWNER, 2026-09-28 ~20:00 — READ THIS FIRST
+
+- **AUDIT ONLY. Change no code** until the owner approves fixes. The rest of the
+  audit continues "after the issues are fixed, before the release".
+- **Expenses are RED everywhere** — the red-vs-amber question in §4a is
+  ANSWERED; do not ask it again. Apply it only when fixing starts.
+- The active work is the **bug audit**:
+  `docs/BUG_AUDIT_2026-09-28.md` (spec `Downloads/Hostyllo_Enterprise_Bug_Audit_and_Fixation.md`).
+  As of 20:45: **8 reproduced defects** — BUG-001..005 and 007 (double posting:
+  Add Payment ×2 paths, Reverse, Expense, Owner Fund, Edit-Payment receive),
+  BUG-008 (a deleted student's id and payments pass to the next admission),
+  BUG-009 (Backup-page restore takes no safety copy). Verified sound: reversals
+  in reports, restore replacement, receipt numbers, backup round-trip on both
+  paths, checkout-collect and Add Student double press.
+- Evidence harnesses (untracked, temporary): `tests/_tmp-dbl|sid|rst|rev|bk|chk.spec.js`.
+- Owner Funds step 5 is ON HOLD (it is a code change).
+
+## 4. WORK ORDER FOR THE 20:20 RESUME (partly superseded — see §3b)
 
 ### 4a. FIRST — the colour audit (owner, 2026-09-28)
 
