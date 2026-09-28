@@ -893,6 +893,11 @@ function _expRepaintReceipt() {
    read whole on every boot; the same bill at 1400px is readable and about
    150KB. PDFs are stored as they came — re-encoding one would mean rendering
    it, and a bill is a document, not a picture of one. */
+/** Is Owner Funds on for this hostel? Then "Fund Transfer" is not offered. */
+function _expOwnerFundsOn() {
+  return typeof ofEnabled === 'function' && ofEnabled();
+}
+
 /* READING A PROOF FILE, shared (2026-09-28): the expense receipt and the Owner
    Funds proof take the same kinds of file and store them the same way, so one
    reader does it. `done(rec)` receives {name, type, size, data}; every refusal
@@ -1028,7 +1033,14 @@ function showExpenseModal(id) {
   /* An edit offers whatever the record already holds even if the hostel has
      since deleted that category, so re-saving an old expense cannot silently
      re-file it under something else. */
-  const cats = (DB.settings.expenseCategories || []).slice();
+  let cats = (DB.settings.expenseCategories || []).slice();
+  /* NO "FUND TRANSFER" WHERE OWNER FUNDS IS ON (owner, 2026-09-28). Money the
+     owner takes or gives belongs in Owner Funds; entered here as well it would
+     be counted twice — once as an expense that lowers profit, once beside it.
+     Hidden for NEW entries and for re-filing; a record already filed under it
+     keeps it (the line below puts it back), because history is not rewritten. */
+  const _noTransfer = _expOwnerFundsOn();
+  if (_noTransfer) cats = cats.filter(x => x !== FUND_TRANSFER_CAT);
   if (e && e.category && cats.indexOf(e.category) === -1) cats.unshift(e.category);
   const catOpts = cats.map(c =>
     `<option ${e && e.category === c ? 'selected' : ''}>${escHtml(c)}</option>`).join('');
@@ -1073,7 +1085,9 @@ function showExpenseModal(id) {
     <datalist id="exp-people">${people.map(n => `<option value="${escHtml(n)}"></option>`).join('')}</datalist>
     <div class="hf-g2">
       ${_expField('Expense category', 'tag',
-        `<select class="form-control" id="f-ecat">${catOpts}</select>`, { req: true, for: 'f-ecat' })}
+        `<select class="form-control" id="f-ecat">${catOpts}</select>`,
+        { req: true, for: 'f-ecat',
+          note: _noTransfer ? 'Money the owner gives or takes is recorded in <a href="#" onclick="closeModal();navigate(\'ownerfunds\');return false">Owner Funds</a>, not here.' : '' })}
       ${_expField('Amount (PKR)', 'money',
         `<input class="form-control" id="f-eamt" type="number" min="1" step="1" placeholder="Enter amount"
                 value="${e ? escHtml(String(e.amount)) : ''}">`, { req: true, for: 'f-eamt' })}
@@ -1180,6 +1194,13 @@ async function submitExpense(id) {
   const refNo  = (document.getElementById('f-eref')?.value || '').replace(/\s+/g, ' ').trim().slice(0, 40);
 
   if (!cat) { toast('Pick a category', 'error'); return; }
+  /* The form no longer offers it where Owner Funds is on; this is the same rule
+     at the write, for a form opened before the feature was switched on. A
+     record already filed under it may keep it. */
+  if (cat === FUND_TRANSFER_CAT && _expOwnerFundsOn() && !(e && e.category === FUND_TRANSFER_CAT)) {
+    toast('Money the owner gives or takes is recorded in Owner Funds, not as an expense', 'error');
+    return;
+  }
   /* > 0, not merely truthy. A minus sign in front of the figure passed the old
      check and wrote a negative expense, which does not reduce what was spent —
      it quietly adds to the month's profit. */

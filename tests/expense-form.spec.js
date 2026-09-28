@@ -324,3 +324,52 @@ test('the receipt number is optional, sits under the eye, is searchable, and exp
 
   await app.close();
 });
+
+/* NO FUND TRANSFER WHERE OWNER FUNDS IS ON (owner, 2026-09-28). Owner money
+   entered as an expense AND in Owner Funds would be counted twice. */
+test('with Owner Funds on, "Fund Transfer" is not offered for new expenses; an old one keeps it', async () => {
+  const { app, win } = await launch();
+  try {
+    const r = await win.evaluate(async () => {
+      const opts = () => [...document.querySelectorAll('#f-ecat option')].map(o => o.value);
+      localStorage.removeItem('hx_feat_on_ownerFunds');
+      showAddExpenseModal();
+      const offOffers = opts().includes(FUND_TRANSFER_CAT);
+      closeModal();
+
+      localStorage.setItem('hx_feat_on_ownerFunds', '1');
+      showAddExpenseModal();
+      const onOffers = opts().includes(FUND_TRANSFER_CAT);
+      const note = (document.querySelector('.hi-note') || {}).textContent || '';
+      // Forced through anyway (a form opened before the switch): refused.
+      document.getElementById('f-ecat').innerHTML = '<option>' + FUND_TRANSFER_CAT + '</option>';
+      document.getElementById('f-eamt').value = '5000';
+      document.getElementById('f-edate').value = thisMonth() + '-09';
+      document.getElementById('f-ewho').value = 'Owner';
+      document.getElementById('f-edesc').value = 'Owner took money';
+      const before = DB.expenses.length;
+      await submitExpense();
+      const refused = DB.expenses.length === before;
+      closeModal();
+
+      // An expense ALREADY filed as a transfer still opens and saves as one.
+      DB.expenses.push({ id: 'e_tr', category: FUND_TRANSFER_CAT, amount: 700, date: thisMonth() + '-03',
+                         description: 'Old transfer', handedTo: 'Owner', method: 'Cash' });
+      showEditExpenseModal('e_tr');
+      const editKeeps = document.getElementById('f-ecat').value === FUND_TRANSFER_CAT;
+      await submitExpense('e_tr');
+      const saved = DB.expenses.find(x => x.id === 'e_tr').category;
+      localStorage.removeItem('hx_feat_on_ownerFunds');
+      return { offOffers, onOffers, note, refused, editKeeps, saved };
+    });
+    expect(r.offOffers, 'hostels without Owner Funds keep the category').toBe(true);
+    expect(r.onOffers).toBe(false);
+    expect(r.note).toMatch(/Owner Funds/);
+    expect(r.refused).toBe(true);
+    expect(r.editKeeps).toBe(true);
+    expect(r.saved).toBe('Fund Transfer');
+  } finally {
+    await app.close();
+  }
+});
+
