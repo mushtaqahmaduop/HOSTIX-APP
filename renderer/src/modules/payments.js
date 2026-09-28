@@ -1118,7 +1118,9 @@ function payToggleAll(on) {
 // Bulk mark-paid reuses the same arithmetic as the single-row action, including
 // the partialPayments installment log, so a bulk settle is indistinguishable
 // from settling each row by hand.
-async function payBulkMarkPaid() {
+/* One press, one save (submitOnce, utils.js — bug audit BUG-006). */
+async function payBulkMarkPaid(...a) { return submitOnce('payment:bulk', () => _payBulkMarkPaid(...a)); }
+async function _payBulkMarkPaid() {
   // The licence gate, before anything is read or written (see enforcement-ui.js).
   if (typeof requireWritable === 'function' && !requireWritable('Marking payments paid')) return;
   const ids = [...paySelected];
@@ -1409,7 +1411,9 @@ function exportPaymentsExcel() {
    spreadsheet one" is what the button always meant. */
 function exportPaymentsCSV() { exportPaymentsExcel(); }
 
-async function generateMonthlyRents() {
+/* One press, one save (submitOnce, utils.js — bug audit BUG-006). */
+async function generateMonthlyRents(...a) { return submitOnce('payment:generate', () => _generateMonthlyRents(...a)); }
+async function _generateMonthlyRents() {
   // The licence gate, before anything is read or written (see enforcement-ui.js).
   if (typeof requireWritable === 'function' && !requireWritable('Generating rent records')) return;
   // FIX: use thisMonthLabel() — locale-safe, matches how all payment records store month strings.
@@ -1468,7 +1472,9 @@ async function generateMonthlyRents() {
    applyPayment() reads calculateOutstanding(), which prices a record with no
    recorded balance from the charge authority. That is the entire point of there
    being one answer. */
-async function markPaymentPaid(id) {
+/* One press, one save (submitOnce, utils.js — bug audit BUG-006). */
+async function markPaymentPaid(...a) { return submitOnce('payment:mark:' + a[0], () => _markPaymentPaid(...a)); }
+async function _markPaymentPaid(id) {
   // The licence gate, before anything is read or written (see enforcement-ui.js).
   if (typeof requireWritable === 'function' && !requireWritable('Marking a payment paid')) return;
   const p = DB.payments.find(x => x.id === id); if (!p) return;
@@ -1498,7 +1504,9 @@ async function markPaymentPaid(id) {
 // Same collection as markPaymentPaid(), including the D-1 balance fix — it
 // differs only in refreshing the student modal instead of the page, which
 // renderPage() would fight with.
-async function markPaymentPaidFromStudentView(payId, studentId) {
+/* One press, one save (submitOnce, utils.js — bug audit BUG-006). */
+async function markPaymentPaidFromStudentView(...a) { return submitOnce('payment:mark:' + a[0], () => _markPaymentPaidFromStudentView(...a)); }
+async function _markPaymentPaidFromStudentView(payId, studentId) {
   const p = DB.payments.find(x => x.id === payId); if (!p) return;
   const due = calculateOutstanding(p);
   if (due <= 0) {
@@ -2576,7 +2584,9 @@ function recalcUnpaidPS() {
   const unpaidEl = document.getElementById('f-ps-unpaid');
   if(unpaidEl) { unpaidEl.value = unpaid; unpaidEl.style.color = unpaid > 0 ? 'var(--red)' : 'var(--green)'; }
 }
-async function submitPaymentForStudent() {
+/* One press, one save (submitOnce, utils.js — bug audit BUG-006). */
+async function submitPaymentForStudent(...a) { return submitOnce('payment:student-form', () => _submitPaymentForStudent(...a)); }
+async function _submitPaymentForStudent() {
   // The licence gate, before anything is read or written (see enforcement-ui.js).
   if (typeof requireWritable === 'function' && !requireWritable('A payment')) return;
   if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
@@ -3415,7 +3425,9 @@ function pfCount() {
   const ta = document.getElementById('f-pnotes-main'), el = document.getElementById('f-pnotes-count');
   if (ta && el) el.textContent = ta.value.length + '/250';
 }
-async function submitAddPayment() {
+/* One press, one save (submitOnce, utils.js — bug audit BUG-006). */
+async function submitAddPayment(...a) { return submitOnce('payment:add', () => _submitAddPayment(...a)); }
+async function _submitAddPayment() {
   // The licence gate, before anything is read or written (see enforcement-ui.js).
   if (typeof requireWritable === 'function' && !requireWritable('A payment')) return;
   /* ONE VISIT, ONE POSTING (audit G5). This form can write the selected month
@@ -4243,7 +4255,9 @@ function pefReceiveFull() {
   recalcUnpaid();
 }
 
-async function submitEditPayment(id) {
+/* One press, one save (submitOnce, utils.js — bug audit BUG-006). */
+async function submitEditPayment(...a) { return submitOnce('payment:edit:' + a[0], () => _submitEditPayment(...a)); }
+async function _submitEditPayment(id) {
   // The licence gate, before anything is read or written (see enforcement-ui.js).
   if (typeof requireWritable === 'function' && !requireWritable('A change to a payment')) return;
   if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
@@ -4579,7 +4593,9 @@ function pfReverseKind() {
   return on && on.value === 'refund' ? 'refund' : 'correction';
 }
 
-async function submitReversePayment(id) {
+/* One press, one save (submitOnce, utils.js — bug audit BUG-006). */
+async function submitReversePayment(...a) { return submitOnce('payment:reverse:' + a[0], () => _submitReversePayment(...a)); }
+async function _submitReversePayment(id) {
   // The licence gate, before anything is read or written (see enforcement-ui.js).
   if (typeof requireWritable === 'function' && !requireWritable('Reversing a collection')) return;
   if (typeof requirePerm === 'function' && !requirePerm('payments')) return;

@@ -3449,7 +3449,9 @@ function sfDropPhoto(ev) {
   loadAddStudentPhoto(input);
 }
 
-async function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=false) {
+/* One press, one save (submitOnce, utils.js — bug audit BUG-006). */
+async function submitAddStudent(...a) { return submitOnce('student:add', () => _submitAddStudent(...a)); }
+async function _submitAddStudent(presetRoomId='', addAnother=false, saveOnly=false) {
   // The licence gate, before anything is read or written (see enforcement-ui.js).
   if (typeof requireWritable === 'function' && !requireWritable('Admitting a student')) return;
   // Gated at the form AND at the submit: the page can be reached without the button.

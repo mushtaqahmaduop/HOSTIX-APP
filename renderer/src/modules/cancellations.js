@@ -1158,7 +1158,9 @@ async function confirmCancellation(cancId) {
      <button class="btn btn-primary" onclick="submitCancellationSettlement('${c.id}')">Confirm</button>`);
 }
 
-async function submitCancellationSettlement(cancId) {
+/* One press, one save (submitOnce, utils.js — bug audit BUG-006). */
+async function submitCancellationSettlement(...a) { return submitOnce('checkout:' + a[0], () => _submitCancellationSettlement(...a)); }
+async function _submitCancellationSettlement(cancId) {
   // The licence gate, before anything is read or written (see enforcement-ui.js).
   if (typeof requireWritable === 'function' && !requireWritable('A checkout settlement')) return;
   const c = DB.cancellations.find(x => x.id === cancId);

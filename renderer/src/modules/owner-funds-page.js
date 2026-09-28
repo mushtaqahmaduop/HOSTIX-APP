@@ -320,7 +320,9 @@ function showOwnerFundModal(dir) {
      </div>`);
 }
 
-async function submitOwnerFund() {
+/* One press, one save (submitOnce, utils.js — bug audit BUG-006). */
+async function submitOwnerFund(...a) { return submitOnce('ownerfund:add', () => _submitOwnerFund(...a)); }
+async function _submitOwnerFund() {
   if (typeof requireWritable === 'function' && !requireWritable('An owner fund movement')) return;
   const on = document.querySelector('.of-dirc.is-on');
   const input = {
@@ -406,7 +408,9 @@ function showReverseOwnerFund(id) {
   setTimeout(() => document.getElementById('of-rev-reason')?.focus(), 30);
 }
 
-async function submitReverseOwnerFund(id) {
+/* One press, one save (submitOnce, utils.js — bug audit BUG-006). */
+async function submitReverseOwnerFund(...a) { return submitOnce('ownerfund:reverse:' + a[0], () => _submitReverseOwnerFund(...a)); }
+async function _submitReverseOwnerFund(id) {
   if (typeof requireWritable === 'function' && !requireWritable('Reversing an owner fund movement')) return;
   const reason = (document.getElementById('of-rev-reason')?.value || '').trim();
   if (!reason) { toast('Give a reason for the reversal', 'error'); document.getElementById('of-rev-reason')?.focus(); return; }

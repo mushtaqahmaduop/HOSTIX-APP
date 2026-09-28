@@ -82,6 +82,45 @@ function openExternalLink(url) {
 // ── ID & date helpers ─────────────────────────────────────────────────────────
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
+/* ── ONE SAVE AT A TIME (bug audit BUG-006, 2026-09-28) ──────────────────────
+   Every money-writing button called its submit function directly, and none of
+   them refused to run while the previous press was still saving. A double-click
+   — or a second press while `await saveDB()` was in flight — posted the money
+   twice: two expenses, two owner-fund movements, a reversal taken back twice,
+   a "Receive pending" recorded twice (docs/BUG_AUDIT_2026-09-28.md).
+
+   submitOnce(key, fn) runs `fn` unless a call with the same key is still
+   running, in which case it DOES NOT run it again: it hands back the running
+   call's promise, so a caller that awaits still waits for the one real save.
+   The key names the operation, and the record where it matters
+   ('payment:reverse:' + id), so reversing two different payments at once is
+   not blocked. The button that was pressed is disabled and marked busy until
+   the save settles — success or failure — so the second click has nothing to
+   land on. A submit that stops at validation settles at once and frees the key,
+   so correcting the form and pressing again works as before. */
+const _submitRunning = new Map();
+function submitOnce(key, fn) {
+  if (_submitRunning.has(key)) return _submitRunning.get(key);
+  /** @type {HTMLButtonElement|null} */
+  let btn = null;
+  try {
+    const a = /** @type {HTMLButtonElement|null} */ (typeof document !== 'undefined' && document ? document.activeElement : null);
+    if (a && a.tagName === 'BUTTON' && !a.disabled) {
+      btn = a; btn.disabled = true; btn.setAttribute('aria-busy', 'true');
+    }
+  } catch (_) { btn = null; }
+  const release = () => {
+    _submitRunning.delete(key);
+    if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); }
+  };
+  let run;
+  try { run = Promise.resolve(fn()); }
+  catch (e) { run = Promise.reject(e); }
+  const tracked = run.then(v => { release(); return v; }, e => { release(); throw e; });
+  _submitRunning.set(key, tracked);
+  return tracked;
+}
+
 function nextStudentId() {
   var maxNum = 0;
   DB.students.forEach(function (s) {

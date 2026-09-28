@@ -1174,7 +1174,9 @@ function showEditExpenseModal(id)  { showExpenseModal(id); }
  * add form gained a payment method and the edit form quietly dropped it.
  * @param {string} [id]
  */
-async function submitExpense(id) {
+/* One press, one save (submitOnce, utils.js — bug audit BUG-006). */
+async function submitExpense(...a) { return submitOnce('expense:' + (a[0] || 'new'), () => _submitExpense(...a)); }
+async function _submitExpense(id) {
   // The licence gate, before anything is read or written (see enforcement-ui.js).
   if (typeof requireWritable === 'function' && !requireWritable('An expense')) return;
   // Same split as the form above — gated again here, because the submit can be
