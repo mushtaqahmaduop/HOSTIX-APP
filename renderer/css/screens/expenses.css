@@ -315,9 +315,27 @@
 .exp-table thead th:nth-child(5), .exp-table tbody td:nth-child(5) { width: 128px; }
 .exp-table thead th:nth-child(6), .exp-table tbody td:nth-child(6) { width: 118px; }
 .exp-table thead th:nth-child(7), .exp-table tbody td:nth-child(7) { width: 86px; }
-.exp-table thead th:nth-child(8), .exp-table tbody td:nth-child(8) { width: 64px; }
+.exp-table thead th:nth-child(8), .exp-table tbody td:nth-child(8) { width: 100px; }
 /* The eye centres in its own column now that the column is the button's size. */
 .exp-table th.exp-col-rcpt, .exp-table tbody td.exp-rcptc { text-align: center; }
+/* The receipt number, under the eye (2026-09-28). The column went 64 -> 100px,
+   and its cell's side padding 16 -> 6, so a typical bill number ("INV-20931",
+   "RCPT-000482") shows whole; a longer one ellipsises and the hover card has
+   all of it. Tabular figures, so numbers down the column
+   line up digit for digit. */
+.exp-table tbody td.exp-rcptc { padding-left: 6px; padding-right: 6px; }
+.exp-table tbody td.exp-rcptc .exp-rcpt-btn { display: inline-flex; }
+.exp-refno {
+    display: block; max-width: 100%; margin: 2px auto 0;
+    font-size: var(--text-xs); line-height: var(--leading-tight);
+    font-variant-numeric: tabular-nums; letter-spacing: 0;
+    color: var(--text-secondary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.exp-rcptc .exp-refno:first-child { margin-top: 0; }
+/* The receipt number's row in the form sits between the description counter
+   and the attach panel, with the panel's own spacing. */
+.exf-refrow { margin: var(--space-3) 0; }
 
 /* TWO LINES, THEN AN ELLIPSIS. -webkit-line-clamp is the only thing that gives
    an ellipsis at the end of the SECOND line; `overflow:hidden` alone would cut

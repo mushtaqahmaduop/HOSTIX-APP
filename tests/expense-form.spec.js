@@ -258,3 +258,69 @@ test('the export carries both columns, and leaves them blank rather than guessin
 
   await app.close();
 });
+
+/* ── the receipt number (owner, 2026-09-28) ───────────────────────────────────
+   "some hostels have a receipt for the expenses or utilities so there should be
+   a reference number ... in the receipt column below the eye icon ... and a
+   field for it in the form, optional". */
+test('the receipt number is optional, sits under the eye, is searchable, and exports', async () => {
+  const { app, win } = await launch();
+
+  const r = await win.evaluate(async () => {
+    const fill = (desc, ref) => {
+      showAddExpenseModal();
+      document.getElementById('f-ecat').value = 'Electricity';
+      document.getElementById('f-eamt').value = '4500';
+      document.getElementById('f-edate').value = thisMonth() + '-09';
+      document.getElementById('f-ewho').value = 'PESCO';
+      document.getElementById('f-edesc').value = desc;
+      document.getElementById('f-eref').value = ref;
+    };
+    fill('With a bill number', '  INV-20931 \n');
+    await submitExpense();
+    const withRef = DB.expenses.find(e => e.description === 'With a bill number');
+    fill('No bill number', '');
+    await submitExpense();
+    const noRef = DB.expenses.find(e => e.description === 'No bill number');
+
+    // A file AND a number: the eye first, the number under it.
+    withRef.receipt = { name: 'bill.jpg', type: 'image/jpeg', size: 10, data: 'data:image/jpeg;base64,AA==' };
+    renderPage('expenses');
+    await new Promise(res => setTimeout(res, 300));
+    const cellOf = desc => [...document.querySelectorAll('.exp-table tbody tr')]
+      .find(tr => tr.textContent.includes(desc)).querySelector('td.exp-rcptc');
+    const both = cellOf('With a bill number');
+    const kids = [...both.children].map(c => c.className.split(' ').find(k => /^exp-(rcpt-btn|refno)$/.test(k)));
+
+    // Search finds a record by its bill number alone.
+    expFilter.search = 'inv-209'; renderPage('expenses');
+    await new Promise(res => setTimeout(res, 300));
+    const found = [...document.querySelectorAll('.exp-table tbody tr')].map(tr => tr.textContent);
+    expFilter.search = ''; renderPage('expenses');
+    await new Promise(res => setTimeout(res, 300));
+
+    const cols = expExportColumns({});
+    const refCol = cols.find(c => c.label === 'Receipt No.');
+    return {
+      stored: withRef.refNo,
+      noKey: Object.prototype.hasOwnProperty.call(noRef, 'refNo'),
+      kids, dash: cellOf('No bill number').textContent.trim(),
+      found: found.length === 1 && found[0].includes('With a bill number'),
+      exported: refCol && refCol.value(withRef), exportedBlank: refCol && refCol.value(noRef),
+      printed: refCol && refCol.pdf !== false,
+      oldLabel: cols.some(c => c.label === 'Reference'),
+    };
+  });
+
+  expect(r.stored, 'whitespace from a pasted number is trimmed').toBe('INV-20931');
+  expect(r.noKey, 'a blank number must not be stored as an empty string').toBe(false);
+  expect(r.kids).toEqual(['exp-rcpt-btn', 'exp-refno']);
+  expect(r.dash).toBe('—');
+  expect(r.found).toBe(true);
+  expect(r.exported).toBe('INV-20931');
+  expect(r.exportedBlank).toBe('');
+  expect(r.printed, 'the number is what matches a printed line to the paper bill').toBe(true);
+  expect(r.oldLabel, '"Reference" would now mean two different things').toBe(false);
+
+  await app.close();
+});

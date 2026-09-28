@@ -148,7 +148,8 @@ function expensesScoped() {
       if (!String(e.description || '').toLowerCase().includes(q) &&
           !String(e.category || '').toLowerCase().includes(q) &&
           !String(e.handedTo || '').toLowerCase().includes(q) &&
-          !String(e.method || '').toLowerCase().includes(q)) return false;
+          !String(e.method || '').toLowerCase().includes(q) &&
+          !String(e.refNo || '').toLowerCase().includes(q)) return false;
     }
     return true;
   });
@@ -237,9 +238,16 @@ function expExportColumns(opts) {
     { label: 'Amount', type: 'money', width: 16, total: 'sum',
       value: e => Number(e.amount || 0),
       get:   e => '<b>' + fmtPKR(e.amount) + '</b>' },
+    /* THE BILL'S OWN NUMBER (owner, 2026-09-28). Printed as well as exported:
+       matching a register line to the paper bill is what the number is for. */
+    { label: 'Receipt No.', type: 'text', width: 14,
+      value: e => e._transfer ? '' : (e.refNo || '') },
     { label: 'Receipt', type: 'text', width: 10, pdf: false,
       value: e => e.receipt ? 'Attached' : '' },
-    { label: 'Reference', type: 'id', width: 16, pdf: false, value: e => String(e.id || '') },
+    /* The app's internal id. It was headed "Reference", which next to a
+       receipt's reference number would have been two different things under
+       one word. */
+    { label: 'Record ID', type: 'id', width: 16, pdf: false, value: e => String(e.id || '') },
   ];
 }
 
@@ -599,14 +607,21 @@ function renderExpenses() {
              file", which is a thing a warden needs to see at a glance while
              doing a month's reconciliation. As a button that simply was not
              there, absence said nothing. */}
-      <td class="exp-rcptc">${e._transfer || !e.receipt
+      ${''/* THE RECEIPT NUMBER RIDES UNDER THE EYE (owner, 2026-09-28: "the
+             reference number would fit in the receipt column below the eye
+             icon"). Both are the same fact — this record's bill — so they share
+             a column rather than costing the register another one. A number
+             with no file shows alone; a dash only when there is neither. */}
+      <td class="exp-rcptc">${e._transfer || (!e.receipt && !e.refNo)
         ? '<span class="exp-dash">—</span>'
-        : `<button type="button" class="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon exp-rcpt-btn"
+        : `${e.receipt ? `<button type="button" class="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon exp-rcpt-btn"
              onclick="event.stopPropagation();expOpenReceipt('${e.id}')"
              title="View receipt"
              aria-label="View the receipt attached to this ${escHtml(e.category || 'expense')} record">
              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
-           </button>`}</td>
+           </button>` : ''}${e.refNo
+             ? `<span class="exp-refno" data-tip="${escHtml(e.refNo)}" data-tip-label="Receipt no.">${escHtml(e.refNo)}</span>`
+             : ''}`}</td>
       <td>
         <div class="exp-acts">
           <button class="ui-btn ui-btn--secondary ui-btn--sm ui-btn--icon" onclick="${e._transfer?`showEditTransferModal('${e.id}')`:`showEditExpenseModal('${e.id}')`}" title="Edit" aria-label="Edit this ${escHtml(e.category || 'expense')} record"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
@@ -1084,6 +1099,17 @@ function showExpenseModal(id) {
         { req: reqDesc, full: true, top: true, for: 'f-edesc' })}
     </div>
     <div class="hi-note exf-count" id="f-edesc-count">${desc.length}/250</div>
+    ${''/* THE RECEIPT NUMBER sits with the receipt file, directly above it:
+           both answer "which bill is this?", and a hostel that files paper
+           bills has the number even when it has no photo. Optional. */}
+    <div class="hf-g2 exf-refrow">
+      ${_expField('Receipt / reference no.', 'receipt',
+        `<input class="form-control" id="f-eref" type="text" maxlength="40" autocomplete="off"
+                placeholder="e.g. INV-20931 or the bill's reference number"
+                value="${e ? escHtml(e.refNo || '') : ''}">`,
+        { full: true, for: 'f-eref',
+          note: 'Optional. The number printed on the bill or receipt, so this entry can be matched to the paper.' })}
+    </div>
     <div id="f-ercpt">${_expReceiptPanel(_expReceipt)}</div>
     <input type="file" id="f-ercpt-file" accept="image/png,image/jpeg,image/webp,application/pdf" hidden
            onchange="expReceiptLoad(this)">`,
@@ -1141,6 +1167,9 @@ async function submitExpense(id) {
   const method = document.getElementById('f-emethod').value;
   const who    = document.getElementById('f-ewho').value.trim();
   const desc   = document.getElementById('f-edesc').value.trim();
+  // Collapsed whitespace, capped at the field's own 40: a pasted number often
+  // carries a trailing newline or a double space from the bill's layout.
+  const refNo  = (document.getElementById('f-eref')?.value || '').replace(/\s+/g, ' ').trim().slice(0, 40);
 
   if (!cat) { toast('Pick a category', 'error'); return; }
   /* > 0, not merely truthy. A minus sign in front of the figure passed the old
@@ -1167,6 +1196,7 @@ async function submitExpense(id) {
      recorded" filter and the export's dash disagree about the same row. */
   if (method) rec.method = method; else delete rec.method;
   if (who)    rec.handedTo = who;  else delete rec.handedTo;
+  if (refNo)  rec.refNo = refNo;   else delete rec.refNo;
   if (_expReceipt) rec.receipt = _expReceipt; else delete rec.receipt;
 
   /* WHO ENTERED IT (owner, 2026-09-23: "change paid to into Vendor and added
