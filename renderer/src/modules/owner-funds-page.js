@@ -169,6 +169,8 @@ function renderOwnerFunds() {
       </select></span>
       ${tbMonth(allKeys, { value: key, all: true, aria: 'Period', onchange: "ofSet('period',this.value)" })}
       <label class="of-tog"><input type="checkbox" ${ofFilter.showReversed ? 'checked' : ''} onchange="ofSet('showReversed',this.checked)"> Show reversed</label>
+      ${tbExport({ id: 'of-export', cls: 'ui-btn ui-btn--secondary ui-btn--sm',
+                   excel: 'exportOwnerFundsExcel()', pdf: 'exportOwnerFundsPDF()' })}
       <span class="of-tools__n">${rows.length} ${rows.length === 1 ? 'movement' : 'movements'}</span>
     </div>
     ${rows.length ? `
@@ -218,6 +220,59 @@ function ofExportColumns() {
                ? '<span class="pos">+' + fmtPKR(r.amount) + '</span>'
                : '<span class="neg">-' + fmtPKR(r.amount) + '</span>' },
   ];
+}
+
+/* ══ THIS PAGE'S EXPORT (step 5) ══════════════════════════════════════════
+   The list as filtered on screen, with the page's own statement as the
+   summary. Reversed movements are left out even when "Show reversed" is on:
+   they do not count, and a signed Amount column that included them would sum
+   to a figure the statement does not state. The filter line says so. */
+function _ofExportDef() {
+  const key  = ofFilter.period;
+  const st   = ofStatement(key);
+  const rows = ofFiltered().filter(ofIsLive);
+  const net  = rows.reduce((s, r) => s + (r.direction === OF_IN ? 1 : -1) * Number(r.amount || 0), 0);
+  const summary = [];
+  if (st.result != null) {
+    summary.push({ label: 'Revenue',  value: EXPORT.fmt.money(st.revenue), tone: 'pos' });
+    summary.push({ label: 'Expenses', value: EXPORT.fmt.money(st.expenses), tone: 'neg' });
+    summary.push({ label: 'Profit / loss', value: EXPORT.fmt.money(st.result), tone: st.result >= 0 ? 'pos' : 'neg' });
+  }
+  summary.push({ label: 'Owner gave', value: EXPORT.fmt.money(st.ownerIn), tone: 'pos' });
+  summary.push({ label: 'Owner took', value: EXPORT.fmt.money(st.ownerOut), tone: st.ownerOut > 0 ? 'neg' : '' });
+  summary.push(st.afterOwner != null
+    ? { label: 'After owner', value: EXPORT.fmt.money(st.afterOwner), tone: st.afterOwner >= 0 ? 'pos' : 'neg' }
+    : { label: 'Net owner funding', value: EXPORT.fmt.money(st.ownerNet), tone: st.ownerNet >= 0 ? 'pos' : 'neg' });
+  const period = _ofPeriodLabel(key);
+  return {
+    module: 'Owner Funds',
+    title:  'Owner Funds',
+    scope:  period,
+    sheet:  'Owner Funds',
+    filters: [
+      ['Period',    period],
+      ['Direction', ofFilter.dir === OF_IN ? 'Owner gave' : ofFilter.dir === OF_OUT ? 'Owner took' : null],
+      ['Search',    ofFilter.search || null],
+      ['Reversed',  ofFilter.showReversed ? 'Not included — reversed movements do not count' : null],
+    ],
+    summary,
+    columns: ofExportColumns(),
+    rows,
+    grand: { label: 'Net owner funding', value: fmtPKR(net) },
+    empty: 'No owner fund movements match the selected filters.',
+  };
+}
+function exportOwnerFundsExcel() {
+  if (!ofAllowed()) return;
+  const def = _ofExportDef();
+  if (!def.rows.length) { toast('No owner fund movements to export', 'error'); return; }
+  EXPORT.excel(def);
+}
+function exportOwnerFundsPDF() {
+  if (!ofAllowed()) return;
+  const def = _ofExportDef();
+  if (!def.rows.length) { toast('No owner fund movements to export', 'error'); return; }
+  EXPORT.pdf(def);
 }
 
 /* ══ RECORD A MOVEMENT ════════════════════════════════════════════════════ */

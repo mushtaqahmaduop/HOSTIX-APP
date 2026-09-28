@@ -795,6 +795,16 @@ function renderDashboard() {
         <div class="dash-pill-stack"><span class="ui-chip ui-chip--neutral">${netProfit>=0?'Profit':'Loss'}</span></div>
       </div>
       <div class="dash-kpi__value">${moneyValue(netProfit,{size:"display",compact:true})}</div>
+      ${''/* AFTER OWNER (Owner Funds step 5, owner 2026-09-28: "keep it; add
+             owner line below"). The headline stays revenue − expenses; this
+             line adds what the owner gave and takes what the owner took this
+             month, from ofStatement() fed with the card's OWN two figures, so
+             there is no second answer to the fund. Only where the feature is on
+             and the account may see owner money. */}
+      ${(typeof ofAllowed === 'function' && ofAllowed()) ? (() => {
+          const st = ofStatement(mo, { revenue: collected, expenses: moExp });
+          return `<div class="dash-kpi__sub dash-kpi__sub--owner" title="Available Fund, plus what the owner gave and less what the owner took this month. Owner money is never revenue or an expense.">After owner <span class="pkr">Rs.</span>${fmtCompact(st.afterOwner)}</div>`;
+        })() : ''}
       ${''/* THE "PKR 170T - PKR 77.89T" SUB-LINE IS GONE (owner, 7 Sep). It
              restated the subtraction using the two cards either side of it —
              Total Revenue two tiles left, Expenses one tile right — so at a

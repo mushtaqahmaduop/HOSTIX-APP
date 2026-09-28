@@ -276,3 +276,61 @@ test('reports: an Owner funds tab, owner lines under Available Fund, and both ex
   }
 });
 
+/* ── step 5: the dashboard line and the page's own export ────────────────── */
+test('dashboard: an After owner line under Available Fund, and the page exports — only where it is on', async () => {
+  const app = await launch();
+  const win = await app.firstWindow();
+  const errors = [];
+  win.on('pageerror', e => errors.push(e.message));
+  try {
+    await login(win);
+    const r = await win.evaluate(async () => {
+      const wait = ms => new Promise(res => setTimeout(res, ms));
+      const mo = thisMonth();
+      DB.ownerFunds = []; DB.payments = [];
+      DB.expenses = [{ id: 'e1', date: mo + '-10', category: 'Electricity', amount: 30000, description: 'Bill', method: 'Cash' }];
+      localStorage.setItem('hx_feat_on_ownerFunds', '1');
+      ofAdd({ direction: 'in', amount: 100000, date: mo + '-05', category: 'emergency', method: 'Bank Transfer' });
+      const took = ofAdd({ direction: 'out', amount: 40000, date: mo + '-06', category: 'pocket' });
+      ofAdd({ direction: 'out', amount: 5000, date: mo + '-07', category: 'pocket' });
+      await saveDB();
+      const last = DB.ownerFunds.find(x => Number(x.amount) === 5000);
+      ofReverse(last.id, { reason: 'typed twice' }); await saveDB();
+      navigate('dashboard'); await wait(900);
+      const sub = el => (el ? el.textContent.replace(/\s+/g, ' ').trim() : null);
+      const on = { line: sub(document.querySelector('.dash-kpi__sub--owner')), want: 'After owner Rs.' + fmtCompact(30000),
+                   fund: calcAvailableFund(mo) };
+      navigate('ownerfunds'); await wait(700);
+      on.button = !!document.getElementById('of-export');
+      ofFilter.period = mo; ofFilter.showReversed = true;
+      const def = _ofExportDef();
+      on.rows = def.rows.length; on.grand = def.grand.value;
+      on.summary = def.summary.map(x => x.label);
+      on.reversedNote = def.filters.some(f => f[0] === 'Reversed' && f[1]);
+      on.pdf = /Owner took/.test(exDocument(def).html);
+      on.book = !!exWorkbook(def);
+      ofFilter.showReversed = false;
+      // Switched off: no line, and the export refuses.
+      localStorage.removeItem('hx_feat_on_ownerFunds');
+      navigate('dashboard'); await wait(900);
+      const off = { line: !!document.querySelector('.dash-kpi__sub--owner') };
+      let called = 0; const ox = EXPORT.excel; EXPORT.excel = () => { called++; };
+      exportOwnerFundsExcel(); EXPORT.excel = ox;
+      off.exported = called;
+      return { on, off, tookId: !!took };
+    });
+    expect(r.on.line).toBe(r.on.want);                 // -30,000 + 100,000 - 40,000
+    expect(r.on.fund, 'Available Fund must not move').toBe(-30000);
+    expect(r.on.button).toBe(true);
+    expect(r.on.rows, 'the reversed movement is not exported').toBe(2);
+    expect(r.on.grand).toBe('Rs. 60,000');
+    expect(r.on.summary).toEqual(['Revenue', 'Expenses', 'Profit / loss', 'Owner gave', 'Owner took', 'After owner']);
+    expect(r.on.reversedNote).toBe(true);
+    expect(r.on.pdf).toBe(true);
+    expect(r.on.book).toBe(true);
+    expect(r.off).toEqual({ line: false, exported: 0 });
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});
