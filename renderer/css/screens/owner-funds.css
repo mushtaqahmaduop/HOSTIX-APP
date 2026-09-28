@@ -1,0 +1,120 @@
+/* ─── Owner Funds page (step 3, 2026-09-28) ──────────────────────────────────
+   Built from the component layer — ui-card, ui-stat, ui-table, ui-chip — like
+   every rebuilt register. What is here is only what those do not have: the
+   statement, the by-reason bars, the direction cards in the form, and the
+   reversed row. Colour is state: money in is the success role, money out the
+   warning role, a reversal the danger role; nothing else is tinted.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.of-top {
+  display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: var(--space-3); margin-bottom: var(--space-3);
+}
+@media (max-width: 1100px) { .of-top { grid-template-columns: 1fr; } }
+
+/* ── the statement ────────────────────────────────────────────────────────── */
+.of-st, .of-reasons { padding: var(--space-4); }
+.of-st__h { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-3); }
+.of-st__t { font-size: var(--text-base); font-weight: var(--weight-strong); color: var(--text-primary); }
+.of-st__s { font-size: var(--text-sm); color: var(--text-tertiary); }
+.of-st__row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3);
+  padding: 6px 0; font-size: var(--text-sm); color: var(--text-secondary);
+  border-bottom: 1px dashed var(--border);
+}
+.of-st__row b { font-variant-numeric: tabular-nums; color: var(--text-primary); font-weight: var(--weight-medium); }
+.of-st__row.is-in b  { color: var(--success-fg); }
+.of-st__row.is-out b { color: var(--warning-fg); }
+.of-st__row.is-total { border-bottom: none; padding-top: 8px; color: var(--text-primary); font-weight: var(--weight-strong); }
+.of-st__row.is-total b { font-size: var(--text-lg); font-weight: var(--weight-strong); }
+.of-st__row.is-total.is-pos b { color: var(--success-fg); }
+.of-st__row.is-total.is-neg b { color: var(--danger-fg); }
+.of-st__gap { height: var(--space-2); border-bottom: 1px solid var(--border); margin-bottom: var(--space-2); }
+.of-st__note {
+  display: flex; align-items: center; gap: var(--space-2);
+  font-size: var(--text-sm); color: var(--text-tertiary);
+  padding: var(--space-2) 0 var(--space-3); border-bottom: 1px solid var(--border); margin-bottom: var(--space-2);
+}
+.of-st__foot { margin-top: var(--space-3); font-size: var(--text-xs); color: var(--text-tertiary); line-height: var(--leading-normal); }
+
+/* ── by reason ────────────────────────────────────────────────────────────── */
+.of-br + .of-br { margin-top: var(--space-4); }
+.of-br__h {
+  display: flex; justify-content: space-between; margin-bottom: var(--space-2);
+  font-size: var(--text-sm); font-weight: var(--weight-strong); color: var(--text-primary);
+}
+.of-br__h span { font-variant-numeric: tabular-nums; }
+.of-br__row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); padding: 4px 0; }
+.of-br__n { font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.of-br__bar { height: 6px; border-radius: var(--radius-full); background: var(--dash-track, var(--neutral-bg)); overflow: hidden; }
+.of-br__bar i { display: block; height: 100%; border-radius: var(--radius-full); }
+.of-br__bar i.is-in  { background: var(--success-fg); }
+.of-br__bar i.is-out { background: var(--warning-solid, var(--warning-fg)); }
+.of-br__v { font-size: var(--text-sm); font-variant-numeric: tabular-nums; color: var(--text-primary); text-align: right; }
+.of-br__none { font-size: var(--text-sm); color: var(--text-tertiary); padding: 4px 0; }
+
+/* ── toolbar and register ─────────────────────────────────────────────────── */
+.of-tools { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; padding: var(--space-3) var(--space-4); }
+.of-tools .ui-search { flex: 1 1 200px; min-width: 170px; max-width: 320px; }
+.of-tools .ui-selectw { min-width: 140px; }
+.of-tog { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--text-secondary); cursor: pointer; white-space: nowrap; }
+.of-tools__n { margin-left: auto; font-size: var(--text-sm); color: var(--text-tertiary); white-space: nowrap; }
+
+.of-table tbody tr { cursor: pointer; }
+.of-table .of-c-date { white-space: nowrap; color: var(--text-secondary); }
+.of-table .of-c-amt  { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: var(--weight-strong); }
+.of-table td.of-c-amt.is-in  { color: var(--success-fg); }
+.of-table td.of-c-amt.is-out { color: var(--warning-fg); }
+.of-table .of-c-reason, .of-table .of-c-method { white-space: nowrap; }
+.of-table .of-c-ref  { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.of-table .of-c-note { max-width: 150px; }
+.of-table .of-c-note span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.of-table .of-c-act  { text-align: right; white-space: nowrap; }
+.of-dir { white-space: nowrap; }
+.of-rev { margin-left: 6px; }
+.of-dash { color: var(--text-tertiary); }
+
+/* A reversed movement stays on the list but reads as not counting. */
+.of-table tr.is-reversed td { color: var(--text-tertiary); }
+.of-table tr.is-reversed td.of-c-amt { text-decoration: line-through; color: var(--text-tertiary); }
+.of-table tr.is-reversed .of-dir { opacity: .55; }
+
+/* ── the form ─────────────────────────────────────────────────────────────── */
+.of-dirs { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); margin-bottom: var(--space-4); }
+@media (max-width: 640px) { .of-dirs { grid-template-columns: 1fr; } }
+.of-dirc {
+  display: flex; align-items: flex-start; gap: var(--space-3); text-align: left;
+  padding: var(--space-3); border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--surface-1, var(--card));
+  font: inherit; color: inherit; cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.of-dirc:hover { border-color: var(--accent); }
+.of-dirc.is-on { border-color: var(--accent); background: var(--accent-bg); }
+.of-dirc__i {
+  width: var(--h-sm); height: var(--h-sm); flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm); background: var(--neutral-bg); color: var(--text-secondary);
+}
+.of-dirc.is-on .of-dirc__i { background: var(--accent); color: var(--on-accent, #fff); }
+.of-dirc__b { display: block; min-width: 0; }
+.of-dirc__t, .of-dirc__s { display: block; }
+.of-dirc__t { font-size: var(--text-sm); font-weight: var(--weight-strong); color: var(--text-primary); }
+.of-dirc__s { font-size: var(--text-xs); color: var(--text-tertiary); margin-top: 2px; line-height: var(--leading-normal); }
+#of-proof { margin-top: var(--space-3); }
+
+/* ── detail and reverse ───────────────────────────────────────────────────── */
+.of-dt__amt { font-size: var(--text-2xl, 28px); font-weight: var(--weight-strong); font-variant-numeric: tabular-nums; margin-bottom: var(--space-3); }
+.of-dt__amt.is-in  { color: var(--success-fg); }
+.of-dt__amt.is-out { color: var(--warning-fg); }
+.of-dt__amt.is-reversed { text-decoration: line-through; color: var(--text-tertiary); }
+.of-dt__rev {
+  display: flex; gap: var(--space-2); align-items: flex-start; margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm);
+  background: var(--danger-bg); color: var(--danger-fg); font-size: var(--text-sm);
+}
+.of-dt__r { display: flex; justify-content: space-between; gap: var(--space-3); padding: 7px 0; border-bottom: 1px solid var(--border); font-size: var(--text-sm); }
+.of-dt__r span { color: var(--text-secondary); }
+.of-dt__r b { color: var(--text-primary); font-weight: var(--weight-medium); text-align: right; overflow-wrap: anywhere; }
+.of-revm__who { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--space-2); }
+.of-revm__who span { font-size: var(--text-sm); color: var(--text-secondary); }
+.of-revm__note { font-size: var(--text-sm); color: var(--text-tertiary); margin-bottom: var(--space-3); line-height: var(--leading-normal); }

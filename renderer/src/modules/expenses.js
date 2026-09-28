@@ -893,10 +893,12 @@ function _expRepaintReceipt() {
    read whole on every boot; the same bill at 1400px is readable and about
    150KB. PDFs are stored as they came — re-encoding one would mean rendering
    it, and a bill is a document, not a picture of one. */
-function expReceiptLoad(input) {
-  const file = input && input.files && input.files[0];
+/* READING A PROOF FILE, shared (2026-09-28): the expense receipt and the Owner
+   Funds proof take the same kinds of file and store them the same way, so one
+   reader does it. `done(rec)` receives {name, type, size, data}; every refusal
+   is toasted here and `done` is simply not called. */
+function expReadReceiptFile(file, done) {
   if (!file) return;
-  input.value = '';
   const type = String(file.type || '');
   const isImg = type.indexOf('image/') === 0;
   const isPdf = type === 'application/pdf';
@@ -908,8 +910,7 @@ function expReceiptLoad(input) {
       toast('That file is too large to store — try a photo instead of a scan', 'error');
       return;
     }
-    _expReceipt = { name: file.name || 'receipt', type: isImg ? 'image/jpeg' : type, size, data: dataUrl };
-    _expRepaintReceipt();
+    done({ name: file.name || 'receipt', type: isImg ? 'image/jpeg' : type, size, data: dataUrl });
   };
 
   const reader = new FileReader();
@@ -936,6 +937,13 @@ function expReceiptLoad(input) {
     img.src = raw;
   };
   reader.readAsDataURL(file);
+}
+
+function expReceiptLoad(input) {
+  const file = input && input.files && input.files[0];
+  if (!file) return;
+  input.value = '';
+  expReadReceiptFile(file, rec => { _expReceipt = rec; _expRepaintReceipt(); });
 }
 
 function expReceiptRemove() { _expReceipt = null; _expRepaintReceipt(); }

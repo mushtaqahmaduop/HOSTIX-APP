@@ -728,6 +728,9 @@ function applyPermissionsToChrome() {
   // nav.js renderPage(). Keep the two in step or the rail offers a page that
   // then refuses to render.
   showNav('archive',  canDo('reports'));
+  // Owner Funds: hidden unless the permission is held AND the hostel has the
+  // opt-in feature (the feature pass below also hides it when switched off).
+  showNav('ownerfunds', canDo('ownerFunds') && (typeof hasFeature !== 'function' || hasFeature('ownerFunds')));
   // Settings is no longer in the account menu — showNav('settings') above is
   // the only gate it needs now that the rail item is the single entry point.
 

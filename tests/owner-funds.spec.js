@@ -101,3 +101,99 @@ test('the Users page offers the permission only where the feature is on', async 
     await app.close();
   }
 });
+
+/* ── step 3: the page ─────────────────────────────────────────────────────── */
+test('the page: hidden when switched off; with it on, record, reverse and the statement', async () => {
+  const app = await launch();
+  const win = await app.firstWindow();
+  const errors = [];
+  win.on('pageerror', e => errors.push(e.message));
+  try {
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1366, 768));
+    await login(win);
+    await win.evaluate(async () => {
+      DB.ownerFunds = []; DB.expenses = []; DB.payments = [];
+      if (DB.settings.security) DB.settings.security.pinOn = false;
+      localStorage.removeItem('hx_feat_on_ownerFunds');
+      await saveDB();
+      applyPermissionsToChrome();
+    });
+    // Switched off: no rail item, and a direct visit is refused.
+    const off = await win.evaluate(async () => {
+      const nav = document.querySelector('.nav-item[data-page="ownerfunds"]');
+      navigate('ownerfunds');
+      await new Promise(r => setTimeout(r, 600));
+      return { navShown: !!(nav && nav.offsetParent), page: document.getElementById('content').textContent };
+    });
+    expect(off.navShown).toBe(false);
+    expect(off.page).toMatch(/Not included/);
+
+    // Switched on.
+    await win.evaluate(() => { localStorage.setItem('hx_feat_on_ownerFunds', '1'); applyPermissionsToChrome(); navigate('ownerfunds'); });
+    await win.waitForTimeout(600);
+    expect(await win.evaluate(() => !!document.querySelector('.nav-item[data-page="ownerfunds"]').offsetParent)).toBe(true);
+    expect(await win.evaluate(() => document.getElementById('hdr-action-text').textContent)).toBe('Record Movement');
+
+    // Record through the form: owner gave 100,000 for an emergency, by bank.
+    const mo = await win.evaluate(() => thisMonth());
+    await win.evaluate(() => headerAction());
+    await win.waitForSelector('#of-amt');
+    await win.fill('#of-amt', '100000');
+    await win.selectOption('#of-cat', 'emergency');
+    await win.selectOption('#of-method', 'Bank Transfer');
+    await win.fill('#of-ref', 'TXN-9912');
+    await win.evaluate(() => submitOwnerFund());
+    await win.waitForTimeout(500);
+
+    // …and owner took 40,000 pocket money: pick the direction card first.
+    await win.evaluate(() => showOwnerFundModal());
+    await win.waitForSelector('#of-amt');
+    await win.click('.of-dirc[data-dir="out"]');
+    expect(await win.evaluate(() => [...document.querySelectorAll('#of-cat option')].map(o => o.value)))
+      .toEqual(['pocket', 'investment_out', 'own_bill', 'other_out']);
+    await win.fill('#of-amt', '40000');
+    await win.evaluate(() => submitOwnerFund());
+    await win.waitForTimeout(500);
+
+    // A bad amount is refused and nothing is written.
+    await win.evaluate(() => showOwnerFundModal());
+    await win.waitForSelector('#of-amt');
+    await win.fill('#of-amt', '0');
+    await win.evaluate(() => submitOwnerFund());
+    expect(await win.evaluate(() => DB.ownerFunds.length)).toBe(2);
+    await win.evaluate(() => closeModal());
+
+    const page = await win.evaluate(() => ({
+      rows: document.querySelectorAll('.of-table tbody tr').length,
+      tiles: [...document.querySelectorAll('.ui-stat__v')].map(e => e.textContent.trim()),
+      after: [...document.querySelectorAll('.of-st__row')].map(e => e.textContent.replace(/\s+/g, ' ').trim()),
+    }));
+    expect(page.rows).toBe(2);
+    expect(page.tiles.slice(0, 3)).toEqual(['Rs. 100,000', 'Rs. 40,000', '+Rs. 60,000']);
+    expect(page.after.join(' | ')).toContain('Hostel money after owner+Rs. 60,000');
+
+    // Reverse the pocket money through the window.
+    const outId = await win.evaluate(() => DB.ownerFunds.find(r => r.direction === 'out').id);
+    await win.evaluate(id => showReverseOwnerFund(id), outId);
+    await win.waitForSelector('#of-rev-reason');
+    await win.fill('#of-rev-reason', 'Entered by mistake');
+    await win.evaluate(id => submitReverseOwnerFund(id), outId);
+    await win.waitForTimeout(500);
+    const afterRev = await win.evaluate(() => ({
+      stored: DB.ownerFunds.length,
+      took: document.querySelectorAll('.ui-stat__v')[1].textContent.trim(),
+      rows: document.querySelectorAll('.of-table tbody tr').length,
+    }));
+    expect(afterRev).toEqual({ stored: 2, took: 'Rs. 0', rows: 1 });
+    await win.evaluate(() => ofSet('showReversed', true));
+    await win.waitForTimeout(500);
+    expect(await win.evaluate(() => document.querySelectorAll('.of-table tr.is-reversed').length)).toBe(1);
+
+    // The dashboard's money did not move.
+    expect(await win.evaluate(mo => calcAvailableFund(mo), mo)).toBe(0);
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});
+

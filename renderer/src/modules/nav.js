@@ -110,6 +110,8 @@ const pageConfig = {
   // The owner's reference (pay page.png, 2026-09-15): the page's own name and one line on what it is for.
   payments:      { title:'Payments', sub:'Manage student payments, receive pending amounts and track collection status.', action:'Add Payment' },
   expenses:      { title:'Expenses', sub:'', action:'Add Expense' },
+  // Owner Funds (2026-09-28): money between the owner and the hostel.
+  ownerfunds:    { title:'Owner Funds', sub:'Money the owner gives to or takes from the hostel.', action:'Record Movement' },
   // The owner's reference (cancellations2.png, 2026-09-15).
   cancellations: { title:'Cancellations', sub:'Manage student cancellations, track settlements and restore records.', action:'Add Cancellation' },
   /* Former Students was a MODAL behind the account menu until 2026-09-10.
@@ -356,7 +358,9 @@ function applyHeaderChrome(page) {
      without passing through here. */
   // 'add', not 'edit', since the two split on 2026-09-10 — this button only
   // ever opens an Add form.
-  const mayAdd = typeof canDo !== 'function' || canDo('add');
+  // Owner Funds records with its own permission, not 'add' (owner-funds.js).
+  const mayAdd = page === 'ownerfunds' ? (typeof ofAllowed === 'function' && ofAllowed())
+               : (typeof canDo !== 'function' || canDo('add'));
   const btn = document.getElementById('hdr-action');
   if (btn) {
     if (cfg.action && mayAdd) {
@@ -375,6 +379,7 @@ function headerAction() {
   else if(currentPage==='students') showAddStudentModal();
   else if(currentPage==='payments') openAddPayment();
   else if(currentPage==='expenses') showAddExpenseModal();
+  else if(currentPage==='ownerfunds') showOwnerFundModal();
   else if(currentPage==='cancellations') showAddCancellationModal();
   else if(currentPage==='issues') showAddIssueModal();
 }
@@ -532,7 +537,7 @@ function renderPage(p, resetScroll=false) {
         return;
       }
 
-      const _needs = { settings:'settings', reports:'reports', archive:'reports' }[basePage];
+      const _needs = { settings:'settings', reports:'reports', archive:'reports', ownerfunds:'ownerFunds' }[basePage];
       if (_needs && typeof canDo === 'function' && !canDo(_needs)) {
         el.innerHTML = '<div style="padding:48px 24px;text-align:center;color:var(--text3)">'
           + '<div style="font-size:15px;font-weight:700;color:var(--text2);margin-bottom:6px">Not permitted</div>'
@@ -545,6 +550,7 @@ function renderPage(p, resetScroll=false) {
       else if(basePage==='students') el.innerHTML = renderStudents();
       else if(basePage==='payments') el.innerHTML = renderPayments();
       else if(basePage==='expenses') el.innerHTML = renderExpenses();
+      else if(basePage==='ownerfunds') el.innerHTML = renderOwnerFunds();
       else if(basePage==='cancellations') el.innerHTML = renderCancellations(cancFilter);
       else if(basePage==='former') el.innerHTML = renderFormerStudents();
       else if(basePage==='reports') el.innerHTML = renderReports();

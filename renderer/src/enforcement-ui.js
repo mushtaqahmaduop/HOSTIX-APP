@@ -304,7 +304,14 @@ function _apply(decision) {
   _enforcement = decision || null;
   try { _renderBanner(_enforcement); } catch (e) { console.error('[licence] banner:', e); }
   try { _applyReadOnly(isReadOnly()); } catch (e) { console.error('[licence] readonly:', e); }
-  try { applyFeaturesToChrome(); } catch (e) { console.error('[licence] features:', e); }
+  /* The whole chrome pass when someone is signed in, not only the feature
+     pass: features only ever HIDE, and an opt-in feature switched ON while the
+     app is open (Owner Funds) has a rail item to REVEAL — which only the
+     permission pass does, and it re-applies features last. */
+  try {
+    if (typeof CUR_USER !== 'undefined' && CUR_USER && typeof applyPermissionsToChrome === 'function') applyPermissionsToChrome();
+    else applyFeaturesToChrome();
+  } catch (e) { console.error('[licence] features:', e); }
   // A page the customer is standing on may have just been switched off. Send
   // them somewhere that still exists rather than leaving them on a screen that
   // no longer renders.
