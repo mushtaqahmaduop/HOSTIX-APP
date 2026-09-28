@@ -6,6 +6,54 @@ only on this machine.
 
 ---
 
+## 0. STATUS AT 22:30 — READ THIS FIRST (supersedes §3b, §4 and §6)
+
+Everything in the §4 work order is DONE. 29 local commits on
+`claude/funny-dijkstra-c68mqn` on top of `9200c98`, **none pushed**.
+
+- **Bug audit finished** — `docs/BUG_AUDIT_2026-09-28.md`. Fixed and verified:
+  - fixes 1–5: double press (BUG-001..007), student numbers (BUG-008), one
+    safe restore (BUG-009/010), expenses red;
+  - fix 6 (BUG-013): a restored pre-merge backup lost its maintenance and
+    complaints on restart;
+  - fix 7 (BUG-014): restoring an older backup reissued receipt numbers already
+    printed.
+
+  Checked and sound: camera error messages, interrupted and hostile restore.
+  Open: BUG-011 (P3) and BUG-012 (P1, needs a decision).
+- **Colour audit delivered as a report** — `docs/COLOR_AUDIT_2026-09-28.md`.
+  Nothing in the app changed. 7 measured contrast root causes (worst: the
+  active page's sidebar badge at 1.6:1, Reports room-type chips at 1.75:1),
+  the `dh-*` competing palette, status colours that differ by page, and a
+  4-phase plan.
+- **Owner Funds step 5 done** (`a55d4f7`): an "After owner" line under
+  Available Fund, and Excel/PDF export on the page. **Step 6 done**: 5/5 in
+  `tests/owner-funds.spec.js`; both themes at 1366×728 and at the client's
+  size (auto-fit lays it out 1365 wide) — no wrap, no overflow; switched off,
+  the nav item, the line and the export all go.
+- Reusable harnesses saved to `C:\Users\PCS\HOSTIX-backups\tools\`:
+  - `contrast-sweep.spec.js`;
+  - `screen-check-2sizes.spec.js`;
+  - `colour-inventory.js`.
+
+  All the `_tmp-*` specs are deleted, except the owner's `_tmp-cam`.
+
+**Open questions for the owner (replaces §6):**
+1. BUG-012: should staff accounts (PBKDF2 hashes) go into backups, or does a
+   restore on a new PC always mean re-creating staff?
+2. BUG-011 (display numbers reused after deleting the latest, P3): fix now or
+   later?
+3. Colour S3: should Pending be amber and Arrears/overdue red?
+4. Colour S4: should an Open issue be neutral, with red for High priority only?
+5. Colour plan: Phase 0 only (the measured failures), or Phase 1 as well (one
+   palette, a visible change to chip reds and greens)?
+6. Move the 29 commits to a `6.1` branch before any push?
+7. Reverse window: make Correction/Refund a required choice?
+8. When to redeploy the control plane (needed for the `ownerFunds` switch) and
+   build the installer?
+
+---
+
 ## 1. Where the code is
 
 - Repo `C:\HOSTIX-APP`, branch **`claude/funny-dijkstra-c68mqn`** — this is the

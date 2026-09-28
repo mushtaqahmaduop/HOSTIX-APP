@@ -29,7 +29,7 @@ expenses, was already applied (bug-audit fix 5) and is treated here as settled.
 
 ## 1. Method, and what it does not cover
 
-- **Runtime sweep.** A temporary Playwright harness (untracked; see §7) logs
+- **Runtime sweep.** A Playwright harness (kept at `HOSTIX-backups	ools\contrast-sweep.spec.js`; copy it into `tests/` to run) logs
   in and seeds six students, four rooms, paid/partial/pending payments,
   expenses, three issues and two owner-fund movements. It then visits every
   page at 1366×728 in light and in dark and waits 2.2s for animations to
@@ -125,8 +125,8 @@ page (light shown; dark follows the same classes).
 ## 5. Inventory of raw colours
 
 Counted outside `css/tokens.css`, skipping comment lines and vendored/minified
-libraries. The script is `%CLAUDE_JOB_DIR%/tmp/inv.js`; it should become
-`tools/` if kept.
+libraries. The script is kept at
+`HOSTIX-backups	ools\colour-inventory.js`.
 
 - **1,110 literals, 443 distinct values** — 609 in CSS, 501 in JS.
 - By file: `style.css` 396 · `students.js` 179 · `dashboard.js` 88 ·
@@ -198,6 +198,5 @@ libraries. The script is `%CLAUDE_JOB_DIR%/tmp/inv.js`; it should become
 4. **C2** needs a new role pair (`--danger-solid` / `--text-on-danger`).
    Accept adding it to `tokens.css`?
 
-The harness specs used here (`tests/_tmp-contrast.spec.js`,
-`tests/_tmp-badge.spec.js`) are untracked and temporary. Phase 0 turns the first
-into a real spec.
+The sweep harness is kept at `HOSTIX-backups	ools\contrast-sweep.spec.js`;
+Phase 0 turns it into a real spec.
