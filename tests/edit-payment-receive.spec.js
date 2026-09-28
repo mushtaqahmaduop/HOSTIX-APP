@@ -263,6 +263,7 @@ test('edit payment: a part-paid month shows ITS pending, after an Add Payment fo
     const reversed = await win.evaluate(async () => {
       document.getElementById('f-prev-amt').value = '2000';
       document.getElementById('f-prev-reason').value = 'Mess charged twice';
+      document.querySelector('input[name="prev-kind"][value="correction"]').checked = true;
       await submitReversePayment('PP1');
       await new Promise(r => setTimeout(r, 400));
       const p = DB.payments.find(x => x.id === 'PP1');

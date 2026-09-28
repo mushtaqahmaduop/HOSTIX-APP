@@ -136,6 +136,7 @@ test('collected money is locked, and only its collector or an admin may change i
     expect(await win.evaluate(() => document.getElementById('f-prev-amt').max)).toBe('3000');
     const rev = await win.evaluate(async pid => {
       const p = () => DB.payments.find(x => x.id === pid);
+      document.querySelector('input[name="prev-kind"][value="correction"]').checked = true;
       document.getElementById('f-prev-amt').value = '4000';
       document.getElementById('f-prev-reason').value = 'Too much';
       await submitReversePayment(pid);

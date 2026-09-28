@@ -56,6 +56,7 @@ test('a double press posts the money once, on every money form', async () => {
       showReversePaymentModal(p.id); await wait(300);
       document.getElementById('f-prev-amt').value = '1000';
       document.getElementById('f-prev-reason').value = 'double press';
+      document.querySelector('input[name="prev-kind"][value="correction"]').checked = true;
       await Promise.all([submitReversePayment(p.id), submitReversePayment(p.id)]);
       R.reverse = { collected: p.amount, reversals: (p.reversals || []).length };
 

@@ -153,6 +153,7 @@ test('a mis-keyed collection can be reversed from the row, and the record says s
 
   await win.fill('#f-prev-amt', '4500');
   await win.fill('#f-prev-reason', 'Counted twice at the desk');
+  await win.check('input[name="prev-kind"][value="correction"]');   // required since 2026-09-28
   await win.evaluate(() => { document.getElementById('f-prev-date').value = '2026-09-02'; });
   await win.click('.modal-footer .btn-danger, .modal .btn-danger');
   await win.waitForTimeout(700);
@@ -225,15 +226,27 @@ test('money handed back is refunded, not un-collected, and settles the month', a
   });
   await win.waitForSelector('#f-prev-amt', { timeout: 8000 });
 
-  /* CORRECTION IS PRESELECTED. A warden who does not read the box gets exactly
-     yesterday's behaviour — the safe default, because wrongly re-opening a
-     settled month shows up on the next screen and wrongly cancelling a real
-     debt does not. */
+  /* NOTHING IS PRESELECTED (2026-09-28). The two choices leave opposite
+     balances, so the warden must say which — and pressing Reverse without one
+     changes nothing. */
   const preset = await win.evaluate(() =>
     [...document.querySelectorAll('input[name="prev-kind"]')].map(i => i.value + (i.checked ? '*' : '')));
-  expect(preset).toEqual(['correction*', 'refund']);
+  expect(preset).toEqual(['correction', 'refund']);
 
   await win.fill('#f-prev-amt', '1000');
+  const unpicked = await win.evaluate(async () => {
+    pfReverseHint();
+    const hint = document.getElementById('f-prev-hint').textContent;
+    document.getElementById('f-prev-reason').value = 'no kind picked';
+    const before = JSON.stringify(DB.payments[0].reversals || []);
+    await submitReversePayment(DB.payments[0].id);
+    const same = JSON.stringify(DB.payments[0].reversals || []) === before;
+    document.getElementById('f-prev-reason').value = '';
+    return { hint, same };
+  });
+  expect(unpicked.hint).toMatch(/Pick Correction or Refund/);
+  expect(unpicked.same, 'a reversal was written with no kind picked').toBe(true);
+  await win.evaluate(() => { document.querySelector('input[name="prev-kind"][value="correction"]').checked = true; });
 
   /* The consequence is stated in words BEFORE the warden commits, and it has to
      change with the choice — that line is the only place the difference is

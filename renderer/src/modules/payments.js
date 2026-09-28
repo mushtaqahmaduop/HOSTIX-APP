@@ -4515,15 +4515,17 @@ function showReversePaymentModal(id) {
               back — the reason is free text — and the two leave opposite
               balances behind. So it is asked, once, here.
 
-              CORRECTION IS PRESELECTED because it is what this button has
-              always done: a warden who does not read this box gets exactly the
-              behaviour they had yesterday, and the consequence line below
-              spells out either choice in words before they commit. */}
+              NOTHING IS PRESELECTED (owner delegated the call, 2026-09-28).
+              Correction used to be, so a warden who did not read the box got
+              yesterday's behaviour — and a refund filed as a correction put the
+              money back on the month as owed, silently. The two leave opposite
+              balances; the warden now says which, and the line below states
+              the consequence of the one picked. */}
        <div class="field">
-         <label>What is this?</label>
+         <label>What is this? <span class="req">*</span></label>
          <div class="pay-rev__kind">
            <label class="pay-rev__opt">
-             <input type="radio" name="prev-kind" value="correction" checked onchange="pfReverseHint()">
+             <input type="radio" name="prev-kind" value="correction" onchange="pfReverseHint()">
              <span class="pay-rev__opt__b">
                <span class="pay-rev__opt__t">Correction</span>
                <span class="pay-rev__opt__s">The money never came in — a mis-key, a double entry, the wrong month.</span>
@@ -4584,6 +4586,7 @@ function pfReverseHint() {
      warden discovering the difference on the register afterwards. */
   const due  = money(parseFloat(inp.dataset.due) || 0);
   const kind = pfReverseKind();
+  if (!kind) { el.textContent = 'Pick Correction or Refund — it decides what is still owed.'; el.className = 'pay-rev__hint is-red'; return; }
   const owed = kind === 'refund' ? due : due + amt;
   el.textContent = 'Leaves ' + fmtPKR(collected - amt) + ' collected, and '
     + (owed > 0 ? fmtPKR(owed) + ' still owed on this month.'
@@ -4591,11 +4594,11 @@ function pfReverseHint() {
   el.className = 'pay-rev__hint';
 }
 
-/** Which of the two events the form is set to. Correction unless told otherwise
-    — the same default reversePayment() applies, stated in one place. */
+/** Which of the two events the form is set to, or null until one is picked —
+    the choice is required (2026-09-28). */
 function pfReverseKind() {
   const on = document.querySelector('input[name="prev-kind"]:checked');
-  return on && on.value === 'refund' ? 'refund' : 'correction';
+  return on ? (on.value === 'refund' ? 'refund' : 'correction') : null;
 }
 
 /* One press, one save (submitOnce, utils.js — bug audit BUG-006). */
@@ -4618,10 +4621,10 @@ async function _submitReversePayment(id) {
     toast('You can reverse up to ' + fmtPKR(rv.max) + ' on this record' + (rv.admin ? '' : ' — what you collected and still hold'), 'error');
     return;
   }
+  const kind = pfReverseKind();
+  if (!kind) { toast('Pick Correction or Refund — the two leave different amounts owed', 'error'); return; }
   if (!reason) { toast('Give a reason — it goes on the student ledger', 'error'); return; }
   if (pinNeeded() && !(await pinConfirm({ what: 'reversing ' + fmtPKR(amount) }))) return;   // step 10
-
-  const kind = pfReverseKind();
 
   // Money handed back is one act as well (audit G5).
   const r = reversePayment(p, { amount, reason, date, kind, receiptId: newReceiptId() });
