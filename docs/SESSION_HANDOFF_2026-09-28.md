@@ -6,6 +6,30 @@ only on this machine.
 
 ---
 
+## 00. LATER THE SAME NIGHT — the owner said "decide best possible answer for me"
+
+All eight questions decided. Everything local is done; the outward steps wait for a "go".
+
+| # | Question | Decision | State |
+|---|---|---|---|
+| 1 | Staff accounts in backups (BUG-012) | Include them, hashed only | Done `d1c5623`, fix 9 |
+| 2 | BUG-011 | Fix | Done `779566b`, fix 8 |
+| 3 | S3 Pending vs Arrears | Red = late money: Pending/Partial amber, Arrears/Overdue red | Done `f58313a` |
+| 4 | S4 Open issue | Neutral; red = High priority | Done `f58313a` |
+| 5 | Colour scope | Phase 0 now; Phase 1 after a visual review | Phase 0 done `f58313a` |
+| 6 | Move commits to a 6.1 branch | Yes | **Blocked** — resetting the PR branch was refused by the permission check; the owner runs the 3 commands in the final report |
+| 7 | Reverse: required choice | Yes, nothing preselected | Done `6edc296` |
+| 8 | Control-plane redeploy + installer | Redeploy first (the flag defaults off, so no hostel changes), then build 6.1.0 | **Waiting for the owner's go** — outward-facing |
+
+Also found: a fourth restore path (`importData()` in settings.js, unreachable) still did the old unsafe restore; it now uses `importBackupData()`.
+
+Why Owner Funds did not show in the owner's dev app: it is opt-in, and the control plane has not been redeployed, so
+nothing turns it on. Dev switch (DevTools): `localStorage.setItem('hx_feat_on_ownerFunds','1'); location.reload()`,
+then sign in as the Super Admin. Restart `npm start` first if it was running before these commits.
+
+Known flake: `tests/services.test.js` "a fleet-wide nudge waits the delay the server hands out" fails
+now and then while the machine is loaded (1 of 3 runs during the full e2e); untouched code.
+
 ## 0. STATUS AT 22:30 — READ THIS FIRST (supersedes §3b, §4 and §6)
 
 Everything in the §4 work order is DONE. 29 local commits on
