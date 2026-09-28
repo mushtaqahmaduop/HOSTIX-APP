@@ -137,7 +137,25 @@ ok('defaults are generous — existing customers lose nothing', () => {
   // the control plane a question.
   const d = features.defaults();
   assert.ok(Object.keys(d).length > 0);
-  for (const [k, v] of Object.entries(d)) assert.strictEqual(v, true, k + ' defaults to false');
+  // Opt-in flags are the declared exception: built for one client, switched on
+  // per hostel, never something an existing customer had (ownerFunds, 2026-09-28).
+  for (const [k, v] of Object.entries(d)) {
+    if (features.CATALOGUE[k].optIn) continue;
+    assert.strictEqual(v, true, k + ' defaults to false');
+  }
+});
+
+ok('an opt-in flag is OFF by default and says so', () => {
+  const optIn = Object.keys(features.CATALOGUE).filter(k => features.CATALOGUE[k].optIn);
+  assert.ok(optIn.includes('ownerFunds'));
+  for (const k of optIn) {
+    assert.strictEqual(features.CATALOGUE[k].default, false, k + ' is opt-in but defaults on');
+    assert.strictEqual(features.defaults()[k], false);
+  }
+  // Switched on for one hostel, it is an override; everyone else stays off.
+  assert.deepStrictEqual(features.diffFromDefaults({ ownerFunds: true }), { ownerFunds: true });
+  assert.strictEqual(features.resolve({}).ownerFunds, false);
+  assert.strictEqual(features.resolve({ ownerFunds: true }).ownerFunds, true);
 });
 
 ok('resolve() always returns EVERY flag, never a partial map', () => {

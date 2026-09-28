@@ -71,6 +71,19 @@ const CATALOGUE = Object.freeze({
     description: 'Expense register, categories, and owner fund transfers.',
     default: true,
     since: '4.0.0'
+  },
+  /* THE FIRST OPT-IN FLAG (2026-09-28). Built for one client and switched on
+     per hostel on request, so it is the one deliberate exception to "defaults
+     are generous": `default: false`, `optIn: true`. It takes nothing from
+     anyone — no hostel ever had it. The desktop app treats an opt-in flag as
+     OFF unless an entitlement says true (enforcement-ui.js, OPT_IN_FEATURES),
+     the opposite of every other flag, which fails open. */
+  ownerFunds: {
+    label: 'Owner Funds',
+    description: 'Money the owner gives to or takes from the hostel, shown beside the profit and loss of each month.',
+    default: false,
+    optIn: true,
+    since: '6.1.0'
   }
 });
 

@@ -60,7 +60,7 @@ let usersRailFilter = { page: 1, pageSize: 25 };
    of presets where no preset uses it would be a split nobody could reach
    without ticking boxes by hand. */
 const USER_ROLES = [
-  { key: 'Super Admin',  perms: ['add','edit','delete','payments','reports','backup','settings','users'] },
+  { key: 'Super Admin',  perms: ['add','edit','delete','payments','reports','backup','settings','users','ownerFunds'] },
   { key: 'Admin',        perms: ['add','edit','delete','payments','reports','backup','settings'] },
   { key: 'Manager',      perms: ['add','edit','payments','reports','settings'] },
   { key: 'Accountant',   perms: ['payments','reports'] },
@@ -1861,6 +1861,9 @@ const PERM_GROUPS = {
               lines: ['Hostel details and logo', 'Room types, methods, categories, floors', 'Rent and mess charges'] },
   users:    { ico: 'shield',   hue: 'dh-violet', title: 'User management',
               lines: ['Add and edit users', 'Set permissions', 'Reset passwords and deactivate accounts'] },
+  ownerFunds: { ico: 'wallet', hue: 'dh-amber', title: 'Owner funds',
+              lines: ['See money the owner gave to or took from the hostel',
+                      'Record and reverse those movements'] },
 };
 
 /* ── THE PHOTO CONTROL ───────────────────────────────────────────────────────
@@ -1909,10 +1912,14 @@ function showUserEditor(id) {
   const on = k => (isNew ? defaultOn[k] === true : perms[k] === true);
   const role = isNew ? '' : usrRole(Object.assign({ id }, u));
 
+  /* A permission for a feature this hostel does not have is not offered — but
+     its box is still rendered, hidden, so the role presets (Super Admin
+     includes it) and the save read it exactly as they read every other one. */
+  const _permShown = k => k !== 'ownerFunds' || (typeof hasFeature !== 'function' || hasFeature('ownerFunds'));
   const groups = PERMS.map(p => {
     const g = PERM_GROUPS[p.key] || { ico: 'info', hue: 'dh-slate', title: p.label, lines: [] };
     return `
-      <div class="usf-grp ${g.hue}">
+      <div class="usf-grp ${g.hue}"${_permShown(p.key) ? '' : ' style="display:none"'}>
         <label class="usf-grp__h">
           <span class="usf-grp__i">${icon(g.ico, 'sm')}</span>
           <input type="checkbox" id="up-${p.key}" ${on(p.key) ? 'checked' : ''} onchange="usfTouch()">
@@ -2032,7 +2039,7 @@ function showUserEditor(id) {
         ${''/* The count is read off PERMS rather than written out, so the
                eighth permission cannot arrive with the sentence still saying
                seven — which is exactly what happened on 2026-09-10. */}
-        <div class="cfg-note">${icon('info', 'xs')}<span>This app enforces <b>these ${PERMS.length}</b>. The lines inside each card are what its tick grants — they are not separate switches, so nothing here can be half-granted. Permissions can be changed later from this page.</span></div>
+        <div class="cfg-note">${icon('info', 'xs')}<span>This app enforces <b>these ${PERMS.filter(p => _permShown(p.key)).length}</b>. The lines inside each card are what its tick grants — they are not separate switches, so nothing here can be half-granted. Permissions can be changed later from this page.</span></div>
       </div>
     </div>`,
     `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>

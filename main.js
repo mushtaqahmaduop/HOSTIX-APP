@@ -61,7 +61,10 @@ const BACKUP_TABLES = ['rooms','students','payments','expenses','cancellations',
    them empty; the renderer rebuilds the waiting rows from the ledger. */
 /* `concessions` (warden ledger step 8) rides with them for the same reason: a
    backup from before step 8 has no such table and must still restore — empty. */
-const HANDOVER_TABLES = ['warden_collections', 'handovers', 'handover_items', 'concessions'];
+/* `owner_funds` (Owner Funds, 2026-09-28) rides with them too: every backup
+   written before it existed has no such table and must still restore. */
+const HANDOVER_TABLES = ['warden_collections', 'handovers', 'handover_items', 'concessions',
+  'owner_funds'];
 
 /* DATABASE HEALTH  —  spec §17.
  *
@@ -350,6 +353,7 @@ function initDatabase() {
     CREATE TABLE IF NOT EXISTS handovers          (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS handover_items     (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS concessions        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS owner_funds        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
   `);
   // Created here rather than in the block above because it carries triggers
   // that refuse UPDATE and DELETE — see migrations/002-student-ledger.js.

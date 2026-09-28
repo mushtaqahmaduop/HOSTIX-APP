@@ -3797,7 +3797,7 @@ function _showExcelImportResult(rows, errors) {
 // ════════════════════════════════════════════════════════════════════════════
 async function resetAllData() {
   if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
-  showConfirm('⚠️ Reset ALL Data?','This will permanently delete all students, payments, expenses, maintenance, complaints, fines, notices, inspections, bill splits, cash handovers and concessions. Rooms will be reset. This CANNOT be undone.',async ()=>{
+  showConfirm('⚠️ Reset ALL Data?','This will permanently delete all students, payments, expenses, maintenance, complaints, fines, notices, inspections, bill splits, cash handovers, concessions and owner fund movements. Rooms will be reset. This CANNOT be undone.',async ()=>{
     // BUG FIX: Previously only cleared students/payments/expenses, leaving
     // maintenance, complaints, fines, notices, activityLog, inspections,
     // billSplits, cancellations, checkinlog as orphaned ghost records.
@@ -3825,6 +3825,7 @@ async function resetAllData() {
     DB.handovers=[];
     DB.handoverItems=[];
     DB.concessions=[];
+    DB.ownerFunds=[];
     DB.rooms=[];   // empty, like a new install — no demo rooms (owner, 2026-09-24)
     await saveDB();
     // Reset is a restore to empty — the one other action allowed to replace

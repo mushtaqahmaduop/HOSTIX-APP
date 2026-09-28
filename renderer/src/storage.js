@@ -42,7 +42,9 @@ const _TABLE_MAP = {
   handovers:         'handovers',
   handoverItems:     'handover_items',
   // Warden ledger step 8 — standing concessions: requested, decided, ended.
-  concessions:       'concessions'
+  concessions:       'concessions',
+  // Owner Funds (2026-09-28) — money between the owner and the hostel.
+  ownerFunds:        'owner_funds'
 };
 
 // ── Load DB ───────────────────────────────────────────────────────────────────

@@ -1614,13 +1614,15 @@ const BACKUP_COLLECTIONS = [
   'wardenCollections', 'warden_collections', 'handovers', 'handoverItems', 'handover_items',
   // Standing concessions (warden ledger step 8).
   'concessions',
+  // Owner Funds (2026-09-28), under both spellings.
+  'ownerFunds', 'owner_funds',
 ];
 // Collections whose records are written to SQLite by id, so an id is mandatory.
 const BACKUP_ID_REQUIRED = [
   'students', 'rooms', 'payments', 'expenses', 'cancellations', 'transfers', 'archive',
   'studentLedger', 'student_ledger',
   'wardenCollections', 'warden_collections', 'handovers', 'handoverItems', 'handover_items',
-  'concessions',
+  'concessions', 'ownerFunds', 'owner_funds',
 ];
 const BACKUP_MAX_RECORDS = 200000;   // ~40x the largest real hostel seen
 const BACKUP_MAX_DEPTH   = 24;
@@ -2016,6 +2018,11 @@ function uiTipHide() {
   };
   document.addEventListener('mouseover', e => {
     const el = trigger(e);
+    /* A re-render removes the trigger from under the cursor, and a removed
+       element never fires mouseout — so the card stayed floating over the next
+       page ("PAID ON" over Expenses, 2026-09-28). Whatever the cursor reaches
+       next, a tip whose trigger is gone closes. navigate() also closes it. */
+    if (_uiTipFor && !_uiTipFor.isConnected) uiTipHide();
     if (!el || el === _uiTipFor) return;
     clearTimeout(_uiTipTimer);
     // Long enough not to flash while the cursor crosses a row on its way

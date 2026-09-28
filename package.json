@@ -38,6 +38,9 @@
     "test:theme": "node tests/css-theme-hygiene.test.js",
     "test:security": "node tests/security-hardening.test.js",
     "test:whatsapp": "node tests/whatsapp-link.test.js",
+    "test:displayscale": "node tests/display-scale.test.js",
+    "test:ownerfunds": "node tests/owner-funds.test.js",
+    "test:featureoptin": "node tests/feature-optin.test.js",
     "test:update": "node tests/update-url.test.js && node tests/update-check.test.js",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

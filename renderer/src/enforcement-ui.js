@@ -104,7 +104,8 @@ var FEATURE_PAGES = {
   reports:  ['reports'],
   archive:  ['archive'],
   backup:   ['backup'],
-  expenses: ['expenses']
+  expenses: ['expenses'],
+  ownerFunds: ['ownerfunds']
   // printDocs and multiUser gate actions rather than pages — see below.
 };
 
@@ -115,8 +116,44 @@ var FEATURE_LABELS = {
   backup:    'Backup & restore',
   printDocs: 'Printable documents',
   multiUser: 'Multiple staff logins',
-  expenses:  'Expenses & fund transfers'
+  expenses:  'Expenses & fund transfers',
+  ownerFunds: 'Owner Funds'
 };
+
+/* ── OPT-IN FEATURES: OFF UNLESS THE CONTROL PLANE SAYS ON ────────────────────
+   Every flag above fails OPEN, for the reason given at the top of this section.
+   A feature built for ONE client cannot: failing open would hand it to every
+   hostel that has not heard from the control plane — which is most of them,
+   most of the time. Owner Funds (2026-09-28) is the first; the owner switches
+   it on per hostel from the portal.
+
+   So an opt-in flag is ON only when the entitlement says `true`. And because
+   the entitlement goes stale when a hostel is offline for long enough — and
+   stale means `features: null` — the last explicit answer is REMEMBERED on this
+   machine: a hostel that had it keeps it while offline, and loses it only when
+   the control plane says `false`. An entitlement from a control plane too old
+   to know the flag (key absent) reads as "no news", not as "off". */
+var OPT_IN_FEATURES = { ownerFunds: true };
+var _OPT_IN_MEMO = 'hx_feat_on_';
+
+function _optInRemembered(key) {
+  try { return localStorage.getItem(_OPT_IN_MEMO + key) === '1'; } catch (_) { return false; }
+}
+function _optInRemember(key, on) {
+  try {
+    if (on) localStorage.setItem(_OPT_IN_MEMO + key, '1');
+    else    localStorage.removeItem(_OPT_IN_MEMO + key);
+  } catch (_) {}
+}
+function _optInState(key) {
+  var f = _enforcement && _enforcement.features;
+  if (f && Object.prototype.hasOwnProperty.call(f, key)) {
+    var on = f[key] === true;
+    _optInRemember(key, on);
+    return on;
+  }
+  return _optInRemembered(key);
+}
 
 /**
  * Is this feature available to this hostel?
@@ -125,6 +162,7 @@ var FEATURE_LABELS = {
  * connection, an older build of the control plane — all mean yes.
  */
 function hasFeature(key) {
+  if (Object.prototype.hasOwnProperty.call(OPT_IN_FEATURES, key)) return _optInState(key);
   if (!_enforcement || !_enforcement.features) return true;
   return _enforcement.features[key] !== false;
 }
@@ -137,7 +175,9 @@ function requireFeature(key) {
   if (hasFeature(key)) return true;
   var label = FEATURE_LABELS[key] || key;
   if (typeof toast === 'function') {
-    toast(label + ' is not included in this hostel’s plan. Contact support to add it.',
+    toast(OPT_IN_FEATURES[key]
+        ? label + ' is not switched on for this hostel. Contact support to have it added.'
+        : label + ' is not included in this hostel’s plan. Contact support to add it.',
       'error', 'Not included');
   }
   return false;

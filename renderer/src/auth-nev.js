@@ -157,6 +157,10 @@ const PERMS = [
   { key: 'backup',   label: 'Backup & restore',     hint: 'Export and import the database' },
   { key: 'settings', label: 'Change settings',      hint: 'Hostel details, room types, rent' },
   { key: 'users',    label: 'Manage users',         hint: 'Add users and set permissions' },
+  /* OWNER FUNDS (2026-09-28): money between the owner and the hostel. Only
+     means anything where the control plane has switched the feature on for
+     this hostel — the Users page hides the tick everywhere else. */
+  { key: 'ownerFunds', label: 'Owner funds',        hint: 'See and record money the owner gives or takes' },
 ];
 const PERM_KEYS = PERMS.map(p => p.key);
 
@@ -222,6 +226,16 @@ function _migrateUsers(cfg) {
        to a warden the hostel had explicitly denied editing. */
     if (u.perms.add === undefined && u.perms.edit !== undefined) {
       u.perms.add = u.perms.edit === true;
+      changed = true;
+    }
+    /* OWNER FUNDS IS NOT HANDED TO EVERYONE (2026-09-28). The blanket rule below
+       grants a new permission to every account so nobody is silently locked
+       out of something they used to do — but nobody used to see the owner's
+       own money, and a warden should not start seeing it because the app
+       updated. It goes to the accounts that manage users; an administrator
+       ticks it for anyone else. */
+    if (u.perms.ownerFunds === undefined) {
+      u.perms.ownerFunds = u.perms.users === true;
       changed = true;
     }
     // A later version may add a permission; grant it rather than silently deny.

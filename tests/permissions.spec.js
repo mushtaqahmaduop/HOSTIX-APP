@@ -434,7 +434,8 @@ test('every declared permission is actually checked somewhere', async () => {
   // saved, shown with a tick, and enforced nowhere. This is the guard that
   // catches the next one — including any permission added later.
   const fs = require('fs');
-  const src = ['renderer/src/auth-nev.js', 'renderer/src/modules/nav.js']
+  // owner-funds.js holds the Owner funds gate itself (canDo('ownerFunds'), step 2).
+  const src = ['renderer/src/auth-nev.js', 'renderer/src/modules/nav.js', 'renderer/src/owner-funds.js']
     .concat(fs.readdirSync(path.join(REPO_ROOT, 'renderer/src/modules'))
       .map(f => 'renderer/src/modules/' + f))
     .filter(p => p.endsWith('.js'))
