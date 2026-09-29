@@ -58,6 +58,13 @@ async function login(win) {
   await win.waitForFunction(() => typeof CUR_USER !== 'undefined' && !!CUR_USER, null,
     { timeout: 30000 });
   await win.waitForTimeout(900);
+  // Owner Funds OFF, whatever the live control plane says for the test
+  // licence's hostel — it hides the Fund Transfer category this spec is about.
+  // See tests/_fresh-install.js.
+  await win.evaluate(() => {
+    localStorage.removeItem('hx_feat_on_ownerFunds');
+    if (_enforcement && _enforcement.features) _enforcement.features.ownerFunds = false;
+  });
 }
 
 test('fund transfer hidden, expenses grouped by category, no month mixing', async () => {
@@ -177,9 +184,10 @@ test('fund transfer hidden, expenses grouped by category, no month mixing', asyn
   expect(expPage.cats.join('|')).toMatch(/Fund Transfer/);
   // Headline total must equal the rows, transfer included, and not double it.
   expect(expPage.total).toBe('16700');
-  // ...and that same figure as the warden sees it: exact below a million, two
-  // decimals (owner, 2026-09-15) — it was the compact "Rs. 16.7K".
-  expect(expPage.totalShown).toBe('Rs. 16,700.00');
+  // ...and that same figure as the warden sees it: a KPI card, so whole rupees
+  // (owner, 2026-09-29 — it was "Rs. 16,700.00" from 2026-09-15, and before
+  // that the compact "Rs. 16.7K").
+  expect(expPage.totalShown).toBe('Rs. 16,700');
 
   // ── 4. Reports: no Transfers stat, expenses grouped by category ──────────
   // `reportPeriod = 'month'` stood here. A month is the only window Reports

@@ -105,7 +105,7 @@ test('the donut reports the month, and its slices are the real split', async () 
   /* FOUR ARCS FOR FIVE ROWS: the zero row draws no arc, because it has no
      value to draw. That is the whole reason a zero row is safe to show. */
   expect(d.segments).toBe(4);
-  expect(d.centre.replace(/\s/g, '')).toBe('Rs.100,000.00');
+  expect(d.centre.replace(/\s/g, '')).toBe('Rs.100,000');   // chart rule: whole below a million (2026-09-29)
   expect(d.sub).toBe('Total Collected');
   expect(d.chip).toBe(thisMonthLabelIn(d.chip));    // whatever the picker says
 
@@ -120,7 +120,8 @@ test('the donut reports the month, and its slices are the real split', async () 
   expect(d.rows.reduce((s, r) => s + r.pct, 0)).toBeCloseTo(100, 1);
   /* The METHOD list was compact ("Rs. 156K") until the owner's one money rule of
      2026-09-15: exact with two decimals below a million, "1.25M" above. */
-  expect(d.rows.map(r => r.amt)).toEqual(['Rs. 40,000.00', 'Rs. 30,000.00', 'Rs. 20,000.00', 'Rs. 10,000.00', 'Rs. 0.00']);
+  // Whole rupees since 2026-09-29 (the chart's legend follows the KPI rule).
+  expect(d.rows.map(r => r.amt)).toEqual(['Rs. 40,000', 'Rs. 30,000', 'Rs. 20,000', 'Rs. 10,000', 'Rs. 0']);
 
   await app.close();
 });
