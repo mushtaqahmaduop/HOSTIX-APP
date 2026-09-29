@@ -83,11 +83,11 @@ test('a double press posts the money once, on every money form', async () => {
       R.expenses = DB.expenses.length;
 
       // Owner fund.
-      localStorage.setItem('hx_feat_on_ownerFunds', '1');
+      (localStorage.setItem('hx_feat_on_ownerFunds', '1'), _enforcement && _enforcement.features && (_enforcement.features.ownerFunds = true));
       showOwnerFundModal(); document.getElementById('of-amt').value = '10000';
       await Promise.all([submitOwnerFund(), submitOwnerFund()]);
       R.ownerFunds = DB.ownerFunds.length;
-      localStorage.removeItem('hx_feat_on_ownerFunds');
+      (localStorage.removeItem('hx_feat_on_ownerFunds'), _enforcement && _enforcement.features && (_enforcement.features.ownerFunds = false));
 
       // After all that, a normal second expense still saves (the guard frees itself).
       showAddExpenseModal();

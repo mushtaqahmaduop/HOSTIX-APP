@@ -72,6 +72,10 @@ async function seed(win) {
     const day = off => key(off) + '-05';
     DB.payments = [mk('p1', key(0), 20000, 5000, day(0)), mk('p2', key(-1), 30000, 0, day(-1))];
     DB.expenses = [{ id: 'e1', category: 'Electricity', amount: 4000, date: day(0), description: 'Bill' }];
+    // Owner Funds OFF, whatever the live control plane says for the test
+    // licence's hostel — see tests/_fresh-install.js.
+    localStorage.removeItem('hx_feat_on_ownerFunds');
+    if (_enforcement && _enforcement.features) _enforcement.features.ownerFunds = false;
     await saveDB();
     window.__k = { cur: key(0), prev: key(-1) };
   });

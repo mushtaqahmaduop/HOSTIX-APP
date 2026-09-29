@@ -35,7 +35,7 @@ test('a movement and its reversal are saved, and survive a restart', async () =>
     await login(win);
     await settleFreshInstall(win);
     // The feature is opt-in (step 2): as if the control plane had switched it on.
-    await win.evaluate(() => localStorage.setItem('hx_feat_on_ownerFunds', '1'));
+    await win.evaluate(() => (localStorage.setItem('hx_feat_on_ownerFunds', '1'), _enforcement && _enforcement.features && (_enforcement.features.ownerFunds = true)));
     const r = await win.evaluate(async () => {
       const mo = thisMonth();
       const fundBefore = calcAvailableFund(mo);
@@ -86,14 +86,14 @@ test('the Users page offers the permission only where the feature is on', async 
       closeModal();
       return r;
     });
-    await win.evaluate(() => localStorage.removeItem('hx_feat_on_ownerFunds'));
+    await win.evaluate(() => (localStorage.removeItem('hx_feat_on_ownerFunds'), _enforcement && _enforcement.features && (_enforcement.features.ownerFunds = false)));
     const off = await read();
     expect(off.exists, 'the box must still exist for the presets and the save').toBe(true);
     expect(off.shown).toBe(false);
     expect(off.admin, 'the built-in admin account holds the permission').toBe(true);
     expect(off.role).toBe('Super Admin');
 
-    await win.evaluate(() => localStorage.setItem('hx_feat_on_ownerFunds', '1'));
+    await win.evaluate(() => (localStorage.setItem('hx_feat_on_ownerFunds', '1'), _enforcement && _enforcement.features && (_enforcement.features.ownerFunds = true)));
     const on = await read();
     expect(on.shown).toBe(true);
     expect(on.checked).toBe(true);
@@ -114,7 +114,7 @@ test('the page: hidden when switched off; with it on, record, reverse and the st
     await win.evaluate(async () => {
       DB.ownerFunds = []; DB.expenses = []; DB.payments = [];
       if (DB.settings.security) DB.settings.security.pinOn = false;
-      localStorage.removeItem('hx_feat_on_ownerFunds');
+      (localStorage.removeItem('hx_feat_on_ownerFunds'), _enforcement && _enforcement.features && (_enforcement.features.ownerFunds = false));
       await saveDB();
       applyPermissionsToChrome();
     });
@@ -129,7 +129,7 @@ test('the page: hidden when switched off; with it on, record, reverse and the st
     expect(off.page).toMatch(/Not included/);
 
     // Switched on.
-    await win.evaluate(() => { localStorage.setItem('hx_feat_on_ownerFunds', '1'); applyPermissionsToChrome(); navigate('ownerfunds'); });
+    await win.evaluate(() => { (localStorage.setItem('hx_feat_on_ownerFunds', '1'), _enforcement && _enforcement.features && (_enforcement.features.ownerFunds = true)); applyPermissionsToChrome(); navigate('ownerfunds'); });
     await win.waitForTimeout(600);
     expect(await win.evaluate(() => !!document.querySelector('.nav-item[data-page="ownerfunds"]').offsetParent)).toBe(true);
     expect(await win.evaluate(() => document.getElementById('hdr-action-text').textContent)).toBe('Record Movement');
@@ -209,7 +209,7 @@ test('reports: an Owner funds tab, owner lines under Available Fund, and both ex
       const mo = thisMonth();
       DB.ownerFunds = []; DB.payments = [];
       DB.expenses = [{ id: 'e1', date: mo + '-10', category: 'Electricity', amount: 30000, description: 'Bill', method: 'Cash' }];
-      localStorage.setItem('hx_feat_on_ownerFunds', '1');
+      (localStorage.setItem('hx_feat_on_ownerFunds', '1'), _enforcement && _enforcement.features && (_enforcement.features.ownerFunds = true));
       ofAdd({ direction: 'in', amount: 100000, date: mo + '-05', category: 'emergency', method: 'Bank Transfer' });
       ofAdd({ direction: 'out', amount: 40000, date: mo + '-06', category: 'pocket' });
       await saveDB();
@@ -244,7 +244,7 @@ test('reports: an Owner funds tab, owner lines under Available Fund, and both ex
         wholeBook: !!exWorkbook(_rptOverviewDef()),
       };
       // Switched off: none of it.
-      localStorage.removeItem('hx_feat_on_ownerFunds');
+      (localStorage.removeItem('hx_feat_on_ownerFunds'), _enforcement && _enforcement.features && (_enforcement.features.ownerFunds = false));
       reportDetail = null; renderPage('reports');
       await new Promise(res => setTimeout(res, 700));
       const off = { tabs: tabs(), wholeSection: _rptOverviewDef().sections.some(x => x.title === 'Owner funds') };
@@ -289,7 +289,7 @@ test('dashboard: an After owner line under Available Fund, and the page exports 
       const mo = thisMonth();
       DB.ownerFunds = []; DB.payments = [];
       DB.expenses = [{ id: 'e1', date: mo + '-10', category: 'Electricity', amount: 30000, description: 'Bill', method: 'Cash' }];
-      localStorage.setItem('hx_feat_on_ownerFunds', '1');
+      (localStorage.setItem('hx_feat_on_ownerFunds', '1'), _enforcement && _enforcement.features && (_enforcement.features.ownerFunds = true));
       ofAdd({ direction: 'in', amount: 100000, date: mo + '-05', category: 'emergency', method: 'Bank Transfer' });
       const took = ofAdd({ direction: 'out', amount: 40000, date: mo + '-06', category: 'pocket' });
       ofAdd({ direction: 'out', amount: 5000, date: mo + '-07', category: 'pocket' });
@@ -298,7 +298,7 @@ test('dashboard: an After owner line under Available Fund, and the page exports 
       ofReverse(last.id, { reason: 'typed twice' }); await saveDB();
       navigate('dashboard'); await wait(900);
       const sub = el => (el ? el.textContent.replace(/\s+/g, ' ').trim() : null);
-      const on = { line: sub(document.querySelector('.dash-kpi__sub--owner')), want: 'After owner Rs.' + fmtCompact(30000),
+      const on = { line: sub(document.querySelector('.dash-kpi__sub--owner')), want: 'After owner Rs.' + fmtKpi(30000),
                    fund: calcAvailableFund(mo) };
       navigate('ownerfunds'); await wait(700);
       on.button = !!document.getElementById('of-export');
@@ -311,7 +311,7 @@ test('dashboard: an After owner line under Available Fund, and the page exports 
       on.book = !!exWorkbook(def);
       ofFilter.showReversed = false;
       // Switched off: no line, and the export refuses.
-      localStorage.removeItem('hx_feat_on_ownerFunds');
+      (localStorage.removeItem('hx_feat_on_ownerFunds'), _enforcement && _enforcement.features && (_enforcement.features.ownerFunds = false));
       navigate('dashboard'); await wait(900);
       const off = { line: !!document.querySelector('.dash-kpi__sub--owner') };
       let called = 0; const ox = EXPORT.excel; EXPORT.excel = () => { called++; };

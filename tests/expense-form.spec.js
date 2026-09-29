@@ -332,12 +332,12 @@ test('with Owner Funds on, "Fund Transfer" is not offered for new expenses; an o
   try {
     const r = await win.evaluate(async () => {
       const opts = () => [...document.querySelectorAll('#f-ecat option')].map(o => o.value);
-      localStorage.removeItem('hx_feat_on_ownerFunds');
+      (localStorage.removeItem('hx_feat_on_ownerFunds'), _enforcement && _enforcement.features && (_enforcement.features.ownerFunds = false));
       showAddExpenseModal();
       const offOffers = opts().includes(FUND_TRANSFER_CAT);
       closeModal();
 
-      localStorage.setItem('hx_feat_on_ownerFunds', '1');
+      (localStorage.setItem('hx_feat_on_ownerFunds', '1'), _enforcement && _enforcement.features && (_enforcement.features.ownerFunds = true));
       showAddExpenseModal();
       const onOffers = opts().includes(FUND_TRANSFER_CAT);
       const note = (document.querySelector('.hi-note') || {}).textContent || '';
@@ -359,7 +359,7 @@ test('with Owner Funds on, "Fund Transfer" is not offered for new expenses; an o
       const editKeeps = document.getElementById('f-ecat').value === FUND_TRANSFER_CAT;
       await submitExpense('e_tr');
       const saved = DB.expenses.find(x => x.id === 'e_tr').category;
-      localStorage.removeItem('hx_feat_on_ownerFunds');
+      (localStorage.removeItem('hx_feat_on_ownerFunds'), _enforcement && _enforcement.features && (_enforcement.features.ownerFunds = false));
       return { offOffers, onOffers, note, refused, editKeeps, saved };
     });
     expect(r.offOffers, 'hostels without Owner Funds keep the category').toBe(true);

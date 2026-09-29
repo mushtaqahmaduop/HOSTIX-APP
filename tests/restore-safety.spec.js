@@ -48,7 +48,7 @@ test('restore: a safety copy first, every table back, and a hostile file refused
   try {
     await login(win); await settleFreshInstall(win);
     pageJson = await win.evaluate(async () => {
-      localStorage.setItem('hx_feat_on_ownerFunds', '1');
+      (localStorage.setItem('hx_feat_on_ownerFunds', '1'), _enforcement && _enforcement.features && (_enforcement.features.ownerFunds = true));
       const room = DB.rooms[0];
       DB.students = [{ id: '001', name: 'Backed Up', fatherName: 'F', phone: '0300-0000001', roomId: room.id, status: 'Active', messOptIn: false, joinDate: '2026-01-01' }];
       DB.ownerFunds = []; ofAdd({ direction: 'in', amount: 5000, date: thisMonth() + '-03', category: 'shortfall' });
