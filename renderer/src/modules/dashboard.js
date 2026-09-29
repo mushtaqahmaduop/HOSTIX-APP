@@ -758,7 +758,7 @@ function renderDashboard() {
         </div>
       </div>
       <div class="dash-kpi__value">${moneyValue(collected,{size:"display",compact:true})}</div>
-      <div class="dash-kpi__sub" title="of ${escHtml(fmtPKR(totalExpected))} expected">of <span class="pkr">Rs.</span>${fmtCompact(totalExpected)} expected</div>
+      <div class="dash-kpi__sub" title="of ${escHtml(fmtPKR(totalExpected))} expected">of <span class="pkr">Rs.</span>${fmtKpi(totalExpected)} expected</div>
       ${_dashBar(collected, totalExpected)}
     </div>
 
@@ -803,7 +803,7 @@ function renderDashboard() {
              and the account may see owner money. */}
       ${(typeof ofAllowed === 'function' && ofAllowed()) ? (() => {
           const st = ofStatement(mo, { revenue: collected, expenses: moExp });
-          return `<div class="dash-kpi__sub dash-kpi__sub--owner" title="Available Fund, plus what the owner gave and less what the owner took this month. Owner money is never revenue or an expense.">After owner <span class="pkr">Rs.</span>${fmtCompact(st.afterOwner)}</div>`;
+          return `<div class="dash-kpi__sub dash-kpi__sub--owner" title="Available Fund, plus what the owner gave and less what the owner took this month. Owner money is never revenue or an expense.">After owner <span class="pkr">Rs.</span>${fmtKpi(st.afterOwner)}</div>`;
         })() : ''}
       ${''/* THE "PKR 170T - PKR 77.89T" SUB-LINE IS GONE (owner, 7 Sep). It
              restated the subtraction using the two cards either side of it —
@@ -916,12 +916,12 @@ function renderDashboard() {
       <div class="dash-kpi__split">
         <span class="dash-kpi__srow" title="Cash taken this month against a LATER month">
           <span class="dash-kpi__slabel"><i class="dash-kpi__sdot dh-green"></i>Upcoming</span>
-          <b title="${escHtml(fmtPKR(cashIn.advance))}"><span class="pkr">Rs.</span>${escHtml(fmtCompact(cashIn.advance))}</b>
+          <b title="${escHtml(fmtPKR(cashIn.advance))}"><span class="pkr">Rs.</span>${escHtml(fmtKpi(cashIn.advance))}</b>
         </span>
         <i class="dash-kpi__srule"></i>
         <span class="dash-kpi__srow" title="Cash taken this month against an EARLIER month — arrears collected">
           <span class="dash-kpi__slabel"><i class="dash-kpi__sdot dh-violet"></i>Previous</span>
-          <b title="${escHtml(fmtPKR(cashIn.arrears))}"><span class="pkr">Rs.</span>${escHtml(fmtCompact(cashIn.arrears))}</b>
+          <b title="${escHtml(fmtPKR(cashIn.arrears))}"><span class="pkr">Rs.</span>${escHtml(fmtKpi(cashIn.arrears))}</b>
         </span>
       </div>
       ${''/* Still opens showCashReceivedModal(), NOT the payments page — that
@@ -1474,7 +1474,7 @@ function _dashLedgerRow(mo, pending, pendingCount) {
                and pushed the six rows out of the card. The exact figure is on
                the Payments screen this row links to. */
             ? '<span class="dl-glance__sub dl-money" title="' + fmtPKR(g.money) + '">Rs. '
-              + fmtCompact(g.money) + '</span>' : '')
+              + fmtKpi(g.money) + '</span>' : '')
       + '</span>'
       + '<span class="dl-glance__n">' + fmtNum(g.n) + '</span>';
     return g.page
@@ -1503,7 +1503,7 @@ function _dashLedgerRow(mo, pending, pendingCount) {
         + '<span class="dl-meth__bar"><i style="width:' + m.pct.toFixed(1) + '%;background:'
           + escHtml(hue) + '"></i></span>'
         + '<span class="dl-meth__pct">' + m.pct.toFixed(1) + '%</span>'
-        + '<span class="dl-meth__amt">' + escHtml(fmtPKRk(m.amount)) + '</span>'
+        + '<span class="dl-meth__amt">Rs. ' + escHtml(fmtKpi(m.amount)) + '</span>'
         + '</button>';
       }).join('')
     : '';
@@ -1520,7 +1520,7 @@ function _dashLedgerRow(mo, pending, pendingCount) {
            competes with the number for the widest line in a 76px hole, and the
            number is the thing being read. */
         '<span class="dnut__cur">Rs.</span><span class="dnut__fig">'
-          + escHtml(fmtCompactK(methods.total)) + '</span>',
+          + escHtml(fmtChart(methods.total)) + '</span>',
         'Total Collected',
         { aria: 'Collection by payment method for ' + dashMonthLabel() })
     : '';
@@ -1936,8 +1936,8 @@ function _dashRecentPayments(list, mo, collected) {
   const when = dashMonthLabel();
   const foot =
     '<div class="dash-rp-foot">'
-    + stat('dh-blue',   'money',  'Total Payments', fmtPKR(t.collected), when)
-    + stat('dh-violet', 'coins',  'Total Extras',   fmtPKR(t.extras),    'Charged in ' + when)
+    + stat('dh-blue',   'money',  'Total Payments', 'Rs. ' + fmtKpi(t.collected), when)
+    + stat('dh-violet', 'coins',  'Total Extras',   'Rs. ' + fmtKpi(t.extras),    'Charged in ' + when)
     + stat('dh-green',  'check',  'Settled',        (t.count ? t.rate.toFixed(1) + '%' : '—'),
            t.count ? t.settled + ' of ' + t.count + ' records' : 'No records')
     + stat('dh-amber',  'people', 'Transactions',   String(t.count),     when)

@@ -137,11 +137,11 @@ function renderOwnerFunds() {
 
   return `
   <div class="ui-stats">
-    ${tile('Owner gave', fmtPKR(st.ownerIn), 'To the hostel', 'arrowDownCircle',
+    ${tile('Owner gave', 'Rs. ' + fmtKpi(st.ownerIn), 'To the hostel', 'arrowDownCircle',
            `ofSet('dir','${ofFilter.dir === OF_IN ? 'All' : OF_IN}')`, ofFilter.dir === OF_IN)}
-    ${tile('Owner took', fmtPKR(st.ownerOut), 'From the hostel', 'upload',
+    ${tile('Owner took', 'Rs. ' + fmtKpi(st.ownerOut), 'From the hostel', 'upload',
            `ofSet('dir','${ofFilter.dir === OF_OUT ? 'All' : OF_OUT}')`, ofFilter.dir === OF_OUT)}
-    ${tile('Net owner funding', _ofSigned(st.ownerNet), st.ownerNet >= 0 ? 'Owner has put in more' : 'Owner has taken more', 'wallet')}
+    ${tile('Net owner funding', (st.ownerNet > 0 ? '+' : st.ownerNet < 0 ? '−' : '') + 'Rs. ' + fmtKpi(Math.abs(st.ownerNet)), st.ownerNet >= 0 ? 'Owner has put in more' : 'Owner has taken more', 'wallet')}
     ${tile('Movements', String(st.count), st.reversed ? st.reversed + ' reversed, not counted' : 'In this period', 'list')}
   </div>
 

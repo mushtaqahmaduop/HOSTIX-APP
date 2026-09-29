@@ -466,11 +466,11 @@ function renderExpenses() {
   const stats = `
   <div class="exp-stats">
     ${stat('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>',
-          'Total Expenses', `<span title="${fmtPKR(scopedTotal)}" data-exact="${scopedTotal}">${expMoney(scopedTotal)}</span>`,
+          'Total Expenses', `<span title="${fmtPKR(scopedTotal)}" data-exact="${scopedTotal}">Rs. ${fmtKpi(scopedTotal)}</span>`,
           scopedTrf > 0 ? `${scopeLabel} · incl. ${fmtPKR(scopedTrf)} funds transfer` : scopeLabel,
           _expTrend)}
     ${stat('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m9 15 6-6"/><path d="M15 9h-4"/><path d="M15 9v4"/></svg>',
-          'Average Daily', expMoney(avgDaily),
+          'Average Daily', `<span title="${fmtPKR(avgDaily)}">Rs. ${fmtKpi(avgDaily)}</span>`,
           `Avg per day · ${daysElapsed} day${daysElapsed===1?'':'s'}`)}
     ${stat('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>',
           'Total Records', String(scoped.length), scopeLabel)}

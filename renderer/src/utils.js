@@ -383,6 +383,38 @@ function fmtCompact(n) {
   return sign + num + suffix;
 }
 
+/* ── KPI MONEY: WHOLE RUPEES, MILLIONS FROM TEN MILLION (owner, 2026-09-29) ──
+   "some hostel warden asked for whole number". A KPI card is a figure a warden
+   reads against the cash drawer, and ".00" on every one of them was noise:
+   rent is charged and paid in whole rupees. So a KPI shows the exact whole
+   figure up to 9,999,999, and from ten million (1,00,00,000) it switches to
+   millions — 10M, 12.35M — because an eight-digit figure is where a card runs
+   out of width. Billions and trillions as before.
+
+   KPI CARDS ONLY. Tables and the Expenses register keep fmtCompact()'s
+   two-decimal rule, which the owner asked for on 2026-09-15 for those places.
+   The exact figure stays in the title, as with every compact value. */
+function _kpiShort(abs) {
+  const div = abs >= 1e12 ? 1e12 : abs >= 1e9 ? 1e9 : 1e6;
+  const suffix = abs >= 1e12 ? 'T' : abs >= 1e9 ? 'B' : 'M';
+  return (abs / div).toFixed(2).replace(/\.?0+$/, '') + suffix;
+}
+function fmtKpi(n) {
+  const v = Number(n) || 0;             // text or NaN reads as 0, never "NaNM"
+  const abs = Math.round(Math.abs(v));
+  const sign = v < 0 && abs > 0 ? '-' : '';
+  return sign + (abs < 1e7 ? abs.toLocaleString('en-PK') : _kpiShort(abs));
+}
+/* Charts: whole rupees, and millions from ONE million — a chart label or a
+   donut's centre has less room than a KPI card, and "9,999,999" across a ring
+   is exactly the break the owner asked to avoid. Charts only. */
+function fmtChart(n) {
+  const v = Number(n) || 0;             // text or NaN reads as 0, never "NaNM"
+  const abs = Math.round(Math.abs(v));
+  const sign = v < 0 && abs > 0 ? '-' : '';
+  return sign + (abs < 1e6 ? abs.toLocaleString('en-PK') : _kpiShort(abs));
+}
+
 /* ── COMPACT MONEY, FROM THE THOUSAND UP ─────────────────────────────────────
    fmtCompact() above stays exact below ten million on purpose: a KPI card that
    rounds PKR 476,700 to "PKR 477K" has thrown away the figure a warden is
@@ -986,7 +1018,8 @@ function moneyValue(amount, opts) {
      a clipped card becomes a readable one without the precise number going
      anywhere. Used by the KPI row, where the space is fixed and the values are
      unbounded. */
-  const shown = opts.compact ? fmtCompact(amount) : fmtNum(amount);
+  // `compact` is the KPI row — whole rupees, millions from ten million.
+  const shown = opts.compact ? fmtKpi(amount) : fmtNum(amount);
   const exact = opts.compact && shown !== fmtNum(amount)
     ? ` title="${currency} ${fmtNum(amount)}"` : '';
   return `<span class="money-value money-value--${size}${cls}" ${color}${exact}>`
@@ -1666,7 +1699,8 @@ if (typeof module !== 'undefined' && module.exports) {
     validateKeyFormat, validateKeyChecksum, resolveKeyVersion, parseLicenseKey, licenseKeyExpiry,
     licenseDayNumber, licenseDayToDate, licenseSerial,
     buildLicenseKey, buildLegacyLicenseKey, cmpRoomNo,
-    ISSUE_MIDDLE_STATUS, issueMergeRecord, issuesFoldLegacy, waLink, waFitText, gmailLink
+    ISSUE_MIDDLE_STATUS, issueMergeRecord, issuesFoldLegacy, waLink, waFitText, gmailLink,
+    fmtKpi, fmtChart, moneyValue
   };
 }
 /* ─── BACKUP VALIDATION ──────────────────────────────────────────────────────

@@ -40,6 +40,9 @@ declare function _isPlainObject(v: any): boolean;
 declare function escHtml(s: any): string;
 declare function fmtPKR(n: any): string;
 declare function fmtNum(n: any): string;
+// KPI cards: whole rupees, millions from ten million. Charts: millions from one million.
+declare function fmtKpi(n: any): string;
+declare function fmtChart(n: any): string;
 declare function fmtDate(d?: any): string;
 declare function today(): string;
 // Local calendar date / month — NOT toISOString(), which is UTC and names the

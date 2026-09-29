@@ -858,7 +858,7 @@ function renderReports() {
     <div class="rpt-legend__r">
       <span class="rpt-legend__d" style="background:${x.color}"></span>
       <span class="rpt-legend__n" title="${escHtml(x.m)}">${escHtml(x.m)}</span>
-      <span class="rpt-legend__v">${fmtPKR(x.amt)}</span>
+      <span class="rpt-legend__v" title="${fmtPKR(x.amt)}">Rs. ${fmtKpi(x.amt)}</span>
       <span class="rpt-legend__p">${methodTotal?(x.amt/methodTotal*100).toFixed(1):'0.0'}%</span>
     </div>`).join('');
   _rptDonutData = methods.map(x=>({label:x.m, value:x.amt, color:x.color}));
@@ -1519,7 +1519,7 @@ function renderReports() {
           ${''/* Figure first, caption under it. The number is what the hole is
                  for; "Collected" above it made the caption the headline of its
                  own centre. */}
-          <div class="rpt-donut__mid"><b>${fmtPKR(methodTotal)}</b><span>Total Collected</span></div>
+          <div class="rpt-donut__mid"><b title="${fmtPKR(methodTotal)}">Rs. ${fmtChart(methodTotal)}</b><span>Total Collected</span></div>
         </div>
         ${''/* FOUR COLUMNS, ONE ROW EACH (owner's design). The legend was a
                stack with the donut's own height distributed through it, so two
@@ -1558,14 +1558,14 @@ function renderReports() {
       <div class="rpt-donut rpt-donut--sm">
         <div class="rpt-donut__c">
           <canvas id="rpt-revmix"></canvas>
-          <div class="rpt-donut__mid"><b>${fmtPKR(_revParts.total)}</b><span>Total Billed</span></div>
+          <div class="rpt-donut__mid"><b title="${fmtPKR(_revParts.total)}">Rs. ${fmtChart(_revParts.total)}</b><span>Total Billed</span></div>
         </div>
         <div class="rpt-legend">
           ${_revParts.rows.map(r=>`
             <div class="rpt-legend__r">
               <span class="rpt-legend__d" style="background:${r.color}"></span>
               <span class="rpt-legend__n" title="${escHtml(r.label)}">${escHtml(r.label)}</span>
-              <span class="rpt-legend__v">${fmtPKR(r.value)}</span>
+              <span class="rpt-legend__v" title="${fmtPKR(r.value)}">Rs. ${fmtKpi(r.value)}</span>
               <span class="rpt-legend__p">${r.pct.toFixed(1)}%</span>
             </div>`).join('')}
           ${''/* A CONCESSION IS NOT A SLICE. It is money given away — it makes
@@ -1575,7 +1575,7 @@ function renderReports() {
             <div class="rpt-legend__r rpt-legend__r--neg">
               <span class="rpt-legend__d rpt-legend__d--hollow"></span>
               <span class="rpt-legend__n">Concessions</span>
-              <span class="rpt-legend__v">&minus;${fmtPKR(_revParts.conc)}</span>
+              <span class="rpt-legend__v" title="${fmtPKR(_revParts.conc)}">&minus;Rs. ${fmtKpi(_revParts.conc)}</span>
               <span class="rpt-legend__p">&minus;${(_revParts.gross?_revParts.conc/_revParts.gross*100:0).toFixed(1)}%</span>
             </div>`:''}
         </div>
