@@ -1,0 +1,97 @@
+/* ─── ROOM INSPECTIONS (src/modules/inspections.js, 2026-09-30) ───────────────
+   The Condition section inside the room's detail, the checklist form and the
+   read-only view. Colours are the role tokens only, so both themes follow; a
+   chosen OK / Problem / N/A is the soft role fill with the role's own ink,
+   which is the pairing tokens.css measures for contrast (a white label on a
+   solid green failed in dark in the approved mock). */
+
+.insp-cond { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
+.insp-h {
+  font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text3); margin-bottom: 8px;
+}
+.insp-h em { font-style: normal; font-weight: 500; letter-spacing: 0; text-transform: none; margin-left: 8px; }
+.insp-h--sub { margin-top: 12px; }
+
+.insp-last {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--dash-sunk);
+}
+.insp-last__t { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.insp-last__t b { font-size: 13px; color: var(--text); }
+.insp-last__t span { font-size: 12px; color: var(--text3); }
+
+.insp-badge {
+  display: inline-block; padding: 3px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 800; border: 1px solid; white-space: nowrap;
+}
+.insp-badge.is-good, .insp-dot.is-good { color: var(--success-fg); border-color: var(--success-border); background: var(--success-bg); }
+.insp-badge.is-fair, .insp-dot.is-fair { color: var(--warning-fg); border-color: var(--warning-border); background: var(--warning-bg); }
+.insp-badge.is-poor, .insp-dot.is-poor { color: var(--danger-fg);  border-color: var(--danger-border);  background: var(--danger-bg); }
+
+.insp-hist { display: flex; flex-direction: column; }
+.insp-row {
+  display: grid; grid-template-columns: 12px 96px 150px 1fr 50px; gap: 10px; align-items: center;
+  width: 100%; padding: 8px 4px; border: none; border-bottom: 1px solid var(--border);
+  background: transparent; font: inherit; font-size: 12.5px; text-align: left; cursor: pointer;
+}
+.insp-row:hover { background: var(--dash-sunk); }
+.insp-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.insp-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid; }
+.insp-row__d { font-weight: 700; color: var(--text); }
+.insp-row__w { color: var(--text2); }
+.insp-row__p { color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.insp-row__go { color: var(--accent); font-weight: 700; text-align: right; }
+
+/* The form */
+.insp-f__top { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
+.insp-f__fld { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: var(--text2); }
+.insp-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
+.insp-it {
+  display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center;
+  padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px;
+}
+.insp-it.is-bad { border-color: var(--danger-border); }
+.insp-it__n { font-size: 13px; font-weight: 600; color: var(--text); }
+.insp-it__note { grid-column: 1 / -1; font-size: 12px; padding: 5px 8px; }
+
+.insp-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+.insp-seg button {
+  font: inherit; font-size: 11.5px; font-weight: 700; padding: 3px 9px; cursor: pointer;
+  color: var(--text3); background: transparent; border: none; border-left: 1px solid var(--border);
+}
+.insp-seg button:first-child { border-left: none; }
+.insp-seg button:hover { color: var(--text); }
+.insp-seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.insp-seg button.on.ok      { background: var(--success-bg); color: var(--success-fg); }
+.insp-seg button.on.problem { background: var(--danger-bg);  color: var(--danger-fg); }
+.insp-seg button.on.fair    { background: var(--warning-bg); color: var(--warning-fg); }
+.insp-seg button.on.na      { background: var(--neutral-bg); color: var(--neutral-fg); }
+
+.insp-f__sum {
+  margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--dash-sunk);
+  display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; color: var(--text2);
+}
+.insp-f__sum > div { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.insp-f__sum > div > span:first-child { font-weight: 800; color: var(--text); }
+.insp-f__sum em { font-style: normal; color: var(--text3); }
+.insp-f__sum em a { color: var(--accent); }
+.insp-f__raise { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text); }
+.insp-f__raise:has(input:disabled) { color: var(--text3); }
+
+/* The read-only view */
+.insp-view { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin-top: 12px; }
+.insp-view__r {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
+  padding: 7px 9px; border: 1px solid var(--border); border-radius: 8px;
+}
+.insp-view__r.is-bad { border-color: var(--danger-border); }
+.insp-view__n { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); }
+.insp-view__note { flex-basis: 100%; font-size: 12px; color: var(--text2); }
+.insp-chip { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; }
+.insp-chip.is-ok       { background: var(--success-bg); color: var(--success-fg); }
+.insp-chip.is-problem  { background: var(--danger-bg);  color: var(--danger-fg); }
+.insp-chip.is-na, .insp-chip.is-unmarked { background: var(--neutral-bg); color: var(--neutral-fg); }
+.insp-iss { font-size: 11px; font-weight: 700; color: var(--danger-fg); }
+.insp-iss.is-done { color: var(--success-fg); }
+.insp-view__notes { margin-top: 12px; font-size: 13px; color: var(--text2); }

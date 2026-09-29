@@ -3,7 +3,7 @@
              liveUpdateSetting, hiSaveIdentity, bulk rent update helpers,
              room type/payment method helpers, exportData, importData,
              importFromExcel, _showExcelImportPreview, confirmExcelImport,
-             the room inspection checklist, enforceDataRetention.
+             enforceDataRetention.
              (the logo uploader was removed — the brand mark is fixed)
 
    REMOVED 2026-09-29 on the owner's ruling, as features with no way in:
@@ -38,51 +38,8 @@
    business living in the Settings module, and it was 60 lines of inline style. */
 
 
-// ════════════════════════════════════════════════════════════════════════════
-// ROOM INSPECTIONS
-// ════════════════════════════════════════════════════════════════════════════
-const INSPECTION_ITEMS = ['Walls & Paint','Flooring','Windows & Locks','Bathroom','Plumbing','Electrical Fixtures','Fan / AC','Beds & Furniture','Cleanliness','Lighting'];function showAddInspectionModal() {
-  const rooms = roomsByNumber(DB.rooms).map(r=>`<option value="${r.id}">Room ${escHtml(String(r.number))}</option>`).join('');
-  showModal('modal-sm','Room Inspection Checklist',`
-    <div class="form-grid">
-      <div class="field"><label>Room *</label><select id="ins-room" class="form-control"><option value="">Select Room</option>${rooms}</select></div>
-      <div class="field"><label>Overall Condition</label><select id="ins-cond" class="form-control"><option>Good</option><option>Fair</option><option>Poor</option></select></div>
-      <div class="field"><label>Inspection Date</label><input id="ins-date" class="form-control cdp-trigger" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${today()}"></div>
-      <div class="field"><label>Inspected By</label><input id="ins-by" class="form-control" placeholder="Inspector name"></div>
-    </div>
-    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3);margin:16px 0 10px;display:flex;align-items:center;gap:6px">${icon('check','xs')} Inspection Checklist</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
-      ${INSPECTION_ITEMS.map(item=>`
-      <label style="display:flex;align-items:center;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-        <input type="checkbox" id="ins-chk-${item.replace(/[^a-z]/gi,'_')}" style="width:16px;height:16px;accent-color:var(--green)">
-        <span style="font-size:13px">${item}</span>
-      </label>`).join('')}
-    </div>
-    <div class="field"><label>Notes / Issues Found</label><textarea id="ins-notes" class="form-control" placeholder="Describe any issues or observations..."></textarea></div>`,
-  `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveInspection()">Save Inspection</button>`);
-}
-async function saveInspection() {
-  const roomId = document.getElementById('ins-room')?.value;
-  if(!roomId){toast('Select a room','error');return;}
-  const checklist = {};
-  INSPECTION_ITEMS.forEach(item=>{ checklist[item] = document.getElementById('ins-chk-'+item.replace(/[^a-z]/gi,'_'))?.checked||false; });
-  if(!DB.inspections) DB.inspections=[];
-  const room = DB.rooms.find(r=>r.id===roomId);
-  DB.inspections.push({
-    id:'ins_'+uid(), roomId,
-    overallCondition:document.getElementById('ins-cond')?.value||'Good',
-    date:document.getElementById('ins-date')?.value||today(),
-    inspector:document.getElementById('ins-by')?.value?.trim()||'Admin',
-    notes:document.getElementById('ins-notes')?.value?.trim()||'',
-    checklist
-  });
-  logActivity('Room Inspected', 'Room '+(room?.number||''), 'Room');
-  await saveDB(); closeModal(); renderPage('inspections'); toast('Inspection saved','success');
-}
-async function deleteInspection(id) {
-  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
-  showConfirm('Delete Inspection?','',async ()=>{DB.inspections=DB.inspections.filter(x=>x.id!==id);await saveDB();renderPage('inspections');toast('Deleted','info');});
-}
+/* The room inspection checklist moved to src/modules/inspections.js on
+   2026-09-30, when it was finally given a way in (the room's detail). */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    SETTINGS v5 — Room Types + Data Management (owner reference designs)

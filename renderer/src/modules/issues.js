@@ -1109,6 +1109,33 @@ function _issSyncMtRoom() {
 
 const _issVal = (id) => String((document.getElementById(id) || {}).value || '').trim();
 
+/* ── THE ONE PLACE A NEW ISSUE IS MADE ───────────────────────────────────────
+   saveIssue() below (the register's own form) and the room inspection
+   (inspections.js, 2026-09-30 — each problem found becomes a job) both come
+   through here, so a record raised either way gets the same kind, the same
+   never-reused reference and the same "who entered it" stamp. `fields` is the
+   record's own data, as saveIssue builds it. Returns the stored record; the
+   caller saves. */
+function issueNew(fields) {
+  if (!Array.isArray(DB.issues)) DB.issues = [];
+  const kind = _issKindFor(fields.category);
+  const rec = Object.assign({
+    id: (kind === 'maintenance' ? 'mt_' : 'cp_') + uid(),
+    kind,
+    seq: _issNextSeq(kind),
+    resolvedDate: fields.status === 'Resolved' ? today() : '',
+    response: '',
+    /* WHO ENTERED IT (owner, 2026-09-23). Stamped on create only: an edit
+       six weeks later by somebody else does not change who raised the
+       record. Both halves, the pair ledger.js writes — the account id
+       survives a rename, the name survives the account being deleted. */
+    addedBy:     (typeof CUR_ROLE !== 'undefined' && CUR_ROLE) || null,
+    addedByName: (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) || '',
+  }, fields);
+  DB.issues.push(rec);
+  return rec;
+}
+
 async function saveIssue(id) {
   // The licence gate, before anything is read or written (see enforcement-ui.js).
   if (typeof requireWritable === 'function' && !requireWritable('This record')) return;
@@ -1166,19 +1193,7 @@ async function saveIssue(id) {
     else existing.resolvedDate = '';
     logActivity(label + ' Updated', title, label);
   } else {
-    DB.issues.push(Object.assign({
-      id: (kind === 'maintenance' ? 'mt_' : 'cp_') + uid(),
-      kind,
-      seq: _issNextSeq(kind),
-      resolvedDate: status === 'Resolved' ? today() : '',
-      response: '',
-      /* WHO ENTERED IT (owner, 2026-09-23). Stamped on create only: an edit
-         six weeks later by somebody else does not change who raised the
-         record. Both halves, the pair ledger.js writes — the account id
-         survives a rename, the name survives the account being deleted. */
-      addedBy:     (typeof CUR_ROLE !== 'undefined' && CUR_ROLE) || null,
-      addedByName: (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) || '',
-    }, fields));
+    issueNew(fields);
     logActivity(label + ' Added', title, label);
   }
 
