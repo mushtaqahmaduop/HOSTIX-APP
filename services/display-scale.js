@@ -13,14 +13,17 @@
         narrower than that renders at `width / DESIGN_W`, so the page still lays
         out at 1366 and everything shrinks evenly — the same result as the
         client's manual zoom, without anyone having to know about it.
-     2. A READABILITY FLOOR in PHYSICAL pixels. Shrinking stops where 14px body
-        text would fall below ~11 physical pixels, so a 100% screen never goes
-        under 80% while a 150% screen, which has pixels to spare, can go to 67%.
-        Below the floor the page is simply narrower and the responsive CSS
-        takes over; it never becomes unreadable.
-     3. GENTLE GROWTH on very large screens. Past 1920 CSS px wide (a 27-inch
-        1440p at 100%, a 4K at 150%) the app grows up to 125%, so it does not
-        sit as a small island of text in the middle of a wall of screen.
+     2. THE SAME LOOK ON EVERY SCREEN (owner, 2026-09-29). Every resolution in
+        the Windows list — 800x600 up to 1920x1080 and beyond — must look like
+        the owner's 1366x768 laptop, not merely fit. So the page ALWAYS lays out
+        at 1366 wide and is zoomed to fill: DOWN on a small screen, and UP on a
+        large one (1920x1080 @100% renders at 141%). A wider page used to spread
+        the same screens across more room; now it shows the same arrangement,
+        bigger. Growth is capped at 200% (a 4K at 100%).
+     3. A FLOOR AT 58%, which is what 800x600 needs (800 / 1366). The owner
+        asked for 800x600 to look the same, knowing 14px text becomes ~8px
+        there. Below the floor — only a window dragged smaller than any real
+        screen — the page is simply narrower and the responsive CSS takes over.
      4. THE USER'S OWN ZOOM on top. Ctrl +/-, Ctrl+wheel and View → Zoom
         multiply the auto factor, and are remembered between launches. Ctrl+0
         returns to the fit. Auto-fit itself can be switched off from the View
@@ -40,28 +43,26 @@ const path = require('path');
 
 const DESIGN_W = 1366;          // the laptop every screen was designed on
 const DESIGN_H = 660;           // shortest height a page is expected to need
-const LARGE_W  = 1920;          // above this, the app starts to grow
-const LARGE_H  = 1040;          // 1080 minus the taskbar
-const MAX_GROW = 1.25;
-const MIN_PHYSICAL = 0.8;       // factor x Windows scale never below this…
-const MIN_FACTOR   = 0.67;      // …and the page itself never below this
+const REF_H    = 728;           // the laptop's own height (768 minus the taskbar)
+const MAX_GROW = 2;
+const MIN_FACTOR = 0.58;        // 800x600: 800 / 1366
 const USER_STEPS = [0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
 
 const round2 = (n) => Math.round(n * 100) / 100;
 
 /** The factor the page should render at for a window of `width` x `height`
- *  DIPs on a display at Windows scale `scaleFactor` (1, 1.25, 1.5 …). */
-function computeAutoScale(width, height, scaleFactor) {
+ *  DIPs. Windows scaling (125%, 150% …) is already inside the DIPs, so it
+ *  needs no term of its own. */
+function computeAutoScale(width, height) {
   const w = Number(width) || DESIGN_W;
   const h = Number(height) || DESIGN_H;
-  const s = Number(scaleFactor) > 0 ? Number(scaleFactor) : 1;
 
+  // Shrinking: enough to keep the 1366 layout, and 660 of height, on screen.
   const fit = Math.min(w / DESIGN_W, h / DESIGN_H);
-  if (fit < 1) {
-    const floor = Math.max(MIN_FACTOR, MIN_PHYSICAL / s);
-    return round2(Math.max(floor, fit));
-  }
-  const grow = Math.min(w / LARGE_W, h / LARGE_H);
+  if (fit < 1) return round2(Math.max(MIN_FACTOR, fit));
+  // Growing: as far as the laptop's proportions allow, so a tall screen does
+  // not overflow sideways and a wide one does not overflow downwards.
+  const grow = Math.min(w / DESIGN_W, h / REF_H);
   if (grow > 1) return round2(Math.min(MAX_GROW, grow));
   return 1;
 }

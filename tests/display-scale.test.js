@@ -35,44 +35,66 @@ ok('the client desktop (1680x1050 @150% = 1120x660) lays out at 1366 wide', () =
   assert.ok(Math.abs(1120 / f - 1366) < 10, 'layout width ' + (1120 / f));
 });
 
-ok('a 1920x1080 @125% laptop (1536x824) is left alone', () => {
-  assert.strictEqual(computeAutoScale(1536, 824, 1.25), 1);
+// Owner, 2026-09-29: every resolution in the Windows display list must look
+// like the laptop — the page lays out ~1366 wide on all of them, bigger or
+// smaller. Maximized frameless window = the screen minus the 40-DIP taskbar.
+const WINDOWS_LIST = [
+  [1920, 1080], [1680, 1050], [1600, 1200], [1600, 900], [1440, 900],
+  [1400, 1050], [1366, 768], [1360, 768], [1280, 1024], [1280, 960],
+  [1280, 800], [1280, 768], [1280, 720], [1152, 864], [1024, 768], [800, 600],
+];
+WINDOWS_LIST.forEach(([sw, sh]) => {
+  ok(sw + 'x' + sh + ' @100% lays the page out at the laptop\'s 1366 width', () => {
+    const w = sw, h = sh - 40;
+    const f = computeAutoScale(w, h, 1);
+    const layoutW = w / f, layoutH = h / f;
+    assert.ok(layoutW >= 1340 && layoutW <= 1400, 'layout ' + Math.round(layoutW) + ' wide at ' + f);
+    assert.ok(layoutH >= 640, 'layout only ' + Math.round(layoutH) + ' tall at ' + f);
+  });
 });
 
-ok('1920x1080 @100% is left alone — the size most screens already are', () => {
-  assert.strictEqual(computeAutoScale(1920, 1040, 1), 1);
+ok('800x600 needs 59% — above the 58% floor, so it gets the same look', () => {
+  assert.strictEqual(computeAutoScale(800, 560, 1), 0.59);
 });
 
-ok('a 1280x720 @100% screen shrinks a little, not a lot', () => {
-  const f = computeAutoScale(1280, 680, 1);
-  assert.ok(f >= 0.9 && f < 1, String(f));
+ok('1920x1080 @100% grows to 141% instead of spreading the page out', () => {
+  assert.strictEqual(computeAutoScale(1920, 1040, 1), 1.41);
 });
 
-ok('at 100% Windows scale the page never goes under 80% — text stays readable', () => {
-  assert.strictEqual(computeAutoScale(900, 600, 1), 0.8);
+ok('a 1920x1080 @125% laptop (1536x824) grows a little', () => {
+  assert.strictEqual(computeAutoScale(1536, 824, 1.25), 1.12);
 });
 
-ok('at 150% there are pixels to spare, so it may go further — but never under 67%', () => {
-  assert.strictEqual(computeAutoScale(900, 600, 1.5), 0.67);
-  assert.ok(computeAutoScale(900, 600, 1.5) * 1.5 >= 0.8);
+ok('a window between 660 and 728 tall at 1366 wide stays at 100%', () => {
+  assert.strictEqual(computeAutoScale(1366, 700, 1), 1);
 });
 
 ok('a short window shrinks on its height too', () => {
   assert.ok(computeAutoScale(1600, 600, 1) < 1);
 });
 
-ok('a 27-inch 1440p @100% (2560x1400) grows, capped at 125%', () => {
-  assert.strictEqual(computeAutoScale(2560, 1400, 1), 1.25);
+ok('a tall screen grows only as far as its width allows (no sideways overflow)', () => {
+  assert.strictEqual(computeAutoScale(1600, 1160, 1), 1.17);
 });
 
-ok('a 4K @150% (2560x1400 DIPs) grows the same way', () => {
-  assert.strictEqual(computeAutoScale(2560, 1400, 1.5), 1.25);
+ok('an ultrawide grows only as far as its height allows (no downward overflow)', () => {
+  assert.strictEqual(computeAutoScale(3440, 1400, 1), 1.92);
+  assert.strictEqual(computeAutoScale(2560, 1040, 1), 1.43);
 });
 
-ok('an ultrawide that is wide but not tall grows only as far as its height allows', () => {
-  const f = computeAutoScale(3440, 1400, 1);
-  assert.strictEqual(f, 1.25);
-  assert.ok(computeAutoScale(2560, 1040, 1) === 1, 'a 1080-tall ultrawide stays at 100%');
+ok('growth is capped at 200% (a 4K at 100%)', () => {
+  assert.strictEqual(computeAutoScale(3840, 2120, 1), 2);
+});
+
+ok('a window dragged smaller than any screen stops at the 58% floor', () => {
+  assert.strictEqual(computeAutoScale(600, 450, 1), 0.58);
+});
+
+ok('the main window can be as small as an 800x600 screen', () => {
+  const src = code('main.js');
+  const m = /mainWindow = new BrowserWindow\(\{\s*width: \d+, height: \d+, minWidth: (\d+), minHeight: (\d+)/.exec(src);
+  assert.ok(m, 'main window options not found');
+  assert.ok(+m[1] <= 800 && +m[2] <= 560, 'min ' + m[1] + 'x' + m[2]);
 });
 
 ok('junk input falls back to 100%, never NaN', () => {

@@ -1339,9 +1339,21 @@ const TITLEBAR_ACTIONS = {
    when they are already looking at an error. */
 let recoveryWindow = null;
 
+/* A window's starting size, never larger than the screen it opens on — on an
+   800x600 screen a 1050x750 window opens with its close button off-screen. */
+function fitToWorkArea(width, height) {
+  try {
+    const wa = screen.getPrimaryDisplay().workAreaSize;
+    return { width: Math.min(width, wa.width), height: Math.min(height, wa.height) };
+  } catch (_) {
+    return { width, height };
+  }
+}
+
 function createRecoveryWindow() {
   recoveryWindow = new BrowserWindow({
     width: 760, height: 620, minWidth: 620, minHeight: 480,
+    ...fitToWorkArea(760, 620),
     icon: path.join(__dirname, 'assets', 'icon.png'),
     title: 'Hostyllo — Recovery',
     autoHideMenuBar: true,
@@ -1364,7 +1376,10 @@ function createRecoveryWindow() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1400, height: 900, minWidth: 900, minHeight: 600,
+    // An 800x600 screen (owner, 2026-09-29) has 800x560 to give once the
+    // taskbar is out; the old 900x600 minimum hung the window off its edges.
+    width: 1400, height: 900, minWidth: 640, minHeight: 480,
+    ...fitToWorkArea(1400, 900),
     icon: path.join(__dirname, 'assets', 'icon.png'),
     title: 'Hostyllo — Hostel Management System',
     // Frameless: the native title bar and menu bar are replaced by the custom
@@ -1823,6 +1838,7 @@ ipcMain.on('open-pdf-window', (_e, htmlContent, title) => {
 
   const pdfWin = new BrowserWindow({
     width: 1050, height: 750, minWidth: 600, minHeight: 400,
+    ...fitToWorkArea(1050, 750),
     title: safeTitle,
     icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: {
