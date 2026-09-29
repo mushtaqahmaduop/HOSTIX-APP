@@ -374,6 +374,25 @@ function _usrColFiltered(rows, look) {
   });
 }
 
+/* THE RECEIPT BEHIND A COLLECTION (owner, 2026-09-29: "there should also be
+   the receipt preview of the student payment which is received by a user").
+   An administrator reading a warden's collections can open the very receipt
+   the student was given — the same receipt.js slip, signed by the COLLECTOR
+   (ledgerCollectorOf), not by whoever is looking. A payment is numbered once
+   (_assignReceiptNo reuses p.receiptNo), so opening it here never spends a
+   second number. A deleted month record has no receipt left to show. */
+function _usrRcptCell(r) {
+  const pid = r.entry && r.entry.paymentRecordId;
+  const p = !r.deleted && pid && typeof _findPaymentAnywhere === 'function' ? _findPaymentAnywhere(pid) : null;
+  if (!p) return '<span class="lk-dash">—</span>';
+  return `<button type="button" class="usr-rcpt" onclick="event.stopPropagation();usrOpenReceipt('${escHtml(String(pid))}')"
+            title="Preview the receipt for this payment" aria-label="Preview receipt${p.receiptNo ? ' ' + escHtml(p.receiptNo) : ''}">
+            ${icon('receipt', 'xs')}<span>${escHtml(p.receiptNo || 'View')}</span></button>`;
+}
+function usrOpenReceipt(payId) {
+  if (typeof printReceipt === 'function') printReceipt(payId);
+}
+
 /* The register. `compact` is the Wardens rail: month and method fold under the
    name so the table fits a 400px column. */
 function _usrColTable(pageRows, look, compact, statusOf) {
@@ -386,6 +405,7 @@ function _usrColTable(pageRows, look, compact, statusOf) {
         ${compact ? '' : '<th>Month billed</th><th>Method</th>'}
         ${withStatus ? '<th>Status</th>' : ''}
         <th class="is-num">Amount</th>
+        <th class="usr-rcpt-h">Receipt</th>
       </tr></thead>
       <tbody>
         ${pageRows.map(r => {
@@ -403,6 +423,7 @@ function _usrColTable(pageRows, look, compact, statusOf) {
             <td>${e.method ? pmBadge(e.method) : '<span class="lk-dash">Not recorded</span>'}</td>`}
             ${withStatus ? `<td>${_usrLineStatus(statusOf(e))}</td>` : ''}
             <td class="is-num">${_usrAmt(r.amount)}</td>
+            <td class="usr-rcpt-c">${_usrRcptCell(r)}</td>
           </tr>`;
         }).join('')}
       </tbody>

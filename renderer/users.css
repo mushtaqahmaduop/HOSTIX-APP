@@ -144,6 +144,21 @@
 /* The rail's register fits a 400px column; the shared table's page minimum does not. */
 .usr-coltable.is-compact { min-width: 0; }
 
+/* The receipt behind a collection — a quiet chip, the receipt number on it. */
+.usr-coltable .usr-rcpt-h, .usr-coltable .usr-rcpt-c { width: 1%; white-space: nowrap; }
+.usr-rcpt {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 8px; border-radius: 6px; cursor: pointer;
+    font: inherit; font-size: 11.5px; font-weight: 700;
+    font-family: var(--ant-num-font); font-variant-numeric: tabular-nums;
+    color: var(--accent); background: transparent; border: 1px solid var(--border);
+}
+.usr-rcpt:hover { background: var(--dash-sunk); border-color: var(--accent); }
+.usr-rcpt:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* In the 400px rail the number would crowd the amount; the icon is enough. */
+.usr-coltable.is-compact .usr-rcpt span { display: none; }
+.usr-coltable.is-compact .usr-rcpt { padding: 4px 6px; }
+
 .usr-wtable tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* With an account open beside it the table has no method columns left, and
    the shared table's 860px minimum would still scroll Handover out of sight. */
