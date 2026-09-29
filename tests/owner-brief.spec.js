@@ -69,6 +69,9 @@ test('owner summary', async () => {
         owedSum: d.owing.reduce((s, o) => s + o.amt, 0), rev: d.cur.rev,
         pageRev: _rptTotals([k]).rev, methodSum: d.methods.reduce((s, m) => s + m.amt, 0),
         after: [reportMonth, reportYearly],
+        trendSum: d.trend.reduce((s, t) => s + t.rev, 0),
+        janRev: d.trend[0].rev, janExp: d.trend[0].exp,
+        janArchived: (DB.archive || []).some(r => String(r.month || r.date || '').indexOf(String(y) + '-01') === 0),
       };
     }
     return res;
@@ -89,7 +92,8 @@ test('owner summary', async () => {
       return { pages };
     }, [f, DIR, tag]);
     report[tag] = { label: r.label, pdfPages: info.pages, html: r.html, pending: r.pending, owedSum: r.owedSum,
-                    rev: r.rev, pageRev: r.pageRev, methodSum: r.methodSum, after: r.after };
+                    rev: r.rev, pageRev: r.pageRev, methodSum: r.methodSum, after: r.after,
+                    trendSum: r.trendSum, janRev: r.janRev, janExp: r.janExp, janArchived: r.janArchived };
   }
   for (const tag of ['month', 'year']) {
     const r = report[tag];
@@ -100,10 +104,13 @@ test('owner summary', async () => {
     expect(r.owedSum, tag + ': the owing list adds up to Pending').toBe(r.pending);
     expect(r.after, tag + ': the page keeps its own period').toEqual(report.before);
   }
-  // Jan and Feb were archived by the retention sweep: named, not shown as zero.
-  expect(report.year.html).toContain('in archive');
-  expect(report.year.html).toContain('moved to the Annual Archive');
-  expect(report.month.html).not.toContain('moved to the Annual Archive');
+  /* Jan and Feb were moved to DB.archive by the retention sweep, and the year
+     still counts them (owner, 2026-09-29: "include the archive in yearly
+     totals"): January has figures, and the year is the sum of its months. */
+  expect(report.year.janArchived, 'the seed really did archive January').toBe(true);
+  expect(report.year.janRev).toBeGreaterThan(0);
+  expect(report.year.janExp).toBeGreaterThan(0);
+  expect(report.year.rev, 'the year is the sum of its twelve months').toBe(report.year.trendSum);
 
   // Both choices sit in the Reports export menu, each naming its period.
   await win.evaluate(() => navigate('reports'));

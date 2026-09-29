@@ -15,12 +15,58 @@
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
+/* ══ THE WHOLE LEDGER: LIVE RECORDS AND ARCHIVED ONES (owner, 2026-09-29) ════
+   enforceDataRetention() (settings.js) moves settled payments and expenses
+   older than six full months out of DB.payments / DB.expenses into DB.archive.
+   The money functions below read the live lists only, so on a YEAR report the
+   early months read 0 — the rows were still in the database, just not where
+   the totals looked. The owner's ruling: "include the archive in yearly
+   totals". Every figure built on calcRevenue() / calcExpenses() now reads
+   both halves, so a month and the year it belongs to always agree, whether or
+   not the month has been archived.
+
+   Deduplicated by id, live first: retention only removes a row once it is in
+   the archive, but a restored backup or a half-finished pass can leave one in
+   both, and counting it twice would overstate the year (the Annual Archive
+   page's _arcDedupe() guards the same thing). Pending payments are never
+   archived, so nothing owed moves.
+
+   Which half of the archive a row belongs to: `_src`, written by retention;
+   rows from the v3 archive carry none and are told by shape — the same rule
+   as _archiveClassify() in reports.js, which now asks this one. */
+function _archiveIsExpense(r) {
+  if (!r) return false;
+  if (r._src) return r._src === 'expenses';
+  return r.category !== undefined && r.studentName === undefined
+      && r.studentId === undefined && r.month === undefined;
+}
+function _withArchived(live, wantExpense) {
+  var list = live || [];
+  var arch = (typeof DB !== 'undefined' && Array.isArray(DB.archive)) ? DB.archive : [];
+  if (!arch.length) return list;
+  var seen = new Set();
+  list.forEach(function (r) { if (r && r.id != null) seen.add(r.id); });
+  var out = list.slice();
+  arch.forEach(function (r) {
+    if (!r || _archiveIsExpense(r) !== wantExpense) return;
+    if (r.id != null) { if (seen.has(r.id)) return; seen.add(r.id); }
+    out.push(r);
+  });
+  return out;
+}
+/** Every payment record, live and archived, once each. */
+function ledgerPayments() { return _withArchived(DB.payments, false); }
+/** Every expense record, live and archived, once each. */
+function ledgerExpenses() { return _withArchived(DB.expenses, true); }
+
 // ══ SINGLE SOURCE OF TRUTH FOR REVENUE ══════════════════════════════════════
 // Revenue = Paid payments + partial Pending payments (where amount>0 & unpaid is explicitly set)
 // This is used by dashboard, reports, CSVs, PDFs, WhatsApp/email share — everywhere.
+// Archived records count too (see ledgerPayments above).
 function calcRevenue(datePrefix) {
+  const all = ledgerPayments();
   // Use _payMatchesMonth to handle both YYYY-MM-DD date fields AND "April 2026" month labels
-  const paid    = DB.payments
+  const paid    = all
     .filter(p => p.status==='Paid' && _payMatchesMonth(p, datePrefix))
     .reduce((s,p) => s + Number(p.amount||0), 0);
   /* D-4. This used to require `p.unpaid != null`, so a part-payment written
@@ -32,7 +78,7 @@ function calcRevenue(datePrefix) {
      that record" — and carries no such condition, so calcCashReceived() has
      been counting these records all along. The cash figure and the accrual
      figure disagreed about the same rupees. */
-  const partial = DB.payments
+  const partial = all
     .filter(p => p.status==='Pending' && Number(p.amount||0)>0
       && _payMatchesMonth(p, datePrefix))
     .reduce((s,p) => s + Number(p.amount||0), 0);
@@ -127,7 +173,7 @@ function calcCashReceivedIn(list, key) {
       s + (String(e.date || '').indexOf(String(key)) === 0 ? e.amount : 0), 0), 0);
 }
 function calcCashReceived(key) {
-  return calcCashReceivedIn(DB.payments || [], key);
+  return calcCashReceivedIn(ledgerPayments(), key);
 }
 
 /* The month's cash split by WHICH month it settles, which is the reconciliation
@@ -142,7 +188,7 @@ function cashBreakdown(key) {
      rupees beside it or the two disagree. */
   const out = { total: 0, current: 0, arrears: 0, advance: 0, count: 0,
                 nCurrent: 0, nArrears: 0, nAdvance: 0 };
-  (DB.payments || []).forEach(p => {
+  ledgerPayments().forEach(p => {
     const events = _cashEvents(p);
     if (!events.length) return;
     /* Compared at the SAME granularity as `key`. `key` is a prefix and may be a
@@ -178,7 +224,7 @@ function calcExpenses(key) {
   return calcExpensesOnly(key) + calcTransfers(key);
 }
 function calcExpensesOnly(key) {
-  return (DB.expenses || [])
+  return ledgerExpenses()
     .filter(e => String(e.date || '').startsWith(key))
     .reduce((s, e) => s + Number(e.amount || 0), 0);
 }

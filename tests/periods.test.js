@@ -209,5 +209,49 @@ ok('joined / left flags name the period they fall in', () => {
   assert.deepStrictEqual(f(M1), [false, true]);
 });
 
+/* ── THE ARCHIVE IS IN THE TOTALS (owner, 2026-09-29) ─────────────────────────
+   "include the archive in yearly totals". Retention moves settled records
+   older than six months into DB.archive; calcRevenue()/calcExpenses() read
+   both halves, so an archived month is not a zero month — and a row that sits
+   in both halves (a restored backup, a half-finished pass) counts once. */
+ok('archived payments and expenses count in their month and their year', () => {
+  const M = vm.runInContext('({ calcRevenue, calcExpenses, calcCashReceived, ledgerPayments })', sandbox);
+  const save = { p: DB.payments, e: DB.expenses, a: DB.archive, t: DB.transfers };
+  try {
+    DB.transfers = [];
+    DB.payments = [{ id: 'live1', studentId: 's', month: '2026-08', date: '2026-08-03', status: 'Paid', amount: 9000 }];
+    DB.expenses = [{ id: 'ex1', date: '2026-08-10', category: 'Gas', amount: 500 }];
+    DB.archive = [
+      { id: 'old1', studentId: 's', month: '2026-01', date: '2026-01-04', status: 'Paid', amount: 7000, _src: 'payments' },
+      { id: 'oldx', date: '2026-01-12', category: 'Electricity', amount: 1200, _src: 'expenses' },
+      // v3 rows carry no _src and are told by shape
+      { id: 'v3p', studentId: 's', studentName: 'A', month: '2026-02', date: '2026-02-02', status: 'Paid', amount: 3000 },
+      { id: 'v3e', date: '2026-02-09', category: 'Water', amount: 300 },
+      // the same payment in both halves counts once
+      { id: 'live1', studentId: 's', month: '2026-08', date: '2026-08-03', status: 'Paid', amount: 9000, _src: 'payments' },
+    ];
+    assert.strictEqual(M.calcRevenue('2026-01'), 7000);
+    assert.strictEqual(M.calcExpenses('2026-01'), 1200);
+    assert.strictEqual(M.calcRevenue('2026-02'), 3000);
+    assert.strictEqual(M.calcExpenses('2026-02'), 300);
+    assert.strictEqual(M.calcRevenue('2026'), 19000, 'the year is its months, the duplicate once');
+    assert.strictEqual(M.calcExpenses('2026'), 2000);
+    assert.strictEqual(M.calcCashReceived('2026'), 19000);
+    assert.strictEqual(M.ledgerPayments().length, 3);
+  } finally {
+    DB.payments = save.p; DB.expenses = save.e; DB.archive = save.a; DB.transfers = save.t;
+  }
+});
+
+ok('no archive at all is the live figure unchanged', () => {
+  const M = vm.runInContext('({ calcRevenue })', sandbox);
+  const save = { p: DB.payments, a: DB.archive };
+  try {
+    DB.payments = [{ id: 'x', month: '2026-03', date: '2026-03-01', status: 'Paid', amount: 4000 }];
+    DB.archive = undefined;
+    assert.strictEqual(M.calcRevenue('2026-03'), 4000);
+  } finally { DB.payments = save.p; DB.archive = save.a; }
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

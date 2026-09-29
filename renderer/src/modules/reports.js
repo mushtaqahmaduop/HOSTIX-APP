@@ -27,7 +27,7 @@ function _rptResidents(keys) {
   keys = keys || _rptKeys();
   if (!keys.length) return [];
   const billed = new Map();   // studentId -> latest bill in the period
-  (DB.payments || []).forEach(p => {
+  ledgerPayments().forEach(p => {   // archived bills too (owner, 2026-09-29)
     if (!p || !keys.some(k => _payMatchesMonth(p, k))) return;
     const cur = billed.get(p.studentId);
     if (!cur || String(_payMonthKey(p)) >= String(_payMonthKey(cur))) billed.set(p.studentId, p);
@@ -637,7 +637,7 @@ function _rptExportWord() { return reportYearly ? 'Annual' : 'Monthly'; }
 function _rptOutgoings(key) {
   const keys = Array.isArray(key) ? key : [key];
   const hit  = d => keys.some(k => String(d || '').startsWith(k));
-  return (DB.expenses || []).filter(e => hit(e.date)).concat(
+  return ledgerExpenses().filter(e => hit(e.date)).concat(   // archived too (owner, 2026-09-29)
     (DB.transfers || []).filter(t => hit(t.date)).map(t => ({
       id: t.id, date: t.date, category: FUND_TRANSFER_CAT,
       description: t.description || ('Transfer' + (t.receivedBy ? ' to ' + t.receivedBy : '')),
@@ -685,7 +685,9 @@ function _rptGroupsTotal(groups) {
 }
 
 function _rptTotals(keys) {
-  const pays = DB.payments.filter(p => keys.some(k => _payMatchesMonth(p, k)));
+  // Live AND archived (owner, 2026-09-29: "include the archive in yearly totals"),
+  // so the records a card itemises are the records calcRevenue() summed.
+  const pays = ledgerPayments().filter(p => keys.some(k => _payMatchesMonth(p, k)));
   const exps = _rptOutgoings(keys);
   const rev  = keys.reduce((s, k) => s + calcRevenue(k), 0);
 
@@ -1878,8 +1880,8 @@ let _rptGaugeChart = null;
 function rptMonthsWithData() {
   const out = new Set();
   const see = k => { if (/^\d{4}-\d{2}$/.test(k || '')) out.add(k); };
-  (DB.payments  || []).forEach(p => see(_payMonthKey(p)));
-  (DB.expenses  || []).forEach(e => see(String(e.date || '').slice(0, 7)));
+  ledgerPayments().forEach(p => see(_payMonthKey(p)));
+  ledgerExpenses().forEach(e => see(String(e.date || '').slice(0, 7)));
   (DB.transfers || []).forEach(x => see(String(x.date || '').slice(0, 7)));
   (DB.students  || []).forEach(s => see(_toMonthKey(s.joinDate)));
   return out;
@@ -2957,10 +2959,7 @@ function _archiveClassify(r) {
   // table they came from — trust it. Legacy rows migrated from the v3
   // localStorage archive have no `_src`, so fall back to shape sniffing: an
   // expense has a category and no student/month fields.
-  const isExpense = (r && r._src)
-    ? r._src === 'expenses'
-    : !!(r && r.category !== undefined &&
-      r.studentName === undefined && r.studentId === undefined && r.month === undefined);
+  const isExpense = _archiveIsExpense(r);   // one rule, in periods.js
   const date  = (r && (r.date || r.paidDate || r.dueDate)) || '';
   const mYear = (r && r.month && String(r.month).match(/\d{4}/)) ? String(r.month).match(/\d{4}/)[0] : '';
   const year  = mYear || (date ? String(date).slice(0, 4) : '') || 'Undated';

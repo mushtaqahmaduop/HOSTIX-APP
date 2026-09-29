@@ -94,16 +94,7 @@ function ownerBriefData(key, yearly) {
       return { name: t.name, rooms: tr.length, occ: o, pct: _obPct(o, tr.length) };
     }).filter(t => t.rooms > 0);
 
-    /* MONTHS THAT HAVE MOVED TO THE ARCHIVE. Settled records older than six
-       full months leave DB.payments/DB.expenses for DB.archive (settings.js,
-       enforceDataRetention), and calcRevenue()/calcExpenses() read the live
-       lists only — so on a year's summary, and on the Reports page's year view,
-       those months read 0. A silent 0 on an owner's page is a false figure, so
-       the months are named and marked instead. Whether the year totals should
-       read the archive is the owner's decision (raised 2026-09-29). */
-    const inArchive = k => (DB.archive || []).some(r =>
-      String(r.month || '').indexOf(k) === 0 || String(r.date || '').indexOf(k) === 0);
-    const trend = _rptTrend(keys[0], yearly).map(t => Object.assign(t, { archived: inArchive(t.key) }));
+    const trend = _rptTrend(keys[0], yearly);
 
     const issues = _rptIssues();
     const bucket = s => (typeof _issBucket === 'function' ? _issBucket(s) : (s === 'Resolved' ? 'resolved' : 'open'));
@@ -119,7 +110,6 @@ function ownerBriefData(key, yearly) {
       revParts: _rptRevParts(cur.pays),
       cats: _rptByCategory(cur.exps),
       trend,
-      archivedMonths: trend.filter(t => t.archived).map(t => t.key),
       rooms: rooms.length, occ, pOcc,
       occRate: _obPct(occ, rooms.length), pOccRate: _obPct(pOcc, rooms.length),
       byType, owing,
@@ -139,10 +129,6 @@ function ownerBriefData(key, yearly) {
 /* ── HEADLINES — facts only ───────────────────────────────────────────────── */
 function _obHeadlines(d) {
   const out = [], c = d.cur;
-  if (d.archivedMonths && d.archivedMonths.length) {
-    const n = d.archivedMonths.length;
-    out.push(`<b>Totals leave out ${n} month${n === 1 ? '' : 's'}</b> now in the Annual Archive — see the note under the chart.`);
-  }
   if (d.collect.rate != null) {
     out.push(`Collected <b>${escHtml(fmtPKR(c.collected))}</b> of <b>${escHtml(fmtPKR(c.billed))}</b> billed — <b>${Math.round(d.collect.rate * 10) / 10}%</b>.`);
   }
@@ -190,9 +176,7 @@ function _obTrendSvg(trend) {
       ? `<rect x="${x}" y="${y(v)}" width="${bw}" height="${Math.max(.5, y(0) - y(v))}" fill="${col}"/>` : '';
     g += bar(t.rev, cx - bw - 1, OB_C.rev) + bar(t.exp, cx + 1, OB_C.exp);
     if (n <= 12 && t.rev > 0) g += `<text x="${cx - bw / 2 - 1}" y="${y(t.rev) - 3}" text-anchor="middle" font-size="7.5" fill="${OB_C.ink}">${escHtml(fmtChart(t.rev))}</text>`;
-    // An archived month is not a zero month — say where its figures went.
-    if (t.archived && !t.rev && !t.exp) g += `<text x="${cx}" y="${y(0) - 6}" text-anchor="middle" font-size="7.5" font-style="italic" fill="${OB_C.muted}">in archive</text>`;
-    g += `<text x="${cx}" y="${H - B + 14}" text-anchor="middle" font-size="9" fill="${OB_C.muted}">${escHtml(t.lbl)}${t.archived ? '*' : ''}</text>`;
+    g += `<text x="${cx}" y="${H - B + 14}" text-anchor="middle" font-size="9" fill="${OB_C.muted}">${escHtml(t.lbl)}</text>`;
   });
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Revenue and expenses by month">${g}</svg>`;
 }
@@ -279,11 +263,8 @@ function ownerBriefHTML(d) {
       <div class="ob-card__h">Revenue and expenses — ${d.yearly ? 'each month of ' + escHtml(d.key) : 'the six months to ' + escHtml(d.label)}
         <span class="ob-key"><i style="background:${OB_C.rev}"></i>Revenue <i style="background:${OB_C.exp}"></i>Expenses</span></div>
       ${_obTrendSvg(d.trend)}
-      <table class="ob-tt"><thead><tr><th></th>${d.trend.map(t => `<th>${escHtml(t.lbl)}${t.archived ? '*' : ''}</th>`).join('')}</tr></thead>
+      <table class="ob-tt"><thead><tr><th></th>${d.trend.map(t => `<th>${escHtml(t.lbl)}</th>`).join('')}</tr></thead>
         <tbody>${trendRows}</tbody></table>
-      ${d.archivedMonths.length ? `<div class="ob-note">* ${escHtml(d.archivedMonths.map(monthLabel).join(', '))}: settled records
-        older than six months have moved to the Annual Archive and are not counted in this summary's figures.
-        The Annual Archive page holds them.</div>` : ''}
     </div>
     ${foot}
   </section>`;
@@ -476,7 +457,6 @@ function _obCss() {
   .ob-tbl td{padding:4px 6px;border-bottom:1px solid #E5E7EB}
   .ob-tbl .is-num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
   .ob-more{font-size:9.5px;color:${C.muted};margin-top:6px}
-  .ob-note{font-size:9px;color:${C.muted};margin-top:6px;padding-top:5px;border-top:1px dashed ${C.line}}
   .ob-none{font-size:10.5px;color:${C.muted};padding:8px 0}
   @page{margin:12mm}`;
 }
