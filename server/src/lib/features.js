@@ -84,6 +84,14 @@ const CATALOGUE = Object.freeze({
     default: false,
     optIn: true,
     since: '6.1.0'
+  },
+  /* Staff & Payroll (2026-09-30): for every hostel (owner, plan §9.4), so it
+     follows the ordinary rule — on by default, switched off per hostel. */
+  payroll: {
+    label: 'Staff & Payroll',
+    description: 'Employees, salaries, salary advances and payslips; salaries and advances are booked as expenses.',
+    default: true,
+    since: '6.2.0'
   }
 });
 

@@ -63,8 +63,9 @@ const BACKUP_TABLES = ['rooms','students','payments','expenses','cancellations',
    backup from before step 8 has no such table and must still restore — empty. */
 /* `owner_funds` (Owner Funds, 2026-09-28) rides with them too: every backup
    written before it existed has no such table and must still restore. */
+/* So do the three Staff & Payroll tables (2026-09-30), for the same reason. */
 const HANDOVER_TABLES = ['warden_collections', 'handovers', 'handover_items', 'concessions',
-  'owner_funds'];
+  'owner_funds', 'employees', 'salary_advances', 'payslips'];
 
 /* DATABASE HEALTH  —  spec §17.
  *
@@ -354,6 +355,9 @@ function initDatabase() {
     CREATE TABLE IF NOT EXISTS handover_items     (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS concessions        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS owner_funds        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS employees          (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS salary_advances    (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS payslips           (id TEXT PRIMARY KEY, data TEXT NOT NULL);
   `);
   // Created here rather than in the block above because it carries triggers
   // that refuse UPDATE and DELETE — see migrations/002-student-ledger.js.
@@ -2404,7 +2408,7 @@ function _assertWritable(table) {
 const _BACKUP_KEY_ALIASES = {
   activityLog: 'activitylog', billSplits: 'billsplits',
   wardenCollections: 'warden_collections', handoverItems: 'handover_items',
-  ownerFunds: 'owner_funds',
+  ownerFunds: 'owner_funds', salaryAdvances: 'salary_advances',
 };
 function _normaliseBackupKeys(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return data;

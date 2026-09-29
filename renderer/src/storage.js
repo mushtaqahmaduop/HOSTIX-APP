@@ -44,7 +44,11 @@ const _TABLE_MAP = {
   // Warden ledger step 8 — standing concessions: requested, decided, ended.
   concessions:       'concessions',
   // Owner Funds (2026-09-28) — money between the owner and the hostel.
-  ownerFunds:        'owner_funds'
+  ownerFunds:        'owner_funds',
+  // Staff & Payroll (2026-09-30) — the rules are in src/payroll.js.
+  employees:         'employees',
+  salaryAdvances:    'salary_advances',
+  payslips:          'payslips'
 };
 
 // ── Load DB ───────────────────────────────────────────────────────────────────

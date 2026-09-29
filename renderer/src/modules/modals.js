@@ -290,6 +290,9 @@ function _initDBFields(d) {
   if (!Array.isArray(d.handoverItems))     d.handoverItems = [];
   if (!Array.isArray(d.concessions))       d.concessions = [];   // concessions.js (step 8)
   if (!Array.isArray(d.ownerFunds))        d.ownerFunds = [];    // owner-funds.js
+  if (!Array.isArray(d.employees))         d.employees = [];     // payroll.js
+  if (!Array.isArray(d.salaryAdvances))    d.salaryAdvances = [];
+  if (!Array.isArray(d.payslips))          d.payslips = [];
   if (!d.settings) d.settings = {};
 
   /* ONE ISSUES REGISTER (owner, 2026-09-21).
