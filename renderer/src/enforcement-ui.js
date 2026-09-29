@@ -105,7 +105,8 @@ var FEATURE_PAGES = {
   archive:  ['archive'],
   backup:   ['backup'],
   expenses: ['expenses'],
-  ownerFunds: ['ownerfunds']
+  ownerFunds: ['ownerfunds'],
+  payroll:    ['payroll']
   // printDocs and multiUser gate actions rather than pages — see below.
 };
 
@@ -117,7 +118,8 @@ var FEATURE_LABELS = {
   printDocs: 'Printable documents',
   multiUser: 'Multiple staff logins',
   expenses:  'Expenses & fund transfers',
-  ownerFunds: 'Owner Funds'
+  ownerFunds: 'Owner Funds',
+  payroll:    'Staff & Payroll'
 };
 
 /* ── OPT-IN FEATURES: OFF UNLESS THE CONTROL PLANE SAYS ON ────────────────────

@@ -112,6 +112,7 @@ const pageConfig = {
   expenses:      { title:'Expenses', sub:'', action:'Add Expense' },
   // Owner Funds (2026-09-28): money between the owner and the hostel.
   ownerfunds:    { title:'Owner Funds', sub:'Money the owner gives to or takes from the hostel.', action:'Record Movement' },
+  payroll:       { title:'Staff & Payroll', sub:'Employees, salaries, advances and payslips.', action:'Add Employee' },
   // The owner's reference (cancellations2.png, 2026-09-15).
   cancellations: { title:'Cancellations', sub:'Manage student cancellations, track settlements and restore records.', action:'Add Cancellation' },
   /* Former Students was a MODAL behind the account menu until 2026-09-10.
@@ -360,6 +361,7 @@ function applyHeaderChrome(page) {
   // ever opens an Add form.
   // Owner Funds records with its own permission, not 'add' (owner-funds.js).
   const mayAdd = page === 'ownerfunds' ? (typeof ofAllowed === 'function' && ofAllowed())
+               : page === 'payroll' ? (typeof prAllowed === 'function' && prAllowed())
                : (typeof canDo !== 'function' || canDo('add'));
   const btn = document.getElementById('hdr-action');
   if (btn) {
@@ -380,6 +382,7 @@ function headerAction() {
   else if(currentPage==='payments') openAddPayment();
   else if(currentPage==='expenses') showAddExpenseModal();
   else if(currentPage==='ownerfunds') showOwnerFundModal();
+  else if(currentPage==='payroll') showEmployeeForm();
   else if(currentPage==='cancellations') showAddCancellationModal();
   else if(currentPage==='issues') showAddIssueModal();
 }
@@ -537,7 +540,7 @@ function renderPage(p, resetScroll=false) {
         return;
       }
 
-      const _needs = { settings:'settings', reports:'reports', archive:'reports', ownerfunds:'ownerFunds' }[basePage];
+      const _needs = { settings:'settings', reports:'reports', archive:'reports', ownerfunds:'ownerFunds', payroll:'payroll' }[basePage];
       if (_needs && typeof canDo === 'function' && !canDo(_needs)) {
         el.innerHTML = '<div style="padding:48px 24px;text-align:center;color:var(--text3)">'
           + '<div style="font-size:15px;font-weight:700;color:var(--text2);margin-bottom:6px">Not permitted</div>'
@@ -551,6 +554,7 @@ function renderPage(p, resetScroll=false) {
       else if(basePage==='payments') el.innerHTML = renderPayments();
       else if(basePage==='expenses') el.innerHTML = renderExpenses();
       else if(basePage==='ownerfunds') el.innerHTML = renderOwnerFunds();
+      else if(basePage==='payroll') el.innerHTML = renderPayroll();
       else if(basePage==='cancellations') el.innerHTML = renderCancellations(cancFilter);
       else if(basePage==='former') el.innerHTML = renderFormerStudents();
       else if(basePage==='reports') el.innerHTML = renderReports();

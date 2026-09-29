@@ -1142,7 +1142,6 @@ async function saveIssue(id) {
 
   const title = _issVal('mt-title');
   if (!title) { toast('Enter a title', 'error'); return; }
-  if (!Array.isArray(DB.issues)) DB.issues = [];
 
   /* Raised by a student: their link is recorded and the room is the one on
      THEIR record, not whatever the room box says. Raised by staff: the typed

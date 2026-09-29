@@ -94,6 +94,15 @@ ok('THE MONEY RULE: advance is an expense on its day, salary is the NET, the mon
   assert.ok(P.prOwnsExpense(ax));
 });
 
+ok('an advance given after the payment date is not recovered from that payslip', () => {
+  reset();
+  const e = emp().record;
+  P.prGiveAdvance({ employeeId: e.id, amount: 5000, date: '2026-09-10', reason: 'x' });
+  const aug = P.prPay(e.id, '2026-08', { date: '2026-08-28' }).record;
+  assert.strictEqual(aug.net, 30000, 'August was paid before the advance existed');
+  assert.strictEqual(P.prPay(e.id, '2026-09', { date: '2026-09-30' }).record.net, 25000);
+});
+
 ok('a month is paid once', () => {
   reset();
   const e = emp().record;

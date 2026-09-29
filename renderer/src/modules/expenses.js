@@ -623,10 +623,13 @@ function renderExpenses() {
              ? `<span class="exp-refno" data-tip="${escHtml(e.refNo)}" data-tip-label="Receipt no.">${escHtml(e.refNo)}</span>`
              : ''}`}</td>
       <td>
-        <div class="exp-acts">
+        ${typeof prOwnsExpense === 'function' && prOwnsExpense(e)
+          ? `<button type="button" class="exp-payroll" onclick="event.stopPropagation();expOpenPayroll('${e.id}')"
+               title="Booked by Staff &amp; Payroll — change or void it there">${e.source.kind === 'salary' ? 'Payslip' : 'Advance'} ›</button>`
+          : `<div class="exp-acts">
           <button class="ui-btn ui-btn--secondary ui-btn--sm ui-btn--icon" onclick="${e._transfer?`showEditTransferModal('${e.id}')`:`showEditExpenseModal('${e.id}')`}" title="Edit" aria-label="Edit this ${escHtml(e.category || 'expense')} record"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
           <button class="ui-btn ui-btn--danger ui-btn--sm ui-btn--icon" onclick="${e._transfer?`deleteTransfer('${e.id}')`:`deleteExpense('${e.id}')`}" title="Delete" aria-label="Delete this ${escHtml(e.category || 'expense')} record"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
-        </div>
+        </div>`}
       </td>
     </tr>`;
   }).join('');
@@ -1024,6 +1027,7 @@ function showExpenseModal(id) {
   /* One form for both, so it asks for the permission that matches which of the
      two it is about to be (2026-09-10): `id` present means an existing record
      is being changed. */
+  if (id && _expPayrollOwned(id)) return;
   if (typeof requirePerm === 'function' && !requirePerm(id ? 'edit' : 'add')) return;
   const e = id ? (DB.expenses || []).find(x => x.id === id) : null;
   if (id && !e) return;
@@ -1270,16 +1274,37 @@ async function _expDoDelete(id) {
      refusals — this is the line that keeps a future caller from becoming the
      next unguarded delete. */
   if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
+  if (_expPayrollOwned(id)) return;
   const _del_e=DB.expenses.find(x=>x.id===id);
   DB.expenses=DB.expenses.filter(x=>x.id!==id);
   if(_del_e) logActivity('Expense Deleted', _del_e.category+' — '+fmtPKR(_del_e.amount), 'Finance');
   await saveDB(); renderPage(_expReturnPage()); toast('Expense deleted','info');
 }
 
+/* PAYROLL OWNS ITS ROWS (Staff & Payroll, 2026-09-30). A salary or an advance
+   is booked here by src/payroll.js with `source: {kind, id}`; editing or
+   deleting it from this page would leave the payslip or advance saying one
+   thing and the expense another. So both are refused here, with the way to the
+   record that can change it. */
+function _expPayrollOwned(id) {
+  const e = (DB.expenses || []).find(x => x.id === id);
+  if (!(e && typeof prOwnsExpense === 'function' && prOwnsExpense(e))) return false;
+  toast('This ' + (e.source.kind === 'salary' ? 'salary' : 'advance') + ' was booked by Staff & Payroll — change or void it there', 'info');
+  return true;
+}
+function expOpenPayroll(id) {
+  const e = (DB.expenses || []).find(x => x.id === id);
+  if (!e || !e.source) return;
+  if (typeof prAllowed === 'function' && !prAllowed()) { toast('Your account does not have the Staff & payroll permission', 'info'); return; }
+  if (e.source.kind === 'salary') { navigate('payroll'); setTimeout(() => showPayslip(e.source.id), 200); }
+  else { prView.tab = 'advances'; prView.advShow = 'All'; navigate('payroll'); }
+}
+
 async function deleteExpense(id) {
   // The licence gate, before anything is read or written (see enforcement-ui.js).
   if (typeof requireWritable === 'function' && !requireWritable('Deleting an expense')) return;
   if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
+  if (_expPayrollOwned(id)) return;
   showConfirm('Delete expense?','This cannot be undone.', () => _expDoDelete(id));
 }
 

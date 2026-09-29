@@ -336,7 +336,9 @@ function prOnPayroll(emp, m) {
 /** The payslip that WOULD be paid now: gross, proration, advance recovery, other, net.
     `opts.prorate` (default true) takes the days not employed off a joining or leaving
     month; `opts.other` is a list of {label, amount} one-off deductions;
-    `opts.recoverAll` recovers every open advance in full (final settlement). */
+    `opts.recoverAll` recovers every open advance in full (final settlement);
+    `opts.date` is the payment date — an advance given AFTER it is not in this
+    payslip's hands and waits for the next one (default today). */
 function prDraft(empId, m, opts) {
   const o = opts || {};
   const emp = prFindEmployee(empId);
@@ -354,7 +356,8 @@ function prDraft(empId, m, opts) {
     if (amt > 0) deductions.push({ kind: 'other', label: label || 'Other deduction', amount: amt });
   }
   let room = gross - deductions.reduce((s, x) => s + x.amount, 0);
-  for (const a of prOpenAdvances(empId)) {
+  const payDate = _prIsDate(o.date) ? o.date : _prToday();
+  for (const a of prOpenAdvances(empId).filter(x => String(x.date) <= payDate)) {
     if (room <= 0) break;
     const want = o.recoverAll ? prAdvanceBalance(a) : prAdvanceDue(a);
     const take = Math.min(want, room);
@@ -381,7 +384,7 @@ function prPay(empId, m, input) {
   if (prPayslipFor(empId, m)) return _prFail('month', emp.name + ' is already paid for ' + _prMonthLabel(m));
   const date = String(i.date || _prToday());
   if (!_prIsDate(date)) return _prFail('date', 'Pick the payment date');
-  const d = prDraft(empId, m, { prorate: i.prorate, other: i.other, recoverAll: i.recoverAll });
+  const d = prDraft(empId, m, { prorate: i.prorate, other: i.other, recoverAll: i.recoverAll, date });
   const who = _prActor();
   const highest = prPayslips().reduce((mx, p) => Math.max(mx, Number(String(p.ref || '').replace(/\D/g, '')) || 0), 0);
   const seq = typeof refSeqTake === 'function' ? refSeqTake('ps', highest) : highest + 1;

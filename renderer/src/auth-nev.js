@@ -161,6 +161,9 @@ const PERMS = [
      means anything where the control plane has switched the feature on for
      this hostel — the Users page hides the tick everywhere else. */
   { key: 'ownerFunds', label: 'Owner funds',        hint: 'See and record money the owner gives or takes' },
+  /* STAFF & PAYROLL (2026-09-30): employees, salaries and advances. Paying and
+     voiding also need Manage users (docs/STAFF_PAYROLL_PLAN_2026-09-30.md §9.1). */
+  { key: 'payroll',  label: 'Staff & payroll',      hint: 'Staff records, salaries and advances' },
 ];
 const PERM_KEYS = PERMS.map(p => p.key);
 
@@ -236,6 +239,11 @@ function _migrateUsers(cfg) {
        ticks it for anyone else. */
     if (u.perms.ownerFunds === undefined) {
       u.perms.ownerFunds = u.perms.users === true;
+      changed = true;
+    }
+    // Salaries are private in the same way: payroll starts with the admins.
+    if (u.perms.payroll === undefined) {
+      u.perms.payroll = u.perms.users === true;
       changed = true;
     }
     // A later version may add a permission; grant it rather than silently deny.
@@ -787,6 +795,7 @@ function applyPermissionsToChrome() {
   // Owner Funds: hidden unless the permission is held AND the hostel has the
   // opt-in feature (the feature pass below also hides it when switched off).
   showNav('ownerfunds', canDo('ownerFunds') && (typeof hasFeature !== 'function' || hasFeature('ownerFunds')));
+  showNav('payroll', canDo('payroll') && (typeof hasFeature !== 'function' || hasFeature('payroll')));
   // Settings is no longer in the account menu — showNav('settings') above is
   // the only gate it needs now that the rail item is the single entry point.
 

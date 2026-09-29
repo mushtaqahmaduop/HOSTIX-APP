@@ -60,7 +60,7 @@ let usersRailFilter = { page: 1, pageSize: 25 };
    of presets where no preset uses it would be a split nobody could reach
    without ticking boxes by hand. */
 const USER_ROLES = [
-  { key: 'Super Admin',  perms: ['add','edit','delete','payments','reports','backup','settings','users','ownerFunds'] },
+  { key: 'Super Admin',  perms: ['add','edit','delete','payments','reports','backup','settings','users','ownerFunds','payroll'] },
   { key: 'Admin',        perms: ['add','edit','delete','payments','reports','backup','settings'] },
   { key: 'Manager',      perms: ['add','edit','payments','reports','settings'] },
   { key: 'Accountant',   perms: ['payments','reports'] },
@@ -1885,6 +1885,9 @@ const PERM_GROUPS = {
   ownerFunds: { ico: 'wallet', hue: 'dh-amber', title: 'Owner funds',
               lines: ['See money the owner gave to or took from the hostel',
                       'Record and reverse those movements'] },
+  payroll:  { ico: 'users',    hue: 'dh-green',  title: 'Staff & payroll',
+              lines: ['Staff records and salaries', 'Give salary advances',
+                      'Pay salaries and void (with User management)'] },
 };
 
 /* ── THE PHOTO CONTROL ───────────────────────────────────────────────────────
@@ -1936,7 +1939,7 @@ function showUserEditor(id) {
   /* A permission for a feature this hostel does not have is not offered — but
      its box is still rendered, hidden, so the role presets (Super Admin
      includes it) and the save read it exactly as they read every other one. */
-  const _permShown = k => k !== 'ownerFunds' || (typeof hasFeature !== 'function' || hasFeature('ownerFunds'));
+  const _permShown = k => (k !== 'ownerFunds' && k !== 'payroll') || (typeof hasFeature !== 'function' || hasFeature(k));
   const groups = PERMS.map(p => {
     const g = PERM_GROUPS[p.key] || { ico: 'info', hue: 'dh-slate', title: p.label, lines: [] };
     return `

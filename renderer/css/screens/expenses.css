@@ -212,6 +212,13 @@
 
 .exp-who  { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; white-space: nowrap; }
 .exp-acts { display: flex; align-items: center; gap: var(--space-1); }
+/* A row booked by Staff & Payroll: no edit or delete here, a way to its record. */
+.exp-payroll {
+  font: inherit; font-size: 11.5px; font-weight: 800; padding: 4px 10px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+  background: var(--accent-bg); color: var(--accent-fg); border: 1px solid transparent;
+}
+.exp-payroll:hover { border-color: var(--accent); }
+.exp-payroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* ══ THE EXPENSE FORM (add and edit expense.png) ══════════════════════════ */
 
