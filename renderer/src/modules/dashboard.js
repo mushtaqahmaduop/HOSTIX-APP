@@ -700,11 +700,10 @@ function renderDashboard() {
   setTimeout(_dashFillVersion, 0);
 
   const P = _dashLedgerRow(mo, pending, pendingCount);
-  /* _dashOccupancyOverview() is retired, not deleted — the Occupancy Overview
-     card was removed on 7 Sep and its percentage bar moved into Seat
-     Availability, where the seats it describes already are. The function stays
-     below for one release in case the owner wants the card back; nothing calls
-     it, and the linter will say so. */
+  /* The Occupancy Overview card was removed on 7 Sep and its percentage bar
+     moved into Seat Availability, where the seats it describes already are.
+     Its renderer was kept for a release in case the card came back, and was
+     deleted on 2026-09-29 (owner). */
 
   return `
   ${''/* The pending-cancellations banner that stood here is gone, and so is the
@@ -1766,24 +1765,6 @@ function _dashLedgerRow(mo, pending, pendingCount) {
    everywhere else on this page — a bed given to someone over capacity is not a
    bed the hostel has to sell. The headline percentage would otherwise be able
    to exceed 100 and the bar would overflow its track. */
-function _dashOccupancyOverview(totalSeats, filled, avail, pct) {
-  return ''
-  + '<div class="dash-sec dl-panel">'
-    + '<div class="dash-sec__head"><span class="dash-sec__title">Occupancy Overview</span></div>'
-    + '<div class="dl-occ">'
-      + '<div class="dl-occ__top">'
-        + '<span class="dl-occ__pct">' + pct + '%</span>'
-        + '<span class="dl-occ__of">' + fmtNum(filled) + ' / ' + fmtNum(totalSeats) + ' beds</span>'
-      + '</div>'
-      + '<div class="dl-occ__bar"><i style="width:' + Math.min(100, pct) + '%"></i></div>'
-      + '<div class="dl-occ__legend">'
-        + '<span class="dl-occ__row"><i class="dl-occ__sw dl-occ__sw--track"></i>Total beds<b>' + fmtNum(totalSeats) + '</b></span>'
-        + '<span class="dl-occ__row"><i class="dl-occ__sw dl-occ__sw--fill"></i>Occupied<b>' + fmtNum(filled) + '</b></span>'
-        + '<span class="dl-occ__row"><i class="dl-occ__sw dl-occ__sw--free"></i>Available<b>' + fmtNum(avail) + '</b></span>'
-      + '</div>'
-    + '</div>'
-  + '</div>';
-}
 
 /* ══ RECENT PAYMENTS ═════════════════════════════════════════════════════════
    Owner reference: `recent payments.png` (30 Aug).

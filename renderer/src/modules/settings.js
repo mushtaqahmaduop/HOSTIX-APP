@@ -1,14 +1,15 @@
 ﻿/* ─── HOSTYLLO — SETTINGS MODULE ─────────────────────────────────────────────
    Contains: renderSettings, bindSettingsEvents, renderLicenseSettingsPanel,
-             openLicenseSettingsWindow, liveUpdateSetting, hiSaveIdentity,
-             bulk rent update helpers, room type/payment method
-             helpers, exportData, importData, importFromExcel,
-             _showExcelImportPreview, confirmExcelImport, resetAllData,
-             saveIssue/maintenance/complaints/notices/fines/inspections/billsplits,
-             renderActivityLog, calcBillSplit, saveBillSplit, saveCheckin,
-             deleteCheckin, saveNotice, deleteNotice, saveFine, payFine,
-             deleteFine, enforceDataRetention,
+             liveUpdateSetting, hiSaveIdentity, bulk rent update helpers,
+             room type/payment method helpers, exportData, importData,
+             importFromExcel, _showExcelImportPreview, confirmExcelImport,
+             the room inspection checklist, enforceDataRetention.
              (the logo uploader was removed — the brand mark is fixed)
+
+   REMOVED 2026-09-29 on the owner's ruling, as features with no way in:
+   check-in log, notices, fines, bill splitting, Reset All Data and the
+   separate licence window. Git keeps them. Records an old install saved in
+   DB.fines are still shown by the Annual Archive; nothing new writes there.
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
@@ -27,83 +28,6 @@
 
    The one way in is showIssueModal() -> saveIssue() in modules/issues.js. */
 
-async function saveCheckin() {
-  const studentId = document.getElementById('ci-student')?.value;
-  if(!studentId){toast('Select a student','error');return;}
-  if(!DB.checkinlog) DB.checkinlog=[];
-  DB.checkinlog.push({
-    id:'ci_'+uid(), studentId,
-    type:document.getElementById('ci-type')?.value||'Check-in',
-    date:document.getElementById('ci-date')?.value||today(),
-    time:document.getElementById('ci-time')?.value||'',
-    reason:document.getElementById('ci-reason')?.value?.trim()||''
-  });
-  await saveDB(); closeModal(); renderPage('checkinlog'); toast('Entry added','success');
-}
-async function deleteCheckin(id) {
-  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
-  DB.checkinlog=DB.checkinlog.filter(x=>x.id!==id); await saveDB(); renderPage('checkinlog'); toast('Deleted','info');
-}function showAddNoticeModal() {
-  showModal('modal-sm','Post New Notice',`
-    <div class="form-grid">
-      <div class="field col-full"><label>Title *</label><input id="nt-title" class="form-control" placeholder="Notice title"></div>
-      <div class="field"><label>Type</label><select id="nt-type" class="form-control"><option>General</option><option>Important</option><option>Info</option><option>Event</option></select></div>
-      <div class="field"><label>Date</label><input id="nt-date" class="form-control cdp-trigger" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${today()}"></div>
-      <div class="field col-full"><label>Content</label><textarea id="nt-content" class="form-control" placeholder="Write notice content..."></textarea></div>
-    </div>`,
-  `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveNotice()">Post Notice</button>`);
-}
-async function saveNotice() {
-  const title = document.getElementById('nt-title')?.value?.trim();
-  if(!title){toast('Enter a title','error');return;}
-  if(!DB.notices) DB.notices=[];
-  DB.notices.push({
-    id:'nt_'+uid(), title,
-    type:document.getElementById('nt-type')?.value||'General',
-    content:document.getElementById('nt-content')?.value?.trim()||'',
-    date:document.getElementById('nt-date')?.value||today()
-  });
-  await saveDB(); closeModal(); renderPage('notices'); toast('Notice posted','success');
-}
-async function deleteNotice(id) {
-  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
-  showConfirm('Delete Notice?','',async ()=>{DB.notices=DB.notices.filter(x=>x.id!==id);await saveDB();renderPage('notices');toast('Deleted','info');});
-}function showAddFineModal() {
-  const students = studentsByRoom(DB.students.filter(s=>s.status==='Active')).map(s=>`<option value="${s.id}">${escHtml(s.name)}</option>`).join('');
-  showModal('modal-sm','Add Fine / Penalty',`
-    <div class="form-grid">
-      <div class="field col-full"><label>Student *</label><select id="fn-student" class="form-control"><option value="">Select Student</option>${students}</select></div>
-      <div class="field"><label>Amount (PKR) *</label><input id="fn-amount" class="form-control" type="number" placeholder="500"></div>
-      <div class="field"><label>Date</label><input id="fn-date" class="form-control cdp-trigger" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${today()}"></div>
-      <div class="field col-full"><label>Reason</label><input id="fn-reason" class="form-control" placeholder="e.g. Late payment, Rule violation"></div>
-      <div class="field col-full"><label>Additional Notes</label><textarea id="fn-notes" class="form-control" placeholder="Optional notes..."></textarea></div>
-    </div>`,
-  `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveFine()">Add Fine</button>`);
-}
-async function saveFine() {
-  const studentId = document.getElementById('fn-student')?.value;
-  const amount = Number(document.getElementById('fn-amount')?.value||0);
-  if(!studentId){toast('Select a student','error');return;}
-  if(!amount||amount<=0){toast('Enter a valid amount','error');return;}
-  if(!DB.fines) DB.fines=[];
-  DB.fines.push({
-    id:'fn_'+uid(), studentId, amount,
-    reason:document.getElementById('fn-reason')?.value?.trim()||'',
-    notes:document.getElementById('fn-notes')?.value?.trim()||'',
-    date:document.getElementById('fn-date')?.value||today(),
-    paid:false, paidDate:''
-  });
-  await saveDB(); closeModal(); renderPage('fines'); toast('Fine recorded','success');
-}
-async function payFine(id) {
-  const f = DB.fines.find(x=>x.id===id);
-  if(f){f.paid=true;f.paidDate=today();await saveDB();renderPage('fines');toast('Fine marked as paid','success');}
-}
-async function deleteFine(id) {
-  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
-  showConfirm('Delete Fine?','',async ()=>{DB.fines=DB.fines.filter(x=>x.id!==id);await saveDB();renderPage('fines');toast('Deleted','info');});
-}
-
 
 // ════════════════════════════════════════════════════════════════════════════
 // ACTIVITY LOG
@@ -112,81 +36,6 @@ async function deleteFine(id) {
    the Activity Log became a page built to `audit logs.png` — filters, a daily
    trend, a split by type, top users, pagination and a detail panel. It had no
    business living in the Settings module, and it was 60 lines of inline style. */
-
-function calcBillSplit() {
-  const total = Number(document.getElementById('bs-total')?.value||0);
-  const method = document.getElementById('bs-method')?.value||'equal';
-  const result = document.getElementById('bs-result');
-  const saveBtn = document.getElementById('bs-save-btn');
-  if(!result) return;
-  if(!total || total <= 0) { result.innerHTML=''; if(saveBtn) saveBtn.style.display='none'; return; }
-
-  const activeStudents = DB.students.filter(s=>s.status==='Active');
-  const occupiedRooms = [...new Set(activeStudents.map(s=>s.roomId).filter(Boolean))].map(rid=>({
-    room: DB.rooms.find(r=>r.id===rid),
-    students: activeStudents.filter(s=>s.roomId===rid)
-  })).filter(x=>x.room);
-
-  let perUnit = 0, unitLabel = '', rows = [];
-
-  if(method==='equal') {
-    const count = activeStudents.length || 1;
-    perUnit = Math.ceil(total / count);
-    unitLabel = 'per student';
-    rows = activeStudents.map(s=>({ name:s.name, room:'Room '+(DB.rooms.find(r=>r.id===s.roomId)?.number||'?'), share:perUnit }));
-  } else if(method==='byroom') {
-    const count = occupiedRooms.length || 1;
-    perUnit = Math.ceil(total / count);
-    unitLabel = 'per room';
-    rows = occupiedRooms.map(({room,students})=>({ name:'Room '+room.number+' ('+students.length+' students)', room:'', share:perUnit }));
-  } else {
-    const beds = activeStudents.length || 1;
-    perUnit = Math.ceil(total / beds);
-    unitLabel = 'per bed/student';
-    rows = activeStudents.map(s=>{ const rm=DB.rooms.find(r=>r.id===s.roomId); return { name:s.name, room:'Room '+(rm?.number||'?'), share:perUnit }; });
-  }
-
-  window._lastBillSplit = { total, method, perUnit, rows };
-
-  result.innerHTML = `
-    <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:12px;padding:20px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
-        <div>
-          <div style="font-size:12px;color:var(--text3)">Total Bill</div>
-          <div style="font-size:24px;font-weight:800;color:var(--text)">${fmtPKR(total)}</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-size:12px;color:var(--text3)">Each Pays (${unitLabel})</div>
-          <div style="font-size:24px;font-weight:800;color:var(--accent-strong)">${fmtPKR(perUnit)}</div>
-        </div>
-      </div>
-      <div style="max-height:300px;overflow-y:auto">
-        ${rows.map(r=>`
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
-          <div>
-            <div style="font-weight:600;font-size:14px">${escHtml(r.name)}</div>
-            ${r.room?`<div style="font-size:11px;color:var(--text3)">${r.room}</div>`:''}
-          </div>
-          <div style="font-weight:700;color:var(--amber)">${fmtPKR(r.share)}</div>
-        </div>`).join('')}
-      </div>
-    </div>`;
-  if(saveBtn) saveBtn.style.display='block';
-}
-
-async function saveBillSplit() {
-  if(!window._lastBillSplit) return;
-  const { total, method, perUnit } = window._lastBillSplit;
-  if(!DB.billSplits) DB.billSplits=[];
-  DB.billSplits.push({
-    id:'bs_'+uid(),
-    type:document.getElementById('bs-type')?.value||'Electricity',
-    month:document.getElementById('bs-month')?.value||'',
-    total, method, perUnit, date:today()
-  });
-  logActivity('Bill Split Saved', (document.getElementById('bs-type')?.value||'Electricity')+' '+fmtPKR(total), 'Finance');
-  await saveDB(); renderPage('billsplit'); toast('Bill split saved to records','success');
-}
 
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -2820,14 +2669,6 @@ async function licDo(what) {
      activation screen; nothing here needs to re-render. */
 }
 
-function openLicenseSettingsWindow() {
-  // Password gate removed — warden already authenticated via app login
-  if (window.electronAPI && window.electronAPI.licenseOpenSettings) {
-    window.electronAPI.licenseOpenSettings();
-  } else {
-    toast('License settings window not available in dev/browser mode.', 'info');
-  }
-}
 async function liveUpdateSetting(key, val) {
   DB.settings[key] = val;
   await saveDB();
@@ -3792,45 +3633,6 @@ function _showExcelImportResult(rows, errors) {
   `<button class="btn btn-primary" onclick="closeModal()">OK</button>`);
 }
 // ════════════════════════════════════════════════════════════════════════════
-async function resetAllData() {
-  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
-  showConfirm('⚠️ Reset ALL Data?','This will permanently delete all students, payments, expenses, maintenance, complaints, fines, notices, inspections, bill splits, cash handovers, concessions and owner fund movements. Rooms will be reset. This CANNOT be undone.',async ()=>{
-    // BUG FIX: Previously only cleared students/payments/expenses, leaving
-    // maintenance, complaints, fines, notices, activityLog, inspections,
-    // billSplits, cancellations, checkinlog as orphaned ghost records.
-    DB.students=[];
-    DB.payments=[];
-    DB.expenses=[];
-    DB.cancellations=[];
-    /* All three: `issues` is what the register reads, and the other two are
-       migration 003's rollback copies. Leaving those behind would mean Reset
-       All Data emptied the screen while the old records sat in the file. */
-    DB.maintenance=[];
-    DB.complaints=[];
-    DB.issues=[];
-    DB.fines=[];
-    DB.notices=[];
-    DB.activityLog=[];
-    DB.inspections=[];
-    DB.billSplits=[];
-    DB.checkinlog=[];
-    /* The warden-ledger tables too (owner, 2026-09-15: "yes clear both"):
-       cash handovers and their lines (step 4) and standing concessions
-       (step 8). Reset left them behind, pointing at students that no longer
-       existed. */
-    DB.wardenCollections=[];
-    DB.handovers=[];
-    DB.handoverItems=[];
-    DB.concessions=[];
-    DB.ownerFunds=[];
-    DB.rooms=[];   // empty, like a new install — no demo rooms (owner, 2026-09-24)
-    await saveDB();
-    // Reset is a restore to empty — the one other action allowed to replace
-    // the student ledger (owner, 2026-09-14).
-    await ledgerAdopt([]);
-    navigate('dashboard'); toast('All data reset','info');
-  });
-}
 
 
 /* uploadLogo() and loadSavedLogo() are GONE.

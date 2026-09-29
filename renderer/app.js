@@ -22,9 +22,9 @@
    └─ app.js                   ─ YOU ARE HERE — boot, keyboard shortcuts, misc
    ─────────────────────────────────────────────────────────────────────────── */
 
-// ── SAFE WINDOW HELPER ───────────────────────────────────────────────────────
-// safeOpenWindow(width, height) is defined in src/utils.js (loads before app.js).
-// Do NOT duplicate here — it opens with scrollbars/resizable and a 1000x720 default.
+// ── NO window.open() HELPER ──────────────────────────────────────────────────
+// safeOpenWindow() was removed on 2026-09-29: window.open() hangs Electron on
+// Windows, and every print and PDF goes through _electronPDF() instead.
 
 // ── ELECTRON PDF HELPER (Issue 1) ────────────────────────────────────────────
 // Unified PDF function: uses Electron native printToPDF when available (saves

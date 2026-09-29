@@ -6121,23 +6121,6 @@ function recalcStudentUnpaid() {
 function getStudentExtraChargesTotal() {
   let t=0; document.querySelectorAll('.student-extra-charge-amt').forEach(i=>{ t+=parseFloat(i.value)||0; }); return t;
 }
-function getStudentExtraChargesData() {
-  const items=[];
-  document.querySelectorAll('.student-extra-charge-row').forEach(row=>{
-    const label=row.querySelector('.student-extra-label')?.value?.trim();
-    const amt=parseFloat(row.querySelector('.student-extra-charge-amt')?.value)||0;
-    if(label&&amt>0) items.push({label,amount:amt});
-  });
-  return items;
-}
-function addStudentExtraChargeRow(label='',amount='') {
-  const list=document.getElementById('student-extra-charges-list'); if(!list) return;
-  const rowId='secr_'+Date.now();
-  const div=document.createElement('div');
-  div.className='extra-charge-row student-extra-charge-row'; div.id=rowId;
-  div.innerHTML=`<input class="form-control student-extra-label" type="text" placeholder="Charge name (e.g. Cooler Fee)" value="${escHtml(label)}" style="flex:1" oninput="recalcStudentUnpaid()"><input class="form-control student-extra-charge-amt charge-amt" type="number" placeholder="Amount (PKR)" value="${amount}" min="0" oninput="recalcStudentUnpaid()"><button type="button" class="rm-btn" onclick="document.getElementById('${rowId}').remove();recalcStudentUnpaid()" title="Remove">✕</button>`;
-  list.appendChild(div); recalcStudentUnpaid();
-}
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── INPUT AUTO-FORMAT ────────────────────────────────────────────────────────

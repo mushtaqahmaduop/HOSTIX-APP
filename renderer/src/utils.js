@@ -286,19 +286,6 @@ function migrateStudentIdsToNumeric() {
 
 // ── DOM helpers ───────────────────────────────────────────────────────────────
 
-// Safe window.open() wrapper — handles popup blocker gracefully
-function safeOpenWindow(width, height) {
-  width  = width  || 1000;
-  height = height || 720;
-  var w = window.open('', '_blank', 'width=' + width + ',height=' + height + ',scrollbars=yes,resizable=yes');
-  if (!w) {
-    if (typeof toast === 'function')
-      toast('⚠️ Popup blocked — allow popups for this page and try again.', 'error');
-    return null;
-  }
-  return w;
-}
-
 // ── Date & money formatters ───────────────────────────────────────────────────
 /* ── CALENDAR DATES ARE LOCAL, NEVER UTC ─────────────────────────────────────
    toISOString() converts to UTC first. Pakistan is UTC+5, so from 7pm every
@@ -1335,23 +1322,6 @@ const COURSE_LIST = [
   'Digital Marketing Course', 'Content Writing Course'
 ];
 
-function toggleOccField(val) {
-  const custom = document.getElementById('f-tocccustom');
-  const wrap   = document.getElementById('f-tocc-wrap');
-  const main   = /** @type {HTMLInputElement} */ (document.getElementById('f-tocc'));
-  if (val === 'other') {
-    if (wrap)   wrap.style.display   = 'none';
-    if (custom) { custom.style.display = 'block'; custom.style.marginTop = '0'; }
-  } else {
-    if (wrap)   wrap.style.display   = 'block';
-    if (custom) custom.style.display = 'none';
-    if (main)   main.placeholder = val === 'Student'
-      ? 'Type course e.g. BS Computer Science…'
-      : val === 'Job'      ? 'e.g. Software Engineer, Govt. Teacher…'
-      : val === 'Business' ? 'e.g. Shop Owner, Contractor…'
-      : 'Describe…';
-  }
-}
 
 function courseAutocomplete(inp) {
   const val = inp.value.trim().toLowerCase();

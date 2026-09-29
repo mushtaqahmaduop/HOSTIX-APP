@@ -384,9 +384,10 @@ function _cancCash(n) {
 }
 
 /* The settlement as the reference draws it: a pill carrying the word and, when
-   money moved, the amount under it. The same states cancSettleCell() reads —
-   `settlement` is frozen onto the record at checkout, so this is what was true
-   on the day the student left. cancSettleCell() stays for its other callers. */
+   money moved, the amount under it. `settlement` is frozen onto the record at
+   checkout, so this is what was true on the day the student left. (The older
+   cancSettleCell() that read the same states had no callers and was removed
+   on 2026-09-29.) */
 /* The sort arrows, shared by every header on this register. */
 const CANC_SORT = {
   asc:  '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>',
@@ -1460,29 +1461,6 @@ function exportCancellationsExcel() {
    from the record written at departure, never from today's payments — the
    payment rows stay editable forever and this is the only account of what was
    true on the day the student walked out. */
-function cancSettleCell(c) {
-  const s = c && c.settlement;
-  if (!s) {
-    return c && c.status === 'Pending'
-      ? '<span class="lk-chip lk-chip--flat">Not settled</span>'
-      : '<span class="lk-dash">—</span>';
-  }
-  const moved = Number(s.settledNow || 0);
-  if (s.action === 'refund') {
-    return '<span class="lk-chip dh-amber">' + escHtml('Refunded') + '</span>'
-         + '<div class="lk-sub">' + escHtml(fmtPKR(moved > 0 ? moved : Number(s.credit || 0)))
-         + (moved > 0 ? '' : ' credit left') + '</div>';
-  }
-  if (s.action === 'collect') {
-    const left = Number(s.outstanding || 0) - moved;
-    return '<span class="lk-chip ' + (left > 0 ? 'dh-red' : 'dh-green') + '">'
-         + escHtml(left > 0 ? 'Part collected' : 'Collected') + '</span>'
-         + '<div class="lk-sub">' + escHtml(fmtPKR(moved))
-         + (left > 0 ? ' of ' + escHtml(fmtPKR(Number(s.outstanding || 0))) : '') + '</div>';
-  }
-  return '<span class="lk-chip dh-green">Settled</span>'
-       + '<div class="lk-sub">nothing owed</div>';
-}
 
 /* The same three facts, for the record's own card and the edit form. */
 function cancSettleLines(c) {
