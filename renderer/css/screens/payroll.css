@@ -251,3 +251,32 @@
 .pr-psview .ps-net em { flex-basis: 100%; font-style: normal; font-size: 12px; color: var(--text2); }
 .pr-psview .ps-note { margin-top: 8px; font-size: 12.5px; color: var(--text2); }
 .pr-psview .ps-sign { display: none; }
+
+/* Bonuses, documents, the limit (2026-09-30) */
+.pr-tab em.is-ok { background: var(--success-bg); color: var(--success-fg); }
+.pr-k.is-ok { border-color: var(--success-border); }
+.pr-k.is-ok .pr-k__v { color: var(--success-fg); }
+.pr-ico--ok { background: var(--success-bg) !important; color: var(--success-fg) !important; }
+.pr-bon { color: var(--success-fg) !important; font-weight: 700; }
+.pr-slip__r.is-bon span, .pr-slip__r.is-bon b { color: var(--success-fg); }
+.pr-bonbox.is-pending { border-color: var(--success-border); background: var(--success-bg); }
+.pr-bonbox.is-pending b { color: var(--success-fg); }
+.pr-conseq__h em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(--text2); font-weight: 700; }
+.pr-conseq__warn.is-block { background: var(--danger-bg); color: var(--danger-fg); }
+.pr-docs { display: flex; flex-direction: column; gap: 6px; }
+.pr-doc { display: grid; grid-template-columns: 46px 1fr auto; gap: 10px; align-items: center; padding: 7px 9px;
+  border: 1px dashed var(--border); border-radius: 10px; }
+.pr-doc.is-on { border-style: solid; }
+.pr-doc__th { width: 46px; height: 34px; border-radius: 6px; overflow: hidden; background: var(--dash-sunk); color: var(--text3);
+  display: flex; align-items: center; justify-content: center; }
+.pr-doc__th img { width: 100%; height: 100%; object-fit: cover; }
+.pr-doc__pdf { font-size: 10px; font-weight: 800; color: var(--danger-fg); }
+.pr-doc__t { min-width: 0; }
+.pr-doc__t b { display: block; font-size: 12.5px; color: var(--text); }
+.pr-doc__t small { display: block; font-size: 11px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pr-doc__a { display: flex; gap: 8px; }
+.pr-doc__a .pr-link { font-size: 12px; }
+.pr-link--danger { color: var(--danger-fg); }
+.pr-docs__foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; margin-top: 2px; }
+.pr-docview { text-align: center; margin-top: 10px; }
+.pr-docview img { max-width: 100%; max-height: 62vh; border-radius: 8px; border: 1px solid var(--border); }

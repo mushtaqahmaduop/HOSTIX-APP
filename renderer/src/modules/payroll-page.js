@@ -69,12 +69,14 @@ function renderPayroll() {
   prRoles(); prDepartments();
   const openAdv = prAdvances().filter(a => a.status === 'Open' && prAdvanceBalance(a) > 0).length;
   const tabs = [['staff', 'Staff', icon('users', 'xs')], ['run', 'Payroll', icon('wallet', 'xs')],
-                ['advances', 'Advances', icon('money', 'xs')]];
-  const body = prView.tab === 'run' ? _prRunTab() : prView.tab === 'advances' ? _prAdvTab() : _prStaffTab();
+                ['advances', 'Advances', icon('money', 'xs')], ['bonuses', 'Bonuses', icon('award', 'xs')]];
+  const pendBon = prBonuses().filter(b => b.status === 'Pending').length;
+  const body = prView.tab === 'run' ? _prRunTab() : prView.tab === 'advances' ? _prAdvTab()
+             : prView.tab === 'bonuses' ? _prBonTab() : _prStaffTab();
   return `<div class="pr-page">
     <div class="pr-tabs" role="tablist">${tabs.map(([k, l, ic]) => `
       <button type="button" role="tab" aria-selected="${prView.tab === k}" class="pr-tab${prView.tab === k ? ' is-on' : ''}"
-        data-tab="${k}" onclick="prTab('${k}')">${ic}${l}${k === 'advances' && openAdv ? `<em>${openAdv}</em>` : ''}</button>`).join('')}
+        data-tab="${k}" onclick="prTab('${k}')">${ic}${l}${k === 'advances' && openAdv ? `<em>${openAdv}</em>` : ''}${k === 'bonuses' && pendBon ? `<em class="is-ok">${pendBon}</em>` : ''}</button>`).join('')}
     </div>
     ${body}
   </div>`;
@@ -173,9 +175,12 @@ function prRowMenu(id, btn) {
   const items = [
     { label: 'View profile', on: `showEmployeePanel('${id}')`, svg: icon('eye', 'sm') },
     { label: 'Edit', on: `showEmployeeForm('${id}')`, svg: icon('edit', 'sm') },
+    { label: 'Download profile (PDF)', on: `employeeProfilePDF('${id}')`, svg: icon('download', 'sm') },
   ];
   if (e.status !== 'Left') {
     items.push({ label: 'Give advance', on: `showAdvanceForm('${id}')`, svg: icon('money', 'sm') });
+    items.push(admin ? { label: 'Give bonus', on: `showBonusForm('${id}')`, svg: icon('award', 'sm') }
+      : { label: 'Give bonus', disabled: true, hint: 'A bonus is an administrator\'s decision', svg: icon('award', 'sm') });
     items.push(paid ? { label: 'Paid for ' + _prMon(m), disabled: true, hint: paid.ref, svg: icon('check', 'sm') }
       : admin && prOnPayroll(e, m) ? { label: 'Pay ' + _prMon(m), on: `showPayForm('${id}','${m}')`, svg: icon('wallet', 'sm') }
       : { label: 'Pay ' + _prMon(m), disabled: true, hint: admin ? 'Not employed this month' : _prAdminWhy, svg: icon('wallet', 'sm') });
@@ -238,8 +243,10 @@ function _prPanelHtml(e) {
       <div class="pr-pan__chips">${_prStatus(e.status)}<span class="pr-chip">${_prE(e.employmentType)}</span>
         <span class="pr-chip">Since ${_prE(fmtDate(e.joinDate))}</span>${left && e.leftDate ? `<span class="pr-chip">Left ${_prE(fmtDate(e.leftDate))}</span>` : ''}</div></div></div>
     <div class="pr-pan__acts">${payBtn}
-      ${left ? '' : `<button class="btn btn-secondary btn-sm" onclick="showAdvanceForm('${e.id}')">${icon('money', 'xs')} Give advance</button>`}
+      ${left ? '' : `<button class="btn btn-secondary btn-sm" onclick="showAdvanceForm('${e.id}')">${icon('money', 'xs')} Advance</button>`}
+      ${left ? '' : `<button class="btn btn-secondary btn-sm" ${admin ? `onclick="showBonusForm('${e.id}')"` : `disabled title="A bonus is an administrator's decision"`}>${icon('award', 'xs')} Bonus</button>`}
       <button class="btn btn-secondary btn-sm" onclick="showEmployeeForm('${e.id}')">${icon('edit', 'xs')} Edit</button>
+      <button class="btn btn-secondary btn-sm" onclick="employeeProfilePDF('${e.id}')" title="Download the full profile as a PDF">${icon('download', 'xs')} Profile</button>
       ${left ? '' : `<button class="btn btn-secondary btn-sm" ${admin ? `onclick="showSettleForm('${e.id}')"` : `disabled title="${_prAdminWhy}"`}>${icon('doorOpen', 'xs')} Settle</button>`}
     </div>
     <div class="pr-pan__b">
@@ -259,6 +266,15 @@ function _prPanelHtml(e) {
           <span class="pr-chip pr-chip--${a.status === 'Open' ? 'warn' : a.status === 'Void' ? 'muted' : 'ok'}">${a.status === 'Open'
             ? (a.recovery.mode === 'instalments' ? a.recovery.instalments + ' instalments' : 'Off next salary') : _prE(a.status)}</span></div>`).join('')
         : '<div class="pr-none">No advances.</div>'}
+
+      ${(() => { const bons = prBonuses().filter(b => b.employeeId === e.id).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+        return bons.length ? `<div class="pr-sec">Bonuses</div>${bons.slice(0, 6).map(b => `<div class="pr-advbox pr-bonbox is-${b.status.toLowerCase()}">
+          <div><b>${_prE(fmtPKR(b.amount))}</b><small>${_prE(b.ref)} · ${_prE(b.type)} · ${_prE(fmtDate(b.date))} · "${_prE(b.reason)}"</small></div>
+          <span class="pr-chip pr-chip--${b.status === 'Pending' ? 'ok' : b.status === 'Void' ? 'muted' : 'ok'}">${b.status === 'Pending' ? 'With next salary'
+            : b.status === 'Void' ? 'Void' : b.paidNow ? 'Paid ' + _prE(fmtDate(b.paidDate)) : 'On ' + _prE(((prFindPayslip(b.payslipId) || {}).ref) || 'payslip')}</span></div>`).join('')}` : ''; })()}
+
+      <div class="pr-sec">Documents</div>
+      ${_prDocsBlock(e)}
 
       <div class="pr-sec">Payslips</div>
       ${slips.length ? `<div class="pr-slips">${slips.slice(0, 8).map(p => `<button type="button" class="pr-hrow${p.status === 'Void' ? ' is-void' : ''}" onclick="showPayslip('${p.id}')">
@@ -451,12 +467,10 @@ async function _submitEmployee() {
 }
 
 /* ══ GIVE ADVANCE ═════════════════════════════════════════════════════════ */
-let _prAdvOver = false;
 function showAdvanceForm(empId) {
   if (!prAllowed()) { toast('Your account does not have the Staff & payroll permission', 'error'); return; }
   const staff = prEmployees().filter(e => e.status !== 'Left');
   if (!staff.length) { toast('Add an employee first', 'info'); return; }
-  _prAdvOver = false;
   const sel = empId || '';
   showModal('modal-md', '', `
     <div class="hf-mh"><span class="hf-mh__ico">${icon('money', 'sm')}</span><div><div class="hf-mh__t">Give advance</div>
@@ -493,23 +507,30 @@ function prAdvRecalc() {
   const btn = document.getElementById('pra-save');
   if (btn) btn.textContent = amt > 0 ? 'Give ' + fmtPKR(amt) : 'Give advance';
   if (!e || !(amt > 0)) { box.innerHTML = '<div class="pr-conseq__h">What happens when you save</div><div class="pr-dim">Pick the employee and the amount.</div>'; return; }
-  const gross = prGross(e.pay), open = prAdvanceOutstanding(e.id);
+  const lim = prAdvanceRoom(e), gross = lim.gross, open = lim.open;
   const mode = _prAdvMode(), n = Number(_prVal('pra-inst')) || 2;
   const per = mode === 'instalments' ? Math.ceil(amt / n) : amt;
   const nextDeduct = Math.min(gross, per + (open ? prOpenAdvances(e.id).reduce((s, a) => s + prAdvanceDue(a), 0) : 0));
-  const over = amt + open > gross;
-  box.innerHTML = `<div class="pr-conseq__h">What happens when you save</div>
+  /* NEVER ABOVE THE UPCOMING SALARY (owner, 2026-09-30) — for anyone. */
+  const over = amt > lim.room;
+  if (btn) btn.disabled = over;
+  if (over) {
+    box.innerHTML = `<div class="pr-conseq__h">Not allowed</div>
+      <div class="pr-conseq__warn is-block">${icon('warning', 'xs')}<span>An advance can never be more than the upcoming salary.
+        ${lim.room > 0 ? `The most you can give ${_prE(e.name)} is <b>${_prE(fmtPKR(lim.room))}</b> — the ${_prE(_prMon(lim.month))} salary is ${_prE(fmtPKR(gross))}${open ? ' and ' + _prE(fmtPKR(open)) + ' is already advanced' : ''}.`
+          : `${_prE(e.name)}'s ${_prE(_prMon(lim.month))} salary (${_prE(fmtPKR(gross))}) is already fully advanced.`}</span></div>`;
+    return;
+  }
+  box.innerHTML = `<div class="pr-conseq__h">What happens when you save <em>· most you can give: ${_prE(fmtPKR(lim.room))}</em></div>
     <div><i>1</i><span><b>${_prE(fmtPKR(amt))}</b> is added to <b>today's expenses</b> — ${_prE(PR_EXPENSE_CAT)}, "Advance — ${_prE(e.name)}".</span></div>
     <div><i>2</i><span>Next salary: ${_prE(fmtPKR(gross))} − ${_prE(fmtPKR(nextDeduct))}${open ? ' (including ' + _prE(fmtPKR(open)) + ' already open)' : ''} = <b>${_prE(fmtPKR(Math.max(0, gross - nextDeduct)))}</b> to pay${mode === 'instalments' ? `, then ${_prE(fmtPKR(per))} a month for ${n - 1} more` : ''}.</span></div>
-    <div><i>3</i><span>Payroll money never touches a warden's handover.</span></div>
-    ${over ? `<div class="pr-conseq__warn">${icon('warning', 'xs')}<span>This takes ${_prE(e.name)}'s advances to ${_prE(fmtPKR(amt + open))}, above one month's salary.
-      ${prIsAdmin() ? `<label><input type="checkbox" id="pra-over" ${_prAdvOver ? 'checked' : ''} onchange="_prAdvOver=this.checked"> Allow it</label>` : 'Only an administrator can allow that.'}</span></div>` : ''}`;
+    <div><i>3</i><span>Payroll money never touches a warden's handover.</span></div>`;
 }
 async function submitAdvance() { return submitOnce('payroll:advance', _submitAdvance); }
 async function _submitAdvance() {
   if (typeof requireWritable === 'function' && !requireWritable('This advance')) return;
   const input = { employeeId: _prVal('pra-emp'), amount: String(_prVal('pra-amount')).replace(/,/g, ''), date: _prVal('pra-date'),
-    method: _prVal('pra-method'), reason: _prVal('pra-reason'), recoveryMode: _prAdvMode(), instalments: _prVal('pra-inst'), overLimit: _prAdvOver };
+    method: _prVal('pra-method'), reason: _prVal('pra-reason'), recoveryMode: _prAdvMode(), instalments: _prVal('pra-inst') };
   const v = prValidateAdvance(input);
   if (!v.ok) { _prShowFail(v, { employeeId: 'pra-emp', amount: 'pra-amount', date: 'pra-date', reason: 'pra-reason', instalments: 'pra-inst' }); return; }
   if (typeof pinNeeded === 'function' && pinNeeded() && !(await pinConfirm({ what: 'giving an advance of ' + fmtPKR(v.value.amount) }))) return;
@@ -577,7 +598,7 @@ async function _submitVoid(kind, id) {
   const why = _prVal('prv-reason');
   if (!String(why).trim()) { _prShowFail({ reason: 'Give a reason', field: 'r' }, { r: 'prv-reason' }); return; }
   if (typeof pinNeeded === 'function' && pinNeeded() && !(await pinConfirm({ what: 'voiding a payroll record' }))) return;
-  const r = kind === 'advance' ? prVoidAdvance(id, why) : prVoidPayslip(id, why);
+  const r = kind === 'advance' ? prVoidAdvance(id, why) : kind === 'bonus' ? prVoidBonus(id, why) : prVoidPayslip(id, why);
   if (!r.ok) { _prShowFail(r, { reason: 'prv-reason' }); return; }
   await saveDB();
   closeModal();
@@ -606,7 +627,7 @@ function _prRunTab() {
     return `<tr data-emp="${_prE(e.id)}" class="${ps ? 'is-paid' : ''}">
       <td>${ps ? '' : `<input type="checkbox" class="pr-cb" aria-label="Select ${_prE(e.name)}" ${_prSel.has(e.id) ? 'checked' : ''} ${admin ? '' : 'disabled'} onchange="prToggleSel('${e.id}',this.checked)">`}</td>
       <td><div class="pr-who">${_prAvatar(e)}<div><b>${_prE(e.name)}</b><small>${_prE(e.role)}${e.status === 'On leave' ? ' · on leave' : ''}</small></div></div></td>
-      <td class="n">${_prE(fmtPKR(d.gross))}</td>
+      <td class="n">${_prE(fmtPKR(d.gross))}${(d.bonuses || []).length ? `<small class="pr-bon">incl. ${_prE(fmtPKR(d.bonuses.reduce((s, b) => s + b.amount, 0)))} bonus</small>` : ''}</td>
       <td class="n">${adv ? `<span class="pr-adv">− ${_prE(fmtPKR(adv))}</span>` : '<span class="pr-dash">—</span>'}</td>
       <td class="n">${other ? `<span title="${_prE(d.deductions.filter(x => x.kind !== 'advance').map(x => x.label).join(', '))}">− ${_prE(fmtPKR(other))}</span>` : '<span class="pr-dash">—</span>'}</td>
       <td class="n"><b>${_prE(fmtPKR(d.net))}</b></td>
@@ -671,6 +692,7 @@ function prPayRecalc() {
       <div><div class="pr-slip__h">Earnings</div>
         <div class="pr-slip__r"><span>Basic</span><b>${_prE(fmtPKR(d.basic))}</b></div>
         ${d.allowances.map(a => `<div class="pr-slip__r"><span>${_prE(a.label)}</span><b>${_prE(fmtPKR(a.amount))}</b></div>`).join('')}
+        ${(d.bonuses || []).map(b => `<div class="pr-slip__r is-bon"><span>${_prE(b.label)}</span><b>${_prE(fmtPKR(b.amount))}</b></div>`).join('')}
         <div class="pr-slip__r is-tot"><span>Gross</span><b>${_prE(fmtPKR(d.gross))}</b></div></div>
       <div><div class="pr-slip__h">Deductions</div>
         ${(() => { let oi = -1; return d.deductions.map(x => { if (x.kind === 'other') oi++;
@@ -778,7 +800,7 @@ function _prPayslipBody(p, paper) {
     </div>
     <div class="ps-cols">
       <table class="ps-tbl"><thead><tr><th>Earnings</th><th class="n">Rs.</th></tr></thead><tbody>
-        ${row('Basic', fmtNum(p.basic))}${(p.allowances || []).map(a => row(a.label, fmtNum(a.amount))).join('')}
+        ${row('Basic', fmtNum(p.basic))}${(p.allowances || []).map(a => row(a.label, fmtNum(a.amount))).join('')}${(p.bonuses || []).map(b => row(b.label, fmtNum(b.amount))).join('')}
         ${row('Gross', fmtNum(p.gross), 'is-tot')}</tbody></table>
       <table class="ps-tbl"><thead><tr><th>Deductions</th><th class="n">Rs.</th></tr></thead><tbody>
         ${(p.deductions || []).map(x => row(x.label, fmtNum(x.amount))).join('') || row('None', '—')}
@@ -919,6 +941,7 @@ function _prPayrollDef() {
     columns: [
       { label: 'ID', type: 'id', width: 10, value: r => r.e.ref },
       { label: 'Employee', type: 'text', width: 24, value: r => r.e.name, sub: r => r.e.role },
+      { label: 'Bonus', type: 'money', width: 12, value: r => (r.d.bonuses || []).reduce((s, b) => s + b.amount, 0), total: 'sum' },
       { label: 'Gross', type: 'money', width: 13, value: r => r.d.gross, total: 'sum' },
       { label: 'Advance recovered', type: 'money', width: 14, value: r => r.d.deductions.filter(x => x.kind === 'advance').reduce((s, x) => s + x.amount, 0), total: 'sum' },
       { label: 'Other deductions', type: 'money', width: 14, value: r => r.d.deductions.filter(x => x.kind !== 'advance').reduce((s, x) => s + x.amount, 0), total: 'sum' },
@@ -935,3 +958,290 @@ function _prPayrollDef() {
 }
 function exportPayrollPDF() { EXPORT.pdf(_prPayrollDef()); }
 function exportPayrollExcel() { EXPORT.excel(_prPayrollDef()); }
+
+
+/* ══ BONUSES (owner, 2026-09-30: "bonuses option for rewarding or any extra money") ══ */
+function showBonusForm(empId) {
+  if (!prIsAdmin()) { toast('A bonus is an administrator\'s decision', 'error'); return; }
+  const staff = prEmployees().filter(e => e.status !== 'Left');
+  if (!staff.length) { toast('Add an employee first', 'info'); return; }
+  showModal('modal-md', '', `
+    <div class="hf-mh"><span class="hf-mh__ico pr-ico--ok">${icon('award', 'sm')}</span><div><div class="hf-mh__t">Give bonus</div>
+      <div class="hf-mh__s">A reward or any extra money — never recovered</div></div></div>
+    <div class="pr-form">
+      <div class="pr-grid">
+        <label class="pr-fld"><span>Employee *</span><select class="form-control" id="prbn-emp" onchange="prBonRecalc()">
+          <option value="">Select employee</option>${staff.map(e => `<option value="${_prE(e.id)}"${e.id === empId ? ' selected' : ''}>${_prE(e.name + ' — ' + e.role)}</option>`).join('')}</select></label>
+        <label class="pr-fld"><span>Amount *</span><input class="form-control pr-num" id="prbn-amount" inputmode="numeric" placeholder="0" oninput="prBonRecalc()"></label>
+        <label class="pr-fld"><span>Type</span><select class="form-control" id="prbn-type" onchange="prBonRecalc()">${PR_BONUS_TYPES.map(t => `<option>${_prE(t)}</option>`).join('')}</select></label>
+        <label class="pr-fld"><span>Date</span><input class="form-control cdp-trigger" id="prbn-date" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${today()}"></label>
+      </div>
+      <label class="pr-fld pr-fld--wide"><span>Reason *</span><input class="form-control" id="prbn-reason" maxlength="120" placeholder="e.g. Kept the kitchen spotless all month"></label>
+      <div class="pr-seg2" role="radiogroup" aria-label="How it is paid"><span>Pay</span>
+        <button type="button" role="radio" class="is-on" data-pay="salary" onclick="prBonPay('salary')">With next salary</button>
+        <button type="button" role="radio" data-pay="now" onclick="prBonPay('now')">Now, in hand</button>
+        <select class="form-control pr-inst" id="prbn-method" hidden>${typeof pmOptions === 'function' ? pmOptions('Cash') : '<option>Cash</option>'}</select></div>
+      <div class="pr-conseq" id="prbn-conseq"></div>
+    </div>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" id="prbn-save" onclick="submitBonus()">Give bonus</button>`);
+  prBonRecalc();
+}
+function prBonPay(mode) {
+  document.querySelectorAll('.pr-seg2 [data-pay]').forEach(b => b.classList.toggle('is-on', b.dataset.pay === mode));
+  const m = document.getElementById('prbn-method'); if (m) m.hidden = mode !== 'now';
+  prBonRecalc();
+}
+function _prBonMode() { const b = document.querySelector('.pr-seg2 .is-on[data-pay]'); return b ? b.dataset.pay : 'salary'; }
+function prBonRecalc() {
+  const box = document.getElementById('prbn-conseq'); if (!box) return;
+  const e = prFindEmployee(_prVal('prbn-emp')), amt = _prNum(_prVal('prbn-amount')), mode = _prBonMode();
+  const btn = document.getElementById('prbn-save'); if (btn) btn.textContent = amt > 0 ? 'Give ' + fmtPKR(amt) : 'Give bonus';
+  if (!e || !(amt > 0)) { box.innerHTML = '<div class="pr-conseq__h">What happens when you save</div><div class="pr-dim">Pick the employee and the amount.</div>'; return; }
+  const m = prUpcomingMonth(e), g = prGross(prPayFor(e, m) || e.pay);
+  box.innerHTML = `<div class="pr-conseq__h">What happens when you save</div>` + (mode === 'now'
+    ? `<div><i>1</i><span><b>${_prE(fmtPKR(amt))}</b> is paid now and added to <b>today's expenses</b> — ${_prE(PR_EXPENSE_CAT)}, "Bonus — ${_prE(e.name)}".</span></div>
+       <div><i>2</i><span>It is a reward: nothing comes off any salary.</span></div>`
+    : `<div><i>1</i><span>It is added to ${_prE(e.name)}'s ${_prE(_prMon(m))} payslip as an earning: ${_prE(fmtPKR(g))} + ${_prE(fmtPKR(amt))} = <b>${_prE(fmtPKR(g + amt))}</b> before deductions.</span></div>
+       <div><i>2</i><span>It becomes an expense when that salary is paid — nothing is booked today.</span></div>`);
+}
+async function submitBonus() { return submitOnce('payroll:bonus', _submitBonus); }
+async function _submitBonus() {
+  if (typeof requireWritable === 'function' && !requireWritable('This bonus')) return;
+  const input = { employeeId: _prVal('prbn-emp'), amount: String(_prVal('prbn-amount')).replace(/,/g, ''), type: _prVal('prbn-type'),
+    date: _prVal('prbn-date'), reason: _prVal('prbn-reason'), payWith: _prBonMode(), method: _prVal('prbn-method') };
+  const v = prValidateBonus(input);
+  if (!v.ok) { _prShowFail(v, { employeeId: 'prbn-emp', amount: 'prbn-amount', date: 'prbn-date', reason: 'prbn-reason' }); return; }
+  if (input.payWith === 'now' && typeof pinNeeded === 'function' && pinNeeded() && !(await pinConfirm({ what: 'paying a bonus of ' + fmtPKR(v.value.amount) }))) return;
+  const r = prGiveBonus(input);
+  if (!r.ok) { _prShowFail(r, {}); return; }
+  await saveDB();
+  closeModal();
+  renderPage('payroll');
+  refreshEmployeePanel();
+  toast(r.record.ref + ' — ' + fmtPKR(r.record.amount) + ' bonus for ' + r.record.employeeName + (r.record.payWith === 'now' ? ', paid and added to expenses' : ', added to the next salary'), 'success');
+}
+function _prBonTab() {
+  const list = prBonuses().slice().sort((a, b) => (a.status !== 'Pending') - (b.status !== 'Pending') || String(b.date).localeCompare(String(a.date)));
+  const pend = prBonuses().filter(b => b.status === 'Pending');
+  const m = thisMonth(), y = m.slice(0, 4);
+  const paidM = prBonuses().filter(b => b.status === 'Paid' && String(b.paidDate || '').startsWith(m)).reduce((s, b) => s + b.amount, 0);
+  const paidY = prBonuses().filter(b => b.status === 'Paid' && String(b.paidDate || '').startsWith(y)).reduce((s, b) => s + b.amount, 0);
+  const admin = prIsAdmin();
+  return `<div class="pr-kpis pr-kpis--3">
+      <div class="pr-k is-ok"><span class="pr-k__l">With next salary</span><b class="pr-k__v">Rs. ${fmtKpi(pend.reduce((s, b) => s + b.amount, 0))}</b><span class="pr-k__s">${pend.length} waiting to be paid</span></div>
+      <div class="pr-k"><span class="pr-k__l">Paid · ${_prE(_prMon(m))}</span><b class="pr-k__v">Rs. ${fmtKpi(paidM)}</b><span class="pr-k__s">In this month's expenses</span></div>
+      <div class="pr-k"><span class="pr-k__l">Paid · ${_prE(y)}</span><b class="pr-k__v">Rs. ${fmtKpi(paidY)}</b><span class="pr-k__s">Rewards this year</span></div>
+    </div>
+    <div class="pr-tools"><span class="pr-sp"></span>${admin ? `<button class="btn btn-primary btn-sm" onclick="showBonusForm()">${icon('plus', 'xs')} Give bonus</button>`
+      : `<button class="btn btn-primary btn-sm" disabled title="A bonus is an administrator's decision">${icon('plus', 'xs')} Give bonus</button>`}</div>
+    ${list.length ? `<div class="pr-card"><table class="pr-tbl" id="pr-bon"><thead><tr><th>Bonus</th><th>Employee</th><th>Date</th><th>Type</th><th>Paid</th><th class="n">Amount</th><th>Status</th><th></th></tr></thead><tbody>
+      ${list.map(b => { const e = prFindEmployee(b.employeeId) || { name: b.employeeName };
+        const ps = b.payslipId ? prFindPayslip(b.payslipId) : null;
+        return `<tr data-bon="${_prE(b.id)}" class="${b.status === 'Void' ? 'is-left' : ''}">
+          <td><b class="pr-mono">${_prE(b.ref)}</b><small>"${_prE(b.reason)}"</small></td>
+          <td><div class="pr-who">${_prAvatar(e)}<div><b>${_prE(e.name)}</b><small>${_prE(e.role || '')}</small></div></div></td>
+          <td>${_prE(fmtDate(b.date))}<small>${b.givenByName ? 'by ' + _prE(b.givenByName) : ''}</small></td>
+          <td>${_prE(b.type)}</td>
+          <td>${b.status === 'Pending' ? 'With next salary' : b.status === 'Void' ? '—' : b.paidNow ? 'In hand · ' + _prE(fmtDate(b.paidDate)) : 'On ' + (ps ? `<button class="pr-link" onclick="showPayslip('${ps.id}')">${_prE(ps.ref)}</button>` : 'a payslip')}</td>
+          <td class="n"><b>${_prE(fmtPKR(b.amount))}</b></td>
+          <td><span class="pr-st pr-st--${b.status === 'Void' ? 'muted' : 'ok'}">${b.status === 'Pending' ? 'Waiting' : _prE(b.status)}</span>${b.status === 'Void' ? `<small>${_prE(b.voidReason)}</small>` : ''}</td>
+          <td>${b.status !== 'Void' && !b.payslipId && admin ? `<button class="btn btn-secondary btn-sm" onclick="showVoidBonus('${b.id}')">Void</button>` : ''}</td></tr>`; }).join('')}
+      </tbody></table></div>`
+      : `<div class="pr-card pr-empty"><span class="pr-empty__ic">${icon('award', 'md')}</span><b>No bonuses yet</b><span>Reward good work or give extra for Eid — with the next salary, or in hand today.</span></div>`}`;
+}
+function showVoidBonus(id) {
+  const b = prFindBonus(id); if (!b) return;
+  _prVoidDialog('Void bonus ' + b.ref, `${fmtPKR(b.amount)} to ${b.employeeName} (${b.type}).` + (b.expenseId ? ' Its expense is removed.' : ' It will no longer be added to a salary.'),
+    `submitVoid('bonus','${id}')`);
+}
+
+/* ══ DOCUMENTS (owner, 2026-09-30: CNIC front and back, and the agreement,
+   "for records and legal purposes") ═══════════════════════════════════════ */
+const PR_DOC_SLOTS = ['cnicFront', 'cnicBack', 'agreement'];
+function _prDocsBlock(e) {
+  const docs = e.documents || [];
+  const may = prAllowed();
+  const card = (kind, d) => {
+    const img = d && /^image\//.test(d.type);
+    return `<div class="pr-doc${d ? ' is-on' : ''}" data-doc="${kind}">
+      <div class="pr-doc__th">${d ? (img ? `<img src="${_prE(d.data)}" alt="">` : `<span class="pr-doc__pdf">PDF</span>`) : icon('upload', 'sm')}</div>
+      <div class="pr-doc__t"><b>${_prE(prDocLabel(kind))}</b>
+        <small>${d ? _prE(d.name) + ' · ' + _prE(fmtDate(String(d.addedAt).slice(0, 10))) + (d.addedByName ? ' · ' + _prE(d.addedByName) : '') : 'Not on file'}</small></div>
+      <div class="pr-doc__a">${d ? `<button class="pr-link" onclick="prDocView('${e.id}','${d.id}')">View</button>
+          <button class="pr-link" onclick="prDocSave('${e.id}','${d.id}')">Save</button>` : ''}
+        ${may ? `<button class="pr-link" onclick="prDocPick('${e.id}','${kind}')">${d ? 'Replace' : 'Upload'}</button>` : ''}
+        ${d && may ? `<button class="pr-link pr-link--danger" onclick="prDocRemove('${e.id}','${d.id}')">Remove</button>` : ''}</div>
+    </div>`;
+  };
+  const others = docs.filter(d => d.kind === 'other');
+  return `<div class="pr-docs">
+    ${PR_DOC_SLOTS.map(k => card(k, docs.find(d => d.kind === k))).join('')}
+    ${others.map(d => card('other', d).replace(`data-doc="other"`, `data-doc="other-${_prE(d.id)}"`)).join('')}
+    <div class="pr-docs__foot">
+      ${may ? `<button class="pr-link" onclick="prDocPick('${e.id}','other')">${icon('plus', 'xs')} Add another document</button>` : ''}
+      <button class="pr-link" onclick="employeeTermsPDF('${e.id}')">${icon('print', 'xs')} Print terms of employment to sign</button>
+    </div>
+    <input type="file" id="pr-doc-file" hidden accept="image/jpeg,image/png,image/webp,application/pdf" onchange="prDocLoad(this)">
+  </div>`;
+}
+let _prDocTarget = null;
+function prDocPick(empId, kind) {
+  _prDocTarget = { empId, kind };
+  const i = document.getElementById('pr-doc-file'); if (i) { i.value = ''; i.click(); }
+}
+/* Images are kept as JPEG no wider than 1800px — a CNIC stays legible for the
+   record and a phone photo does not bloat every backup; a PDF is kept as-is. */
+function prDocLoad(input) {
+  const f = input.files && input.files[0], t = _prDocTarget; if (!f || !t) return;
+  const isImg = /^image\/(jpeg|png|webp)$/.test(f.type), isPdf = f.type === 'application/pdf';
+  if (!isImg && !isPdf) { toast('Attach a photo or scan (JPG, PNG) or a PDF', 'error'); return; }
+  if (f.size > 12 * 1024 * 1024) { toast('That file is larger than 12 MB — try a photo instead of a scan', 'error'); return; }
+  const r = new FileReader();
+  r.onerror = () => toast('That file could not be read', 'error');
+  r.onload = () => {
+    const done = (data, type) => _prDocStore(t, { name: f.name, type, size: Math.round(String(data).length * 0.75), data });
+    if (!isImg) { done(String(r.result), 'application/pdf'); return; }
+    const img = new Image();
+    img.onerror = () => toast('That image could not be read', 'error');
+    img.onload = () => {
+      const k = Math.min(1, 1800 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      done(c.toDataURL('image/jpeg', 0.86), 'image/jpeg');
+    };
+    img.src = r.result;
+  };
+  r.readAsDataURL(f);
+}
+async function _prDocStore(t, doc) {
+  if (typeof requireWritable === 'function' && !requireWritable('This document')) return;
+  const res = prAddDocument(t.empId, Object.assign({ kind: t.kind }, doc));
+  if (!res.ok) { toast(res.reason, 'error'); return; }
+  await saveDB();
+  refreshEmployeePanel();
+  toast(prDocLabel(t.kind) + (res.replaced ? ' replaced' : ' added'), 'success');
+}
+function _prFindDoc(empId, docId) { const e = prFindEmployee(empId); return e ? (e.documents || []).find(d => d.id === docId) : null; }
+function prDocView(empId, docId) {
+  const d = _prFindDoc(empId, docId), e = prFindEmployee(empId); if (!d) return;
+  if (!/^image\//.test(d.type)) { prDocSave(empId, docId); return; }   // no PDF viewer in the app: save it to open
+  showModal('modal-md', '', `<div class="hf-mh"><span class="hf-mh__ico">${icon('fileText', 'sm')}</span><div><div class="hf-mh__t">${_prE(prDocLabel(d.kind))} · ${_prE(e.name)}</div>
+      <div class="hf-mh__s">${_prE(d.name)} · added ${_prE(fmtDate(String(d.addedAt).slice(0, 10)))}${d.addedByName ? ' by ' + _prE(d.addedByName) : ''}</div></div></div>
+    <div class="pr-docview"><img src="${_prE(d.data)}" alt="${_prE(prDocLabel(d.kind))}"></div>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">Close</button><button class="btn btn-primary" onclick="prDocSave('${empId}','${docId}')">${icon('download', 'xs')} Save a copy</button>`);
+}
+async function prDocSave(empId, docId) {
+  const d = _prFindDoc(empId, docId), e = prFindEmployee(empId); if (!d) return;
+  if (!window.electronAPI || typeof window.electronAPI.saveDataUrl !== 'function') { toast('This build cannot save files', 'error'); return; }
+  const ext = d.type === 'application/pdf' ? '.pdf' : '.jpg';
+  const name = (e.ref + '-' + prDocLabel(d.kind) + '-' + e.name).replace(/[^\w\- ]+/g, '').replace(/\s+/g, '-') + ext;
+  const res = await window.electronAPI.saveDataUrl(d.data, name);
+  if (res && res.success) toast('Saved', 'success');
+  else if (res && res.reason && res.reason !== 'cancelled') toast(res.reason, 'error');
+}
+function prDocRemove(empId, docId) {
+  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
+  const d = _prFindDoc(empId, docId); if (!d) return;
+  showConfirm('Remove ' + escHtml(prDocLabel(d.kind)) + '?', 'The file is removed from this record. Save a copy first if you may need it.', async () => {
+    const r = prRemoveDocument(empId, docId);
+    if (!r.ok) { toast(r.reason, 'error'); return; }
+    await saveDB(); refreshEmployeePanel(); toast('Document removed', 'info');
+  });
+}
+
+/* ══ THE PROFILE, DOWNLOADED (owner, 2026-09-30) ═══════════════════════════
+   Everything on the record in one confidential A4 document: identity, job,
+   pay and its history, advances, bonuses, payslips, the documents on file,
+   and the CNIC sides printed for the record. */
+function _prDocCss() {
+  return `*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Inter','Segoe UI',Arial,sans-serif;color:#111827;font-size:11.5px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .pg{page-break-after:always;break-after:page}.pg:last-child{page-break-after:auto;break-after:auto}
+  .hd{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #111827;padding-bottom:8px;margin-bottom:12px}
+  .hd b{font-size:16px;display:block}.hd span{font-size:10.5px;color:#374151}.hd .r{text-align:right}.hd .r b{color:#1D4ED8}
+  .id{display:flex;gap:14px;align-items:center;margin-bottom:12px}.ph{width:84px;height:84px;border-radius:10px;object-fit:cover;border:1px solid #888}
+  .ini{width:84px;height:84px;border-radius:10px;border:1px solid #888;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;color:#374151}
+  .id b{font-size:18px;display:block}.id span{color:#374151}
+  h3{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:#374151;margin:14px 0 6px;border-bottom:1px solid #888;padding-bottom:3px}
+  .kv{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 14px}.kv div span{display:block;font-size:9.5px;color:#4B5563;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+  .kv div b{font-size:11.5px}table{width:100%;border-collapse:collapse}th{text-align:left;font-size:9.5px;color:#374151;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #888;padding:4px}
+  td{padding:4px;border-bottom:1px solid #E5E7EB;vertical-align:top}.n{text-align:right;font-variant-numeric:tabular-nums}
+  .none{color:#4B5563;font-style:italic}.cn{display:grid;grid-template-columns:1fr 1fr;gap:14px}.cn figure{border:1px solid #888;border-radius:8px;padding:8px}
+  .cn img{width:100%;max-height:230px;object-fit:contain}.cn figcaption{font-size:10px;color:#374151;margin-top:4px}
+  .ft{margin-top:14px;font-size:9.5px;color:#4B5563;border-top:1px solid #888;padding-top:5px;display:flex;justify-content:space-between}
+  .sig{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:46px}.sig div{border-top:1px solid #111827;padding-top:4px;font-size:10.5px}
+  p{margin:6px 0;line-height:1.55}@page{margin:12mm}`;
+}
+function _prDocHead(title, sub) {
+  const s = DB.settings || {};
+  return `<div class="hd"><div>${s.logo && /^data:image\//.test(s.logo) ? `<img src="${_prE(s.logo)}" style="width:30px;height:30px;object-fit:contain;display:block;margin-bottom:3px">` : ''}
+    <b>${_prE(s.hostelName || 'Hostel')}</b><span>${_prE([s.location, s.phone].filter(Boolean).join(' · '))}</span></div>
+    <div class="r"><b>${_prE(title)}</b><span>${_prE(sub)}</span></div></div>`;
+}
+function employeeProfilePDF(empId) {
+  if (typeof hostelNameGate === 'function' && hostelNameGate(() => employeeProfilePDF(empId))) return;
+  if (typeof requireOutput === 'function' && !requireOutput('printing')) return;
+  const e = prFindEmployee(empId); if (!e) return;
+  const by = (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) || '';
+  const kv = (l, v) => `<div><span>${l}</span><b>${v ? _prE(v) : '—'}</b></div>`;
+  const hist = (e.payHistory || []).slice().sort((a, b) => a.from.localeCompare(b.from));
+  const advs = prAdvances().filter(a => a.employeeId === e.id).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const bons = prBonuses().filter(b => b.employeeId === e.id).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const slips = prPayslips().filter(p => p.employeeId === e.id).sort((a, b) => a.month.localeCompare(b.month));
+  const docs = e.documents || [];
+  const cnic = ['cnicFront', 'cnicBack'].map(k => docs.find(d => d.kind === k && /^image\//.test(d.type))).filter(Boolean);
+  const foot = `<div class="ft"><span>CONFIDENTIAL — staff record · ${_prE(e.ref)}</span><span>Printed ${_prE(fmtDate(today()))}${by ? ' by ' + _prE(by) : ''}</span></div>`;
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Staff profile — ${_prE(e.name)}</title><style>${_prDocCss()}</style></head><body>
+  <div class="pg">${_prDocHead('Staff Profile', e.ref)}
+    <div class="id">${e.photo ? `<img class="ph" src="${_prE(e.photo)}">` : `<div class="ini">${_prE(_prInit(e.name))}</div>`}
+      <div><b>${_prE(e.name)}</b><span>${_prE([e.role, e.department, e.employmentType, e.status].filter(Boolean).join(' · '))}</span></div></div>
+    <h3>Personal</h3><div class="kv">${kv("Father's name", e.fatherName)}${kv('CNIC', e.cnic)}${kv('Phone', e.phone)}${kv('Emergency contact', e.emergency)}${kv('Address', e.address)}${kv('App login', e.accountId && typeof WARDENS !== 'undefined' && WARDENS[e.accountId] ? (WARDENS[e.accountId].name || e.accountId) : '')}</div>
+    <h3>Employment</h3><div class="kv">${kv('Employee ID', e.ref)}${kv('Joined', fmtDate(e.joinDate))}${kv('Left', e.leftDate ? fmtDate(e.leftDate) + (e.leftReason ? ' · ' + e.leftReason : '') : '')}${kv('Shift', e.shift)}${kv('Paid by', e.pay.method + (e.pay.accountNo ? ' · ' + e.pay.accountNo : ''))}${kv('Pay day', 'Day ' + e.pay.payDay)}</div>
+    <h3>Salary</h3><table><tbody><tr><td>Basic</td><td class="n">${_prE(fmtPKR(e.pay.basic))}</td></tr>${(e.pay.allowances || []).map(a => `<tr><td>${_prE(a.label)}</td><td class="n">${_prE(fmtPKR(a.amount))}</td></tr>`).join('')}
+      <tr><td><b>Monthly gross</b></td><td class="n"><b>${_prE(fmtPKR(prGross(e.pay)))}</b></td></tr></tbody></table>
+    <h3>Salary history</h3><table><thead><tr><th>From</th><th class="n">Gross</th><th>Reason</th><th>By</th></tr></thead><tbody>
+      ${hist.map(h => `<tr><td>${_prE(_prMon(h.from))}</td><td class="n">${_prE(fmtPKR(prGross(h)))}</td><td>${_prE(h.reason || '')}</td><td>${_prE(h.by || '')}</td></tr>`).join('')}</tbody></table>
+    <h3>Advances</h3>${advs.length ? `<table><thead><tr><th>Ref</th><th>Date</th><th>Reason</th><th class="n">Amount</th><th class="n">Balance</th><th>Status</th></tr></thead><tbody>
+      ${advs.map(a => `<tr><td>${_prE(a.ref)}</td><td>${_prE(fmtDate(a.date))}</td><td>${_prE(a.reason)}</td><td class="n">${_prE(fmtPKR(a.amount))}</td><td class="n">${_prE(fmtPKR(prAdvanceBalance(a)))}</td><td>${_prE(a.status)}</td></tr>`).join('')}</tbody></table>` : '<p class="none">None.</p>'}
+    <h3>Bonuses</h3>${bons.length ? `<table><thead><tr><th>Ref</th><th>Date</th><th>Type</th><th>Reason</th><th class="n">Amount</th><th>Status</th></tr></thead><tbody>
+      ${bons.map(b => `<tr><td>${_prE(b.ref)}</td><td>${_prE(fmtDate(b.date))}</td><td>${_prE(b.type)}</td><td>${_prE(b.reason)}</td><td class="n">${_prE(fmtPKR(b.amount))}</td><td>${_prE(b.status)}</td></tr>`).join('')}</tbody></table>` : '<p class="none">None.</p>'}
+    ${foot}</div>
+  <div class="pg">${_prDocHead('Staff Profile', e.ref + ' · ' + e.name)}
+    <h3>Payslips</h3>${slips.length ? `<table><thead><tr><th>Month</th><th>Payslip</th><th>Paid</th><th class="n">Gross</th><th class="n">Deductions</th><th class="n">Net</th><th>Status</th></tr></thead><tbody>
+      ${slips.map(p => `<tr><td>${_prE(_prMon(p.month))}</td><td>${_prE(p.ref)}</td><td>${_prE(fmtDate(p.paidDate))}</td><td class="n">${_prE(fmtNum(p.gross))}</td><td class="n">${_prE(fmtNum(p.totalDeductions))}</td><td class="n">${_prE(fmtNum(p.net))}</td><td>${_prE(p.status)}</td></tr>`).join('')}</tbody></table>` : '<p class="none">Nothing paid yet.</p>'}
+    <h3>Documents on file</h3>${docs.length ? `<table><thead><tr><th>Document</th><th>File</th><th>Added</th><th>By</th></tr></thead><tbody>
+      ${docs.map(d => `<tr><td>${_prE(prDocLabel(d.kind))}</td><td>${_prE(d.name)}</td><td>${_prE(fmtDate(String(d.addedAt).slice(0, 10)))}</td><td>${_prE(d.addedByName || '')}</td></tr>`).join('')}</tbody></table>` : '<p class="none">No documents uploaded.</p>'}
+    ${cnic.length ? `<h3>CNIC</h3><div class="cn">${cnic.map(d => `<figure><img src="${_prE(d.data)}"><figcaption>${_prE(prDocLabel(d.kind))}</figcaption></figure>`).join('')}</div>` : ''}
+    ${e.notes ? `<h3>Notes</h3><p>${_prE(e.notes)}</p>` : ''}
+    ${foot}</div></body></html>`;
+  _electronPDF(html, printFileName('Staff-Profile-' + e.ref + '-' + String(e.name).replace(/\s+/g, '-'), ''), { pageSize: paperSize(), landscape: false });
+  if (typeof logActivity === 'function') logActivity('Staff Profile Printed', e.ref + ' ' + e.name, 'Payroll');
+}
+
+/* ══ TERMS OF EMPLOYMENT — to print, sign and upload as the agreement ═══════
+   It states only what is recorded: who, which job, from when, the salary, its
+   allowances, pay day and method, and how advances are recovered. No clauses
+   are invented — the hostel adds its own terms by hand or on its letterhead
+   before signing. */
+function employeeTermsPDF(empId) {
+  if (typeof hostelNameGate === 'function' && hostelNameGate(() => employeeTermsPDF(empId))) return;
+  if (typeof requireOutput === 'function' && !requireOutput('printing')) return;
+  const e = prFindEmployee(empId); if (!e) return;
+  const s = DB.settings || {};
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Terms of employment — ${_prE(e.name)}</title><style>${_prDocCss()}</style></head><body>
+  <div class="pg">${_prDocHead('Terms of Employment', e.ref)}
+    <p>This sheet records the terms on which <b>${_prE(e.name)}</b>${e.fatherName ? ', son/daughter of ' + _prE(e.fatherName) : ''}${e.cnic ? ', CNIC ' + _prE(e.cnic) : ''},
+      is employed by <b>${_prE(s.hostelName || 'the hostel')}</b>.</p>
+    <h3>The job</h3><div class="kv"><div><span>Role</span><b>${_prE(e.role)}</b></div><div><span>Department</span><b>${_prE(e.department || '—')}</b></div>
+      <div><span>Employment</span><b>${_prE(e.employmentType)}</b></div><div><span>Start date</span><b>${_prE(fmtDate(e.joinDate))}</b></div>
+      <div><span>Shift</span><b>${_prE(e.shift || '—')}</b></div><div><span>Employee ID</span><b>${_prE(e.ref)}</b></div></div>
+    <h3>Pay</h3><table><tbody><tr><td>Basic salary, per month</td><td class="n">${_prE(fmtPKR(e.pay.basic))}</td></tr>
+      ${(e.pay.allowances || []).map(a => `<tr><td>${_prE(a.label)}, per month</td><td class="n">${_prE(fmtPKR(a.amount))}</td></tr>`).join('')}
+      <tr><td><b>Total monthly salary</b></td><td class="n"><b>${_prE(fmtPKR(prGross(e.pay)))}</b></td></tr></tbody></table>
+    <p>Paid on day ${_prE(e.pay.payDay)} of each month, by ${_prE(e.pay.method)}${e.pay.accountNo ? ' to ' + _prE(e.pay.accountNo) + (e.pay.accountTitle ? ' (' + _prE(e.pay.accountTitle) + ')' : '') : ''}.
+      A salary advance, where given, is part of the upcoming salary paid early and is deducted from that salary; it can never be more than the upcoming salary.</p>
+    <h3>Further terms</h3>
+    <p style="border:1px dashed #888;min-height:170px;padding:8px;color:#4B5563">(Write any further terms agreed — duties, working hours, leave, notice period — here before signing.)</p>
+    <div class="sig"><div>For ${_prE(s.hostelName || 'the hostel')} — name, signature and date</div><div>${_prE(e.name)} — signature and date</div></div>
+    <div class="ft"><span>Signed copy to be uploaded to the staff record as "Signed agreement".</span><span>${_prE(e.ref)}</span></div></div></body></html>`;
+  _electronPDF(html, printFileName('Terms-of-Employment-' + e.ref + '-' + String(e.name).replace(/\s+/g, '-'), ''), { pageSize: paperSize(), landscape: false });
+}

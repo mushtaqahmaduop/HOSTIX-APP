@@ -1725,7 +1725,7 @@ const BACKUP_COLLECTIONS = [
   // Owner Funds (2026-09-28), under both spellings.
   'ownerFunds', 'owner_funds',
   // Staff & Payroll (2026-09-30).
-  'employees', 'salaryAdvances', 'salary_advances', 'payslips',
+  'employees', 'salaryAdvances', 'salary_advances', 'payslips', 'bonuses',
 ];
 // Collections whose records are written to SQLite by id, so an id is mandatory.
 const BACKUP_ID_REQUIRED = [
@@ -1733,7 +1733,7 @@ const BACKUP_ID_REQUIRED = [
   'studentLedger', 'student_ledger',
   'wardenCollections', 'warden_collections', 'handovers', 'handoverItems', 'handover_items',
   'concessions', 'ownerFunds', 'owner_funds',
-  'employees', 'salaryAdvances', 'salary_advances', 'payslips',
+  'employees', 'salaryAdvances', 'salary_advances', 'payslips', 'bonuses',
 ];
 const BACKUP_MAX_RECORDS = 200000;   // ~40x the largest real hostel seen
 const BACKUP_MAX_DEPTH   = 24;

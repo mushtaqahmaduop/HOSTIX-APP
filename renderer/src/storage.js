@@ -48,7 +48,8 @@ const _TABLE_MAP = {
   // Staff & Payroll (2026-09-30) — the rules are in src/payroll.js.
   employees:         'employees',
   salaryAdvances:    'salary_advances',
-  payslips:          'payslips'
+  payslips:          'payslips',
+  bonuses:           'bonuses'
 };
 
 // ── Load DB ───────────────────────────────────────────────────────────────────

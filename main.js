@@ -65,7 +65,7 @@ const BACKUP_TABLES = ['rooms','students','payments','expenses','cancellations',
    written before it existed has no such table and must still restore. */
 /* So do the three Staff & Payroll tables (2026-09-30), for the same reason. */
 const HANDOVER_TABLES = ['warden_collections', 'handovers', 'handover_items', 'concessions',
-  'owner_funds', 'employees', 'salary_advances', 'payslips'];
+  'owner_funds', 'employees', 'salary_advances', 'payslips', 'bonuses'];
 
 /* DATABASE HEALTH  —  spec §17.
  *
@@ -358,6 +358,7 @@ function initDatabase() {
     CREATE TABLE IF NOT EXISTS employees          (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS salary_advances    (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS payslips           (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS bonuses            (id TEXT PRIMARY KEY, data TEXT NOT NULL);
   `);
   // Created here rather than in the block above because it carries triggers
   // that refuse UPDATE and DELETE — see migrations/002-student-ledger.js.

@@ -250,6 +250,25 @@ function prAdvanceDue(a) {
   return bal;
 }
 
+/* ── THE UPCOMING SALARY (owner, 2026-09-30: "never above upcoming salary") ──
+   An advance is part of the next salary, paid early. So the most anyone can be
+   advanced is that salary — the gross of the first month not yet paid — less
+   what is already advanced and not yet recovered. No override, for anyone. */
+function _prNextMonth(m) { const [y, mo] = m.split('-').map(Number); const d = new Date(y, mo, 1);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+function prUpcomingMonth(emp) {
+  let m = (typeof thisMonth === 'function' ? thisMonth() : _prToday().slice(0, 7));
+  if (m < emp.joinDate.slice(0, 7)) m = emp.joinDate.slice(0, 7);
+  for (let guard = 0; guard < 36 && prPayslipFor(emp.id, m); guard++) m = _prNextMonth(m);
+  return m;
+}
+function prAdvanceRoom(emp) {
+  const month = prUpcomingMonth(emp);
+  const gross = prGross(prPayFor(emp, month) || emp.pay);
+  const open = prAdvanceOutstanding(emp.id);
+  return { month, gross, open, room: Math.max(0, gross - open) };
+}
+
 function prValidateAdvance(input) {
   const i = input || {};
   const emp = prFindEmployee(i.employeeId);
@@ -260,11 +279,13 @@ function prValidateAdvance(input) {
   if (raw === '' || !isFinite(n)) return _prFail('amount', 'Enter the amount');
   if (n <= 0) return _prFail('amount', 'Enter an amount greater than zero');
   if (Math.round(n) !== n) return _prFail('amount', 'Enter whole rupees');
-  const gross = prGross(emp.pay);
-  if (n + prAdvanceOutstanding(emp.id) > gross && !i.overLimit)
-    return _prFail('amount', 'That takes ' + emp.name + '\'s advances above one month\'s salary (' + _prRs(gross) + ')', 'overLimit');
-  if (n + prAdvanceOutstanding(emp.id) > gross && i.overLimit && !prIsAdmin())
-    return _prFail('amount', 'Only an administrator can give more than one month\'s salary in advance');
+  const lim = prAdvanceRoom(emp);
+  if (n > lim.room) {
+    return _prFail('amount', lim.room <= 0
+      ? emp.name + '\'s ' + _prMonthLabel(lim.month) + ' salary (' + _prRs(lim.gross) + ') is already fully advanced'
+      : 'The most you can give is ' + _prRs(lim.room) + ' — ' + emp.name + '\'s ' + _prMonthLabel(lim.month) + ' salary is '
+        + _prRs(lim.gross) + (lim.open ? ' and ' + _prRs(lim.open) + ' is already advanced' : ''), 'overLimit');
+  }
   const date = String(i.date || '');
   if (!_prIsDate(date)) return _prFail('date', 'Pick the date the money was given');
   if (date < emp.joinDate) return _prFail('date', 'That is before ' + emp.name + ' joined');
@@ -344,11 +365,18 @@ function prDraft(empId, m, opts) {
   const emp = prFindEmployee(empId);
   if (!emp || !prOnPayroll(emp, m)) return null;
   const pay = prPayFor(emp, m) || emp.pay;
-  const gross = prGross(pay);
+  const base = prGross(pay);
+  const payDate = _prIsDate(o.date) ? o.date : _prToday();
+  /* Bonuses waiting for this salary are earnings on it — given on or before the
+     payment date (a settlement takes every one still waiting). */
+  const bonuses = prPendingBonuses(empId).filter(b => o.recoverAll || String(b.date) <= payDate)
+    .map(b => ({ label: 'Bonus — ' + b.type + ' (' + b.ref + ')', amount: _prMoney(b.amount), bonusId: b.id }));
+  const gross = base + bonuses.reduce((s, b) => s + b.amount, 0);
   const deductions = [];
   const days = prUnemployedDays(emp, m), dim = _prMonthDays(m);
   if (o.prorate !== false && days > 0) {
-    deductions.push({ kind: 'proration', label: 'Not employed ' + days + ' of ' + dim + ' days', amount: _prMoney(gross * days / dim) });
+    // Proration is of the salary only — a bonus is given whole.
+    deductions.push({ kind: 'proration', label: 'Not employed ' + days + ' of ' + dim + ' days', amount: _prMoney(base * days / dim) });
   }
   for (const x of (o.other || [])) {
     const amt = _prMoney(x && x.amount);
@@ -356,7 +384,6 @@ function prDraft(empId, m, opts) {
     if (amt > 0) deductions.push({ kind: 'other', label: label || 'Other deduction', amount: amt });
   }
   let room = gross - deductions.reduce((s, x) => s + x.amount, 0);
-  const payDate = _prIsDate(o.date) ? o.date : _prToday();
   for (const a of prOpenAdvances(empId).filter(x => String(x.date) <= payDate)) {
     if (room <= 0) break;
     const want = o.recoverAll ? prAdvanceBalance(a) : prAdvanceDue(a);
@@ -369,7 +396,7 @@ function prDraft(empId, m, opts) {
   const total = deductions.reduce((s, x) => s + x.amount, 0);
   return {
     employeeId: emp.id, month: m, basic: _prMoney(pay.basic), allowances: (pay.allowances || []).map(a => ({ label: a.label, amount: _prMoney(a.amount) })),
-    gross, deductions, totalDeductions: total, net: Math.max(0, gross - total),
+    bonuses, gross, deductions, totalDeductions: total, net: Math.max(0, gross - total),
     carriedAdvance: prAdvanceOutstanding(empId) - deductions.filter(d => d.kind === 'advance').reduce((s, d) => s + d.amount, 0),
   };
 }
@@ -400,6 +427,10 @@ function prPay(empId, m, input) {
     a.recovered = (a.recovered || []).concat([{ payslipId: ps.id, amount: x.amount, month: m }]);
     if (prAdvanceBalance(a) === 0) a.status = 'Recovered';
   }
+  for (const x of (ps.bonuses || [])) {
+    const b = prFindBonus(x.bonusId);
+    if (b) Object.assign(b, { status: 'Paid', payslipId: ps.id, paidDate: date });
+  }
   ps.expenseId = ps.net > 0
     ? _prWriteExpense({ kind: 'salary', id: ps.id }, ps.net, date, ps.method,
         'Salary — ' + emp.name + ' · ' + _prMonthLabel(m) + ' · ' + ps.ref, emp.name)
@@ -424,6 +455,9 @@ function prVoidPayslip(id, reason) {
     const before = (a.recovered || []).length;
     a.recovered = (a.recovered || []).filter(r => r.payslipId !== ps.id);
     if (a.recovered.length !== before && a.status === 'Recovered' && prAdvanceBalance(a) > 0) a.status = 'Open';
+  }
+  for (const b of prBonuses()) {
+    if (b.payslipId === ps.id && b.status === 'Paid') { b.status = 'Pending'; delete b.payslipId; delete b.paidDate; }
   }
   Object.assign(ps, { status: 'Void', voidReason: why, voidedAt: new Date().toISOString(), voidedBy: _prActor().byName, expenseId: '' });
   _prLog('Payslip Voided', ps.ref + ' · ' + (ps.employeeName || '') + ' · ' + _prMonthLabel(ps.month) + ' · ' + _prRs(ps.net) + ' — ' + why);
@@ -456,11 +490,113 @@ function prSettle(empId, input) {
     const bal = prAdvanceBalance(a);
     if (bal > 0 && i.writeOff !== false) { a.writtenOff = _prMoney(a.writtenOff) + bal; a.status = 'Recovered'; writtenOff.push(a.ref + ' ' + _prRs(bal)); }
   }
+  // The leaving month was already paid: a bonus still waiting is paid now, on its own.
+  for (const b of prPendingBonuses(emp.id)) _prPayBonusNow(b, String(i.date || _prToday()), b.method || emp.pay.method);
   emp.status = 'Left';
   emp.leftReason = _prText(i.reason, 120);
   _prLog('Employee Settled', emp.ref + ' ' + emp.name + ' · left ' + leftDate + ' · final ' + _prRs(ps.net)
     + (writtenOff.length ? ' · written off ' + writtenOff.join(', ') : ''));
   return { ok: true, record: emp, payslip: ps, writtenOff };
+}
+
+/* ── bonuses (owner, 2026-09-30: "bonuses for rewarding or any extra money") ─
+   A reward decision, so an administrator's. Paid one of two ways:
+     · WITH THE NEXT SALARY (default): an earning on that payslip, so it is in
+       the salary's own expense, and a void of the payslip sends it back to wait;
+     · NOW: an expense on the day, like an advance — but never recovered. */
+const PR_BONUS_TYPES = ['Performance', 'Eid / festival', 'Overtime', 'Attendance', 'Reward', 'Other'];
+function prBonuses() { if (!Array.isArray(DB.bonuses)) DB.bonuses = []; return DB.bonuses; }
+function prFindBonus(id) { return prBonuses().find(b => b.id === id) || null; }
+function prPendingBonuses(empId) {
+  return prBonuses().filter(b => b.employeeId === empId && b.status === 'Pending')
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+}
+function prValidateBonus(input) {
+  const i = input || {};
+  const emp = prFindEmployee(i.employeeId);
+  if (!emp) return _prFail('employeeId', 'Pick the employee');
+  if (emp.status === 'Left') return _prFail('employeeId', emp.name + ' has left');
+  const raw = String(i.amount == null ? '' : i.amount).replace(/,/g, '').trim();
+  const n = Number(raw);
+  if (raw === '' || !isFinite(n)) return _prFail('amount', 'Enter the amount');
+  if (n <= 0) return _prFail('amount', 'Enter an amount greater than zero');
+  if (Math.round(n) !== n) return _prFail('amount', 'Enter whole rupees');
+  const type = PR_BONUS_TYPES.includes(i.type) ? i.type : 'Reward';
+  const reason = _prText(i.reason, 120);
+  if (!reason) return _prFail('reason', 'Say what the bonus is for');
+  const date = String(i.date || '');
+  if (!_prIsDate(date)) return _prFail('date', 'Pick the date');
+  if (date < emp.joinDate) return _prFail('date', 'That is before ' + emp.name + ' joined');
+  const payWith = i.payWith === 'now' ? 'now' : 'salary';
+  return { ok: true, value: { employee: emp, amount: n, type, reason, date, payWith, method: _prText(i.method || 'Cash', 40) || 'Cash' } };
+}
+function _prPayBonusNow(b, date, method) {
+  b.expenseId = _prWriteExpense({ kind: 'bonus', id: b.id }, b.amount, date, method || 'Cash',
+    'Bonus — ' + b.employeeName + ' · ' + b.ref + ' · ' + b.type + ' · ' + b.reason, b.employeeName);
+  Object.assign(b, { status: 'Paid', paidDate: date, method: method || b.method || 'Cash', paidNow: true });
+}
+function prGiveBonus(input) {
+  const gate = _prGate(true); if (gate) return gate;
+  const v = prValidateBonus(input); if (!v.ok) return v;
+  const emp = v.value.employee, who = _prActor();
+  const highest = prBonuses().reduce((m, b) => Math.max(m, Number(String(b.ref || '').replace(/\D/g, '')) || 0), 0);
+  const seq = typeof refSeqTake === 'function' ? refSeqTake('bon', highest) : highest + 1;
+  const b = { id: 'bon_' + _prUid(), ref: 'BON-' + String(seq).padStart(4, '0'), employeeId: emp.id, employeeName: emp.name,
+    amount: v.value.amount, type: v.value.type, reason: v.value.reason, date: v.value.date, payWith: v.value.payWith,
+    method: v.value.method, status: 'Pending', givenBy: who.by, givenByName: who.byName, createdAt: new Date().toISOString() };
+  if (b.payWith === 'now') _prPayBonusNow(b, b.date, b.method);
+  prBonuses().push(b);
+  _prLog('Bonus Given', b.ref + ' · ' + emp.name + ' · ' + _prRs(b.amount) + ' · ' + b.type
+    + (b.payWith === 'now' ? ' · paid now' : ' · with next salary'));
+  return { ok: true, record: b };
+}
+function prVoidBonus(id, reason) {
+  const gate = _prGate(true); if (gate) return gate;
+  const b = prFindBonus(id); if (!b) return _prFail(null, 'That bonus could not be found');
+  if (b.status === 'Void') return _prFail(null, 'That bonus is already void');
+  if (b.payslipId) return _prFail(null, 'This bonus was paid on payslip ' + ((prFindPayslip(b.payslipId) || {}).ref || '') + ' — void that payslip first');
+  const why = _prText(reason, 120); if (!why) return _prFail('reason', 'Say why the bonus is being voided');
+  _prDropExpense(b.expenseId);
+  Object.assign(b, { status: 'Void', voidReason: why, voidedAt: new Date().toISOString(), voidedBy: _prActor().byName, expenseId: '' });
+  _prLog('Bonus Voided', b.ref + ' · ' + b.employeeName + ' · ' + _prRs(b.amount) + ' — ' + why);
+  return { ok: true, record: b };
+}
+
+/* ── documents (owner, 2026-09-30: CNIC front and back and the agreement,
+   "for records and legal purposes") ─────────────────────────────────────────
+   Kept on the employee, each with who added it and when. A CNIC side or the
+   agreement REPLACES the one before it (one current copy of each), and the
+   replacement is logged; "Other" documents accumulate. The file itself is a
+   data URL, read and sized by the page before it reaches here. */
+const PR_DOC_KINDS = { cnicFront: 'CNIC — front', cnicBack: 'CNIC — back', agreement: 'Signed agreement', other: 'Other document' };
+const PR_DOC_MAX = 8 * 1024 * 1024;
+function prDocLabel(kind) { return PR_DOC_KINDS[kind] || 'Document'; }
+function prAddDocument(empId, doc) {
+  const gate = _prGate(false); if (gate) return gate;
+  const e = prFindEmployee(empId); if (!e) return _prFail(null, 'That employee could not be found');
+  const d = doc || {};
+  const kind = PR_DOC_KINDS[d.kind] ? d.kind : 'other';
+  const type = String(d.type || '');
+  if (!/^(image\/(jpeg|png|webp)|application\/pdf)$/.test(type)) return _prFail('file', 'Attach an image or a PDF');
+  if (!/^data:(image\/(jpeg|png|webp)|application\/pdf);base64,/.test(String(d.data || ''))) return _prFail('file', 'That file could not be read');
+  if (String(d.data).length > PR_DOC_MAX * 1.4) return _prFail('file', 'That file is larger than 8 MB');
+  const who = _prActor();
+  if (!Array.isArray(e.documents)) e.documents = [];
+  const replaced = kind !== 'other' ? e.documents.filter(x => x.kind === kind) : [];
+  if (replaced.length) e.documents = e.documents.filter(x => x.kind !== kind);
+  const rec = { id: 'doc_' + _prUid(), kind, name: _prText(d.name, 120) || prDocLabel(kind), type, size: Number(d.size) || 0,
+    data: d.data, addedAt: new Date().toISOString(), addedBy: who.by, addedByName: who.byName };
+  e.documents.push(rec);
+  _prLog(replaced.length ? 'Staff Document Replaced' : 'Staff Document Added', e.ref + ' ' + e.name + ' · ' + prDocLabel(kind) + ' · ' + rec.name);
+  return { ok: true, record: rec, replaced: replaced.length > 0 };
+}
+function prRemoveDocument(empId, docId) {
+  const gate = _prGate(false); if (gate) return gate;
+  const e = prFindEmployee(empId); if (!e) return _prFail(null, 'That employee could not be found');
+  const d = (e.documents || []).find(x => x.id === docId); if (!d) return _prFail(null, 'That document could not be found');
+  e.documents = e.documents.filter(x => x.id !== docId);
+  _prLog('Staff Document Removed', e.ref + ' ' + e.name + ' · ' + prDocLabel(d.kind) + ' · ' + d.name);
+  return { ok: true };
 }
 
 /* ── the expense rows payroll owns ───────────────────────────────────────── */
@@ -479,7 +615,7 @@ function _prDropExpense(id) {
   DB.expenses = DB.expenses.filter(e => e.id !== id);
 }
 /** Is this expense row owned by payroll (and so not editable from Expenses)? */
-function prOwnsExpense(e) { return !!(e && e.source && (e.source.kind === 'salary' || e.source.kind === 'advance')); }
+function prOwnsExpense(e) { return !!(e && e.source && ['salary', 'advance', 'bonus'].includes(e.source.kind)); }
 
 /* ── the month, for the page and the dashboard ───────────────────────────── */
 function prMonthSummary(m) {
@@ -494,5 +630,5 @@ function prMonthSummary(m) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { PR_EXPENSE_CAT, prGross, prDraft, prAdvanceDue, prUnemployedDays };
+  module.exports = { PR_EXPENSE_CAT, PR_BONUS_TYPES, prGross, prDraft, prAdvanceDue, prUnemployedDays };
 }

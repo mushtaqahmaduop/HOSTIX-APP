@@ -88,6 +88,53 @@ test('staff, advance, payroll run, void, permissions, restart, settlement', asyn
     return { ref: a.ref, exp: x && [x.amount, x.category, x.source.kind] }; });
   expect(adv).toEqual({ ref: 'ADV-0001', exp: [5000, 'Salaries & Wages', 'advance'] });
 
+  // ── NEVER ABOVE THE UPCOMING SALARY: 25,000 left of 30,000, so 25,001 is blocked ──
+  await win.evaluate((id) => showAdvanceForm(id), e1.id);
+  await win.waitForSelector('#pra-amount', { timeout: 8000 });
+  await win.fill('#pra-amount', '25001');
+  expect(await win.textContent('#pra-conseq')).toContain('The most you can give Shaukat Masih is Rs. 25,000');
+  expect(await win.isDisabled('#pra-save')).toBe(true);
+  await win.fill('#pra-amount', '25000');
+  expect(await win.isDisabled('#pra-save')).toBe(false);
+  await win.evaluate(() => closeModal());
+
+  // ── A bonus with the next salary (through the form), and one paid now ─────
+  await win.evaluate((id) => showBonusForm(id), e2);
+  await win.waitForSelector('#prbn-amount', { timeout: 8000 });
+  await win.fill('#prbn-amount', '3000');
+  await win.selectOption('#prbn-type', 'Eid / festival');
+  await win.fill('#prbn-reason', 'Eid');
+  expect(await win.textContent('#prbn-conseq')).toContain('Rs. 29,000');     // 26,000 + 3,000 on the payslip
+  await win.click('#prbn-save');
+  await win.waitForFunction(() => (DB.bonuses || []).length === 1, null, { timeout: 8000 });
+  const bonNow = await win.evaluate(async (id) => { const r = prGiveBonus({ employeeId: id, amount: 2000, type: 'Performance', reason: 'Best month', date: today(), payWith: 'now' });
+    await saveDB(); const x = DB.expenses.find(e => e.id === r.record.expenseId); return x && [x.amount, x.source.kind]; }, e2);
+  expect(bonNow).toEqual([2000, 'bonus']);
+
+  // ── Documents: CNIC front through the real file picker ────────────────────
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP4z8DAwMDAxMDAwMDAAAANHQEDasKb6QAAAABJRU5ErkJggg==', 'base64');
+  await win.evaluate((id) => showEmployeePanel(id), e1.id);
+  await win.waitForSelector('#pr-panel.is-open [data-doc="cnicFront"]', { timeout: 8000 });
+  await win.evaluate((id) => { _prDocTarget = { empId: id, kind: 'cnicFront' }; }, e1.id);
+  await win.setInputFiles('#pr-doc-file', { name: 'cnic-front.png', mimeType: 'image/png', buffer: png });
+  await win.waitForFunction((id) => ((prFindEmployee(id).documents) || []).some(d => d.kind === 'cnicFront'), e1.id, { timeout: 8000 });
+  await win.waitForFunction(() => /cnic-front\.png/.test((document.querySelector('[data-doc="cnicFront"]') || {}).textContent || ''), null, { timeout: 8000 });
+  expect(await win.evaluate((id) => prFindEmployee(id).documents[0].type, e1.id)).toBe('image/jpeg');   // stored as JPEG
+  await win.evaluate(() => closeEmployeePanel());
+
+  // ── The profile and the terms sheet are built from the record ────────────
+  const docs = await win.evaluate((id) => {
+    DB.settings.hostelName = 'Test Boys Hostel';   // nothing prints under the placeholder name
+    const got = [], keep = window._electronPDF;
+    window._electronPDF = (html, name) => got.push({ html, name });
+    try { employeeProfilePDF(id); employeeTermsPDF(id); } finally { window._electronPDF = keep; }
+    return got.map(g => ({ name: g.name, confidential: g.html.includes('CONFIDENTIAL'), cnicImg: g.html.includes('data:image/jpeg'),
+      name2: g.html.includes('Shaukat Masih'), salary: g.html.includes('Rs. 30,000'), sign: g.html.includes('signature and date') }));
+  }, e1.id);
+  expect(docs.length).toBe(2);
+  expect(docs[0]).toEqual(expect.objectContaining({ confidential: true, cnicImg: true, name2: true, salary: true }));
+  expect(docs[1]).toEqual(expect.objectContaining({ name2: true, salary: true, sign: true }));
+
   // ── Expenses shows it, locked ─────────────────────────────────────────────
   await win.evaluate(() => navigate('expenses'));
   await win.waitForSelector('.exp-payroll', { timeout: 10000 });
@@ -101,6 +148,9 @@ test('staff, advance, payroll run, void, permissions, restart, settlement', asyn
   await win.evaluate(() => { navigate('payroll'); prTab('run'); });
   await win.waitForSelector('#pr-run', { timeout: 10000 });
   const row = await win.evaluate((id) => { const r = document.querySelector(`#pr-run tr[data-emp="${id}"]`); return r.textContent.replace(/\s+/g, ' '); }, e1.id);
+  const row2 = await win.evaluate((id) => document.querySelector(`#pr-run tr[data-emp="${id}"]`).textContent.replace(/\s+/g, ' '), e2);
+  expect(row2).toContain('Rs. 29,000');          // the Eid bonus is on Gul Khan's gross
+  expect(row2).toContain('incl. Rs. 3,000 bonus');
   expect(row).toContain('− Rs. 5,000');
   expect(row).toContain('Rs. 25,000');
   await win.click(`#pr-run tr[data-emp="${e1.id}"] .btn`);
@@ -127,7 +177,9 @@ test('staff, advance, payroll run, void, permissions, restart, settlement', asyn
     return { paid: s.paid, staff: s.staff, payroll: DB.expenses.filter(e => e.category === 'Salaries & Wages' && e.date.startsWith(M)).reduce((t, e) => t + e.amount, 0),
              gross: s.gross }; }, M);
   expect(month.paid).toBe(3);
-  expect(month.payroll, 'what left the hostel is the gross less proration').toBe(month.gross - (22000 - e3net));
+  // What left the hostel: the gross less proration, plus the 2,000 bonus paid in hand.
+  expect(month.payroll).toBe(month.gross - (22000 - e3net) + 2000);
+  expect(await win.evaluate(() => DB.bonuses.map(b => b.status).sort())).toEqual(['Paid', 'Paid']);
 
   // ── Void a payslip: expense gone, advance open, month payable again ───────
   await win.evaluate(() => showPayslip(DB.payslips[0].id));
@@ -162,7 +214,8 @@ test('staff, advance, payroll run, void, permissions, restart, settlement', asyn
   app = await electron.launch(launchOpts());
   win = await app.firstWindow();
   await login(win, false);
-  expect(await win.evaluate(() => [DB.employees.length, DB.salaryAdvances.length, DB.payslips.length])).toEqual([3, 1, 3]);
+  expect(await win.evaluate(() => [DB.employees.length, DB.salaryAdvances.length, DB.payslips.length, DB.bonuses.length,
+    DB.employees.find(e => e.name === 'Shaukat Masih').documents.length])).toEqual([3, 1, 3, 2, 1]);
 
   // ── Final settlement: the employee leaves the payroll ─────────────────────
   const settle = await win.evaluate((id) => { const r = prSettle(id, { leftDate: today(), date: today(), reason: 'Resigned' });

@@ -32,6 +32,7 @@ vm.runInContext(`var __log = []; function logActivity(a, d, c) { __log.push({ a,
 const P = vm.runInContext(`({ DB, get log() { return __log; }, perms: __perms,
   PR_EXPENSE_CAT, prAddEmployee, prUpdateEmployee, prFindEmployee, prGiveAdvance, prVoidAdvance, prAdvanceBalance,
   prPay, prVoidPayslip, prDraft, prSettle, prPayFor, prGross, prOwnsExpense, prMonthSummary, prUnemployedDays,
+  prAdvanceRoom, prGiveBonus, prVoidBonus, prFindBonus, prAddDocument, prRemoveDocument, prFindPayslip,
   calcExpenses })`, sandbox);
 
 let passed = 0, failed = 0;
@@ -40,7 +41,7 @@ function ok(name, fn) {
   catch (e) { failed++; console.log('  FAIL ' + name + '\n       ' + (e && e.message || e)); }
 }
 function reset() {
-  P.DB.employees = []; P.DB.salaryAdvances = []; P.DB.payslips = []; P.DB.expenses = []; P.DB.transfers = [];
+  P.DB.employees = []; P.DB.salaryAdvances = []; P.DB.payslips = []; P.DB.bonuses = []; P.DB.expenses = []; P.DB.transfers = [];
   P.DB.settings.refSeq = {}; P.DB.settings.expenseCategories = ['Electricity', 'Other'];
   P.perms.payroll = true; P.perms.users = true;
 }
@@ -136,23 +137,28 @@ ok('instalments: 6,000 over 3 comes off 2,000 a month', () => {
   assert.strictEqual(P.DB.salaryAdvances[0].status, 'Recovered');
 });
 
-ok('recovery never takes pay below zero; the rest carries to the next salary', () => {
+ok('NEVER ABOVE THE UPCOMING SALARY — for anyone, administrators included (owner, 2026-09-30)', () => {
   reset();
   const e = emp().record;
-  assert.strictEqual(P.prGiveAdvance({ employeeId: e.id, amount: 45000, date: '2026-08-02', reason: 'x' }).code, 'overLimit');
-  assert.ok(P.prGiveAdvance({ employeeId: e.id, amount: 45000, date: '2026-08-02', reason: 'x', overLimit: true }).ok);
-  const aug = P.prPay(e.id, '2026-08', { date: '2026-08-30' }).record;
-  assert.deepStrictEqual([aug.net, aug.carriedAdvance], [0, 15000]);
-  assert.strictEqual(aug.expenseId, '', 'a zero payslip books no expense');
-  const sep = P.prPay(e.id, '2026-09', { date: '2026-09-30' }).record;
-  assert.strictEqual(sep.net, 15000);
+  const over = P.prGiveAdvance({ employeeId: e.id, amount: 30001, date: '2026-08-02', reason: 'x', overLimit: true });
+  assert.strictEqual(over.code, 'overLimit');
+  assert.ok(/most you can give is Rs\. 30,000/.test(over.reason), over.reason);
+  assert.ok(P.prGiveAdvance({ employeeId: e.id, amount: 20000, date: '2026-08-02', reason: 'x' }).ok);
+  const r2 = P.prGiveAdvance({ employeeId: e.id, amount: 10001, date: '2026-08-03', reason: 'x' });
+  assert.ok(/most you can give is Rs\. 10,000 .* Rs\. 20,000 is already advanced/.test(r2.reason), r2.reason);
+  assert.ok(P.prGiveAdvance({ employeeId: e.id, amount: 10000, date: '2026-08-03', reason: 'x' }).ok);
+  assert.ok(/already fully advanced/.test(P.prGiveAdvance({ employeeId: e.id, amount: 1, date: '2026-08-04', reason: 'x' }).reason));
 });
 
-ok('only an administrator goes over one month\'s salary', () => {
+ok('recovery never takes pay below zero; the rest carries to the next salary', () => {
   reset();
-  const e = emp().record;
-  P.perms.users = false;
-  assert.ok(/Only an administrator/.test(P.prGiveAdvance({ employeeId: e.id, amount: 45000, date: '2026-08-02', reason: 'x', overLimit: true }).reason));
+  // Joins mid-month: the upcoming salary is the full 30,000, but half of it is prorated away.
+  const e = emp({ joinDate: '2026-09-16' }).record;
+  assert.ok(P.prGiveAdvance({ employeeId: e.id, amount: 30000, date: '2026-09-16', reason: 'x' }).ok);
+  const sep = P.prPay(e.id, '2026-09', { date: '2026-09-30' }).record;
+  assert.deepStrictEqual([sep.net, sep.carriedAdvance], [0, 15000]);
+  assert.strictEqual(sep.expenseId, '', 'a zero payslip books no expense');
+  assert.strictEqual(P.prPay(e.id, '2026-10', { date: '2026-10-30' }).record.net, 15000);
 });
 
 ok('a joining month is prorated by the days not employed', () => {
@@ -222,6 +228,61 @@ ok('the month summary counts the staff on the payroll, paid and due', () => {
   P.prPay(a.id, '2026-09', { date: '2026-09-30' });
   const s = P.prMonthSummary('2026-09');
   assert.deepStrictEqual([s.staff, s.paid, s.unpaid, s.gross, s.paidNet, s.dueNet], [2, 1, 1, 56000, 30000, 26000]);
+});
+
+ok('a bonus WITH THE SALARY is an earning on the next payslip and in its expense, never prorated', () => {
+  reset();
+  const e = emp({ joinDate: '2026-09-16' }).record;
+  const b = P.prGiveBonus({ employeeId: e.id, amount: 3000, type: 'Eid / festival', reason: 'Eid', date: '2026-09-20' });
+  assert.ok(b.ok, b.reason);
+  assert.strictEqual(b.record.ref, 'BON-0001');
+  assert.strictEqual(P.calcExpenses('2026-09'), 0, 'nothing is booked until it is paid');
+  const ps = P.prPay(e.id, '2026-09', { date: '2026-09-30' }).record;
+  assert.strictEqual(ps.gross, 33000);
+  assert.strictEqual(ps.deductions.find(d => d.kind === 'proration').amount, 15000, 'half the salary, none of the bonus');
+  assert.strictEqual(ps.net, 18000);
+  assert.strictEqual(P.calcExpenses('2026-09'), 18000);
+  assert.strictEqual(P.prFindBonus(b.record.id).status, 'Paid');
+  assert.ok(/void that payslip first/.test(P.prVoidBonus(b.record.id, 'x').reason));
+  P.prVoidPayslip(ps.id, 'redo');
+  assert.strictEqual(P.prFindBonus(b.record.id).status, 'Pending', 'a voided payslip gives the bonus back to wait');
+});
+
+ok('a bonus paid NOW is an expense on its day, owned by payroll, and voids with its expense', () => {
+  reset();
+  const e = emp().record;
+  const b = P.prGiveBonus({ employeeId: e.id, amount: 5000, type: 'Performance', reason: 'Best month', date: '2026-09-12', payWith: 'now' }).record;
+  const x = P.DB.expenses.find(r => r.id === b.expenseId);
+  assert.deepStrictEqual([x.amount, x.date, x.source.kind, b.status], [5000, '2026-09-12', 'bonus', 'Paid']);
+  assert.ok(P.prOwnsExpense(x));
+  assert.strictEqual(P.prPay(e.id, '2026-09', { date: '2026-09-30' }).record.gross, 30000, 'not paid twice');
+  assert.ok(P.prVoidBonus(b.id, 'Given to the wrong person').ok);
+  assert.ok(!P.DB.expenses.some(r => r.id === b.expenseId));
+});
+
+ok('a bonus is an administrator\'s decision', () => {
+  reset();
+  const e = emp().record;
+  P.perms.users = false;
+  assert.ok(/Only an administrator/.test(P.prGiveBonus({ employeeId: e.id, amount: 100, reason: 'x', date: '2026-09-02' }).reason));
+});
+
+ok('documents: CNIC sides and the agreement replace their old copy, others accumulate, junk is refused', () => {
+  reset();
+  const e = emp().record;
+  const img = 'data:image/jpeg;base64,AAAA', pdf = 'data:application/pdf;base64,JVBERi0=';
+  assert.ok(P.prAddDocument(e.id, { kind: 'cnicFront', type: 'image/jpeg', data: img, name: 'front.jpg' }).ok);
+  const again = P.prAddDocument(e.id, { kind: 'cnicFront', type: 'image/jpeg', data: img, name: 'front-new.jpg' });
+  assert.ok(again.ok && again.replaced);
+  P.prAddDocument(e.id, { kind: 'agreement', type: 'application/pdf', data: pdf, name: 'agreement.pdf' });
+  P.prAddDocument(e.id, { kind: 'other', type: 'application/pdf', data: pdf, name: 'a.pdf' });
+  P.prAddDocument(e.id, { kind: 'other', type: 'application/pdf', data: pdf, name: 'b.pdf' });
+  assert.strictEqual(JSON.stringify(e.documents.map(d => d.kind).sort()), JSON.stringify(['agreement', 'cnicFront', 'other', 'other']));
+  assert.strictEqual(e.documents.find(d => d.kind === 'cnicFront').name, 'front-new.jpg');
+  assert.strictEqual(e.documents[0].addedByName, 'Admin', 'who added it is kept');
+  assert.strictEqual(P.prAddDocument(e.id, { kind: 'other', type: 'text/html', data: 'data:text/html;base64,AA' }).field, 'file');
+  assert.ok(P.prRemoveDocument(e.id, e.documents[0].id).ok);
+  assert.ok(P.log.some(l => l.a === 'Staff Document Replaced'));
 });
 
 console.log('\n  ' + passed + ' passed, ' + failed + ' failed\n');

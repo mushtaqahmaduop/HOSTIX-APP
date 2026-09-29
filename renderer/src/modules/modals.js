@@ -293,6 +293,7 @@ function _initDBFields(d) {
   if (!Array.isArray(d.employees))         d.employees = [];     // payroll.js
   if (!Array.isArray(d.salaryAdvances))    d.salaryAdvances = [];
   if (!Array.isArray(d.payslips))          d.payslips = [];
+  if (!Array.isArray(d.bonuses))           d.bonuses = [];
   if (!d.settings) d.settings = {};
 
   /* ONE ISSUES REGISTER (owner, 2026-09-21).

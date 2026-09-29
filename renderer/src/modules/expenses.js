@@ -625,7 +625,7 @@ function renderExpenses() {
       <td>
         ${typeof prOwnsExpense === 'function' && prOwnsExpense(e)
           ? `<button type="button" class="exp-payroll" onclick="event.stopPropagation();expOpenPayroll('${e.id}')"
-               title="Booked by Staff &amp; Payroll — change or void it there">${e.source.kind === 'salary' ? 'Payslip' : 'Advance'} ›</button>`
+               title="Booked by Staff &amp; Payroll — change or void it there">${e.source.kind === 'salary' ? 'Payslip' : e.source.kind === 'bonus' ? 'Bonus' : 'Advance'} ›</button>`
           : `<div class="exp-acts">
           <button class="ui-btn ui-btn--secondary ui-btn--sm ui-btn--icon" onclick="${e._transfer?`showEditTransferModal('${e.id}')`:`showEditExpenseModal('${e.id}')`}" title="Edit" aria-label="Edit this ${escHtml(e.category || 'expense')} record"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
           <button class="ui-btn ui-btn--danger ui-btn--sm ui-btn--icon" onclick="${e._transfer?`deleteTransfer('${e.id}')`:`deleteExpense('${e.id}')`}" title="Delete" aria-label="Delete this ${escHtml(e.category || 'expense')} record"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
@@ -1289,7 +1289,7 @@ async function _expDoDelete(id) {
 function _expPayrollOwned(id) {
   const e = (DB.expenses || []).find(x => x.id === id);
   if (!(e && typeof prOwnsExpense === 'function' && prOwnsExpense(e))) return false;
-  toast('This ' + (e.source.kind === 'salary' ? 'salary' : 'advance') + ' was booked by Staff & Payroll — change or void it there', 'info');
+  toast('This ' + e.source.kind + ' was booked by Staff & Payroll — change or void it there', 'info');
   return true;
 }
 function expOpenPayroll(id) {
@@ -1297,6 +1297,7 @@ function expOpenPayroll(id) {
   if (!e || !e.source) return;
   if (typeof prAllowed === 'function' && !prAllowed()) { toast('Your account does not have the Staff & payroll permission', 'info'); return; }
   if (e.source.kind === 'salary') { navigate('payroll'); setTimeout(() => showPayslip(e.source.id), 200); }
+  else if (e.source.kind === 'bonus') { prView.tab = 'bonuses'; navigate('payroll'); }
   else { prView.tab = 'advances'; prView.advShow = 'All'; navigate('payroll'); }
 }
 
