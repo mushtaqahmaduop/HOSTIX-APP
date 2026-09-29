@@ -727,6 +727,104 @@ function _rptTotals(keys) {
   };
 }
 
+/* ── THE OVERVIEW'S BREAKDOWNS, AS FUNCTIONS (2026-09-29) ─────────────────────
+   These four were written inline in renderReports(). The Owner Summary
+   (owner-brief.js) draws the same breakdowns on paper, and a second copy of
+   the arithmetic is how two documents come to disagree about one month — so
+   they moved here, unchanged, and both read them. The reasoning for each is
+   where it was written, in renderReports(). */
+
+/** Every rupee collected, by the method it came in — the trail, not the record. */
+function _rptMethodSplit(pays) {
+  const byMethod = new Map();
+  const add = (m, v) => { const k = m || 'Cash'; byMethod.set(k, (byMethod.get(k) || 0) + v); };
+  (pays || []).forEach(p => {
+    const total = Number(p.amount || 0);
+    if (total <= 0) return;
+    const trail = (Array.isArray(p.partialPayments) ? p.partialPayments : []).filter(e => e && Number(e.amount) > 0);
+    const revs  = (Array.isArray(p.reversals) ? p.reversals : []).filter(e => e && Number(e.amount) > 0);
+    const net   = trail.reduce((s, e) => s + Number(e.amount), 0) - revs.reduce((s, e) => s + Number(e.amount), 0);
+    if (!trail.length || net > total + 0.5) { add(p.method, total); return; }
+    trail.forEach(e => add(e.method || p.method, Number(e.amount)));
+    revs.forEach(e => add(e.method || p.method, -Number(e.amount)));
+    if (total - net > 0.5) add(p.method, total - net);
+  });
+  return [...byMethod.entries()]
+    .map(([m, amt]) => ({ m, amt, color: methodHue(m) }))
+    .filter(x => x.amt > 0).sort((a, b) => b.amt - a.amt);
+}
+
+/** What the period billed, by part: rent, mess, extras, admission; less concessions. */
+function _rptRevParts(pays) {
+  let rent = 0, mess = 0, extras = 0, adm = 0, conc = 0;
+  (pays || []).forEach(p => {
+    const ch = paymentCharges(p, DB.students.find(s => s.id === p.studentId));
+    rent += ch.rent;
+    mess += ch.messIncluded ? ch.mess : 0;
+    extras += Number(p.extraTotal != null ? p.extraTotal
+      : (p.extraCharges || []).reduce((s, c) => s + Number((c && c.amount) || 0), 0)) || 0;
+    adm  += Number(p.admissionFee != null ? p.admissionFee : p.fee) || 0;
+    conc += Number(p.concession != null ? p.concession : p.discount) || 0;
+  });
+  const slices = [
+    { label: 'Rent',          value: rent,   color: _rptCss('--accent', '#2451D6') },
+    { label: 'Mess',          value: mess,   color: _rptCss('--green',  '#2ec98a') },
+    { label: 'Extra charges', value: extras, color: _rptCss('--violet', '#7c3aed') },
+    { label: 'Admission fee', value: adm,    color: _rptCss('--amber',  '#f0a030') },
+  ].filter(s => s.value > 0);
+  const gross = slices.reduce((s, x) => s + x.value, 0);
+  const total = gross - conc;
+  return { slices, conc, gross, total,
+           rows: slices.map(s => ({ ...s, pct: gross ? s.value / gross * 100 : 0 })) };
+}
+
+/** Collected ÷ billed, and the students behind it: paid, part-paid, unpaid. */
+function _rptCollect(cur) {
+  const billed = cur.billed, collected = cur.collected;
+  const byStudent = new Map();
+  (cur.pays || []).forEach(p => {
+    const k = p.studentId || p.id;
+    const a = byStudent.get(k) || { bill: 0, paid: 0 };
+    a.bill += calculateBill(p);
+    a.paid += Number(p.amount) || 0;
+    byStudent.set(k, a);
+  });
+  let paid = 0, part = 0, unpaid = 0;
+  byStudent.forEach(a => {
+    if (a.bill <= 0) return;                 // nothing charged: not a debtor
+    if (a.paid >= a.bill - 0.5) paid++;
+    else if (a.paid > 0.5)      part++;
+    else                        unpaid++;
+  });
+  return { billed, collected, pending: cur.pending, paid, part, unpaid,
+           rate: billed > 0 ? collected / billed * 100 : null };
+}
+
+/** Revenue and expenses per month: a year's twelve, or the six ending on a month. */
+function _rptTrend(key, yearly) {
+  const out = [];
+  if (yearly) {
+    const y = Number(String(key).slice(0, 4));
+    for (let mo = 0; mo < 12; mo++) {
+      const k = y + '-' + String(mo + 1).padStart(2, '0');
+      out.push({ key: k,
+                 lbl: new Date(y, mo, 1).toLocaleString('default', { month: 'short' }),
+                 rev: calcRevenue(k), exp: calcExpenses(k) });
+    }
+    return out;
+  }
+  const RPT_TREND_MONTHS = 6;
+  const anch = new Date(Number(String(key).slice(0, 4)), Number(String(key).slice(5, 7)) - 1, 1);
+  for (let i = RPT_TREND_MONTHS - 1; i >= 0; i--) {
+    const d = new Date(anch.getFullYear(), anch.getMonth() - i, 1);
+    const k = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    out.push({ key: k,
+               lbl: d.toLocaleString('default', { month: 'short', year: 'numeric' }),
+               rev: calcRevenue(k), exp: calcExpenses(k) });
+  }
+  return out;
+}
+
 // Arrivals less departures inside the window, read off the stays — so a
 // re-admitted student's first departure still counts in the month it happened.
 function _rptStudentDelta(residents) {
@@ -830,22 +928,7 @@ function renderReports() {
      believed at all — the same rules _cashEvents() dates cash by, so the
      total is exactly calcRevenue() over the same records. Methods found on
      records but missing from Settings are kept, not dropped. */
-  const _byMethod = new Map();
-  const _add = (m, v) => { const k = m || 'Cash'; _byMethod.set(k, (_byMethod.get(k) || 0) + v); };
-  pays.forEach(p => {
-    const total = Number(p.amount || 0);
-    if (total <= 0) return;
-    const trail = (Array.isArray(p.partialPayments) ? p.partialPayments : []).filter(e => e && Number(e.amount) > 0);
-    const revs  = (Array.isArray(p.reversals) ? p.reversals : []).filter(e => e && Number(e.amount) > 0);
-    const net   = trail.reduce((s, e) => s + Number(e.amount), 0) - revs.reduce((s, e) => s + Number(e.amount), 0);
-    if (!trail.length || net > total + 0.5) { _add(p.method, total); return; }
-    trail.forEach(e => _add(e.method || p.method, Number(e.amount)));
-    revs.forEach(e => _add(e.method || p.method, -Number(e.amount)));
-    if (total - net > 0.5) _add(p.method, total - net);
-  });
-  const methods = [..._byMethod.entries()]
-    .map(([m, amt]) => ({ m, amt, color: methodHue(m) }))
-    .filter(x => x.amt > 0).sort((a, b) => b.amt - a.amt);
+  const methods = _rptMethodSplit(pays);
   const methodTotal = methods.reduce((s,x)=>s+x.amt,0);
   /* THE SHARE AND THE AMOUNT ARE TWO COLUMNS, NOT ONE PARENTHESIS (owner ref:
      `reports2.png`). They were "PKR 62,500,000 (62.5%)" on one line, which
@@ -945,27 +1028,7 @@ function renderReports() {
      about 2026, and its chart says January to December of it. Twelve bars in
      the same width is why the label drops the year there — "Jan" under a chart
      whose card already names 2026 is not ambiguous. */
-  const trendData = [];
-  if (reportYearly) {
-    const y = Number(_rptKeys()[0]);
-    for (let mo = 0; mo < 12; mo++) {
-      const k = y + '-' + String(mo + 1).padStart(2, '0');
-      trendData.push({ key: k,
-                       lbl: new Date(y, mo, 1).toLocaleString('default', { month: 'short' }),
-                       rev: calcRevenue(k), exp: calcExpenses(k) });
-    }
-  } else {
-    const RPT_TREND_MONTHS = 6;
-    const _anch = new Date(Number(_rptKeys()[0].slice(0, 4)),
-                           Number(_rptKeys()[0].slice(5, 7)) - 1, 1);
-    for (let i = RPT_TREND_MONTHS - 1; i >= 0; i--) {
-      const d = new Date(_anch.getFullYear(), _anch.getMonth() - i, 1);
-      const k = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-      trendData.push({ key: k,
-                       lbl: d.toLocaleString('default', { month: 'short', year: 'numeric' }),
-                       rev: calcRevenue(k), exp: calcExpenses(k) });
-    }
-  }
+  const trendData = _rptTrend(_rptKeys()[0], reportYearly);
   _rptTrendData = trendData;
 
   /* ── Key Highlights ───────────────────────────────────────────────────────
@@ -1050,28 +1113,7 @@ function renderReports() {
      figures. The slices are scaled to their own sum for the arcs and the
      stated total is that same sum, so the card is internally consistent
      whichever way that lands. */
-  const _revParts = (() => {
-    let rent = 0, mess = 0, extras = 0, adm = 0, conc = 0;
-    pays.forEach(p => {
-      const ch = paymentCharges(p, DB.students.find(s => s.id === p.studentId));
-      rent += ch.rent;
-      mess += ch.messIncluded ? ch.mess : 0;
-      extras += Number(p.extraTotal != null ? p.extraTotal
-        : (p.extraCharges || []).reduce((s, c) => s + Number((c && c.amount) || 0), 0)) || 0;
-      adm  += Number(p.admissionFee != null ? p.admissionFee : p.fee) || 0;
-      conc += Number(p.concession != null ? p.concession : p.discount) || 0;
-    });
-    const slices = [
-      { label: 'Rent',          value: rent,   color: _rptCss('--accent', '#2451D6') },
-      { label: 'Mess',          value: mess,   color: _rptCss('--green',  '#2ec98a') },
-      { label: 'Extra charges', value: extras, color: _rptCss('--violet', '#7c3aed') },
-      { label: 'Admission fee', value: adm,    color: _rptCss('--amber',  '#f0a030') },
-    ].filter(s => s.value > 0);
-    const gross = slices.reduce((s, x) => s + x.value, 0);
-    const total = gross - conc;
-    return { slices, conc, gross, total,
-             rows: slices.map(s => ({ ...s, pct: gross ? s.value / gross * 100 : 0 })) };
-  })();
+  const _revParts = _rptRevParts(pays);
   _rptRevData = _revParts.slices.map(s => ({ label: s.label, value: s.value, color: s.color }));
 
   /* ══ COLLECTION PERFORMANCE (owner's design, 2026-09-22) ═══════════════════
@@ -1088,26 +1130,7 @@ function renderReports() {
      in one month — the month's rent and a re-issued bill — is one person, and
      the register they are chased from lists people. Counted off outstandingOf()
      so "unpaid" here and an arrears list elsewhere name the same students. */
-  const _collect = (() => {
-    const billed = cur.billed, collected = cur.collected;
-    const byStudent = new Map();
-    pays.forEach(p => {
-      const k = p.studentId || p.id;
-      const a = byStudent.get(k) || { bill: 0, paid: 0 };
-      a.bill += calculateBill(p);
-      a.paid += Number(p.amount) || 0;
-      byStudent.set(k, a);
-    });
-    let paid = 0, part = 0, unpaid = 0;
-    byStudent.forEach(a => {
-      if (a.bill <= 0) return;                 // nothing charged: not a debtor
-      if (a.paid >= a.bill - 0.5) paid++;
-      else if (a.paid > 0.5)      part++;
-      else                        unpaid++;
-    });
-    return { billed, collected, pending: cur.pending, paid, part, unpaid,
-             rate: billed > 0 ? collected / billed * 100 : null };
-  })();
+  const _collect = _rptCollect(cur);
   // drawReportCharts() runs 50ms after this markup paints and reads it there.
   _rptGaugePct = _collect.rate;
 
@@ -1323,6 +1346,17 @@ function renderReports() {
           <svg class="rpt-xp__cv" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="ui-menu rpt-xp__m" id="rpt-xp-menu" role="menu" hidden>
+          ${''/* THE OWNER SUMMARY LEADS (owner, 2026-09-29): a two-minute brief
+                 on three pages with charts, for the owner rather than the filing
+                 cabinet. Month OR year, the owner's choice — both are offered
+                 whatever the picker is on, and each names its own period, so the
+                 menu never has to be read against the bar to know which. */}
+          <div class="ui-menu__t">Owner summary &middot; 3 pages</div>
+          <button role="menuitem" class="ui-menu__item" id="rpt-ob-month" onclick="rptExportToggle(false);ownerBriefForPage(false)">
+            ${icon('fileText','xs')} Monthly &mdash; ${escHtml(monthLabel(reportMonth || thisMonth()))}</button>
+          <button role="menuitem" class="ui-menu__item" id="rpt-ob-year" onclick="rptExportToggle(false);ownerBriefForPage(true)">
+            ${icon('fileText','xs')} Yearly &mdash; ${escHtml(String(reportMonth || thisMonth()).slice(0, 4))}</button>
+          <div class="ui-menu__sep"></div>
           <div class="ui-menu__t">${escHtml(reportYearly ? 'Year ' + _rptKeys()[0] : _rptScopeLabel())}</div>
           <button role="menuitem" class="ui-menu__item" onclick="rptExportToggle(false);exportReportExcel()">
             ${icon('fileSpreadsheet','xs')} Full report &mdash; Excel</button>
