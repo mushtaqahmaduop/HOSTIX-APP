@@ -211,6 +211,90 @@ function hoTakeBack(id, accountId) {
   return { ok: true, handover: h };
 }
 
+/* ══ THE ADMIN RECORDS A HANDOVER THEY RECEIVED (owner, 2026-09-23) ════════
+   "the admin can also add receive handover without the user or a warden added
+   handover, because sometimes the admin is logged in with his account and
+   warden handover him cash or transfer him easypaisa or jazzcash, so the admin
+   can record a handover from that user and record should also be shown in the
+   user account from which cash is received".
+
+   Until now a handover could only START with the warden: hoSend() is theirs,
+   and the admin could only review what had been sent. But the money moves at
+   a counter, not in the app — a warden hands over cash, or sends a JazzCash
+   transfer, while the admin is the one signed in. There was no way to write
+   that down, which is also the "no confirm option for the admin" in the same
+   message: the admin could not confirm a handover nobody had raised.
+
+   IT IS RECORDED AND SETTLED IN ONE ACT (the owner's ruling): the warden sees
+   it in their account at once, marked as recorded by the admin, and nothing
+   waits on them signing in. The lines it settles are exactly the ones hoSend()
+   would have sent — that account's collections still pending handover — so the
+   two routes cannot disagree about what was owed.
+
+   `recordedBy` is what tells them apart afterwards. A handover with it was
+   never sent by the warden, and every screen that says who did what reads it
+   rather than guessing from the timestamps being equal.
+
+   THE ADMIN CANNOT DO THIS TO THEMSELVES. An account that manages users has
+   nothing to hand over — hoNeedsHandover() already says so — and recording
+   one 'from' yourself would be approving your own money, which is the single
+   thing the review guard exists to prevent.                                  */
+function hoRecordReceived(accountId, opts) {
+  const o = opts || {};
+  if (typeof canDo === 'function' && !canDo('users')) {
+    return _hoFail('Only an account that manages users can record a handover.');
+  }
+  if (!accountId) return _hoFail('Choose who handed the money over.');
+  if (accountId === _hoRole()) return _hoFail('You cannot record a handover from yourself.');
+  if (!hoNeedsHandover(accountId)) return _hoFail('That account has nothing to hand over.');
+  if (hoOpenFor(accountId)) {
+    return _hoFail('That account already has a handover waiting for review — open it instead.');
+  }
+
+  const lines = hoPendingLines(accountId);
+  const total = hoSum(lines);
+  if (!lines.length || total <= 0) return _hoFail('That account is not holding any money.');
+
+  const now = new Date().toISOString();
+  const u   = _hoUser();
+  const w   = (typeof WARDENS !== 'undefined' && WARDENS && WARDENS[accountId]) || {};
+  const by  = hoByMethod(lines);
+  const h = {
+    id: 'ho_' + uid() + Math.random().toString(36).slice(2, 5),
+    wardenId: accountId, wardenName: w.name || '',
+    status: 'approved', totalAmount: total, lineCount: lines.length,
+    expected: by, counted: null, countedHow: null,
+    approvedAmount: total, approvedLines: lines.length,
+    adminId: _hoRole(), adminName: (u && u.name) || '',
+    notes: [], createdAt: now, reviewedAt: now, approvedAt: now, takenBackAt: null,
+    /* Not sent by the warden — written down by whoever took it. */
+    recordedBy: _hoRole(), recordedByName: (u && u.name) || '',
+    /* The warden has not opened the app since; the bell tells them. */
+    wardenSeenAt: null,
+  };
+  /* What the admin says they actually took, per method. It is stored the same
+     way a reviewed handover stores its count, so one reader serves both. */
+  h.counted = {}; h.countedHow = {};
+  Object.keys(by).forEach(m => { h.counted[m] = by[m]; h.countedHow[m] = 'recorded'; });
+
+  _hoList('handovers').push(h);
+  const rows = new Map(_hoList('wardenCollections').map(r => [r.ledgerEntryId, r]));
+  lines.forEach(x => {
+    _hoList('handoverItems').push({
+      id: h.id + ':' + x.row.ledgerEntryId, handoverId: h.id, ledgerEntryId: x.row.ledgerEntryId,
+      amount: x.row.amount, method: x.row.method, outcome: 'approved',
+    });
+    const r = rows.get(x.row.ledgerEntryId) || x.row;
+    r.status = 'approved'; r.handoverId = h.id; r.updatedAt = now;
+  });
+
+  const note = String(o.note || '').trim();
+  if (note) _hoNote(h, note, 'approved');
+  _hoLog('Handover Recorded',
+    (h.wardenName || accountId) + ' — ' + fmtPKR(total) + ' received by ' + (h.adminName || 'an admin'));
+  return { ok: true, handover: h };
+}
+
 /* ── REVIEWING ────────────────────────────────────────────────────────────── */
 
 /**

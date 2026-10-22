@@ -8,6 +8,60 @@
 const crypto = typeof require !== 'undefined' ? require('crypto') : null;
 
 // ── Electron external link helper ─────────────────────────────────────────────
+/* A WhatsApp chat link that works on every PC (owner, 2026-09-24: "the whatsapp
+   support is broken").
+
+   `whatsapp://send` opens ONLY when WhatsApp Desktop is installed. On a PC
+   without it Windows has no handler, shell.openExternal rejects into a console
+   line, and the button does nothing at all. `https://wa.me/` is WhatsApp's own
+   universal link: it hands over to the desktop app when there is one and to
+   WhatsApp Web when there is not.
+
+   Pakistani numbers are normalised to the international form wa.me needs:
+   0342… and 0092342… both become 92342…. The encoded message is trimmed so
+   the whole link stays under the 2048 characters preload.js and main.js
+   accept — they drop a longer one silently. Returns '' without a number. */
+function waLink(phone, text) {
+  var num = String(phone || '').replace(/[^0-9]/g, '').replace(/^0092/, '92').replace(/^0/, '92');
+  if (!num) return '';
+  var pre = 'https://wa.me/' + num + '?text=';
+  return pre + waFitText(text, 1900 - pre.length);      // headroom under 2048
+}
+
+/* The longest head of `text` whose encoding fits `budget`, encoded. Trimmed in
+   whole CHARACTERS before encoding, never in the encoded string: an Urdu letter
+   is two or three %XX escapes, and cutting between them left a link WhatsApp
+   could not decode. Array.from keeps a surrogate pair (an emoji) whole too. */
+function waFitText(text, budget) {
+  var s = String(text || '');
+  var full = encodeURIComponent(s);
+  if (full.length <= budget) return full;
+  var chars = Array.from(s), lo = 0, hi = chars.length;
+  while (lo < hi) {                                      // largest n that fits
+    var mid = (lo + hi + 1) >> 1;
+    if (encodeURIComponent(chars.slice(0, mid).join('')).length <= budget) lo = mid;
+    else hi = mid - 1;
+  }
+  return encodeURIComponent(chars.slice(0, lo).join(''));
+}
+
+/* An email that opens WRITTEN, in Gmail (owner, 2026-09-24: "the gmail in the
+   support page only opens browser and not opens the gmail with the specified
+   id and message").
+
+   `mailto:` goes to whatever mail program Windows has as its default, and on
+   most hostel PCs that is nothing — so the click landed on a bare browser or a
+   "choose an app" prompt, with no address and no message. Gmail's compose URL
+   opens in the browser with the address, subject and body filled in; a warden
+   signed in to Gmail only has to press Send. Same 2048-character ceiling as
+   waLink(), and the body is trimmed the same way — in whole characters. */
+function gmailLink(to, subject, body) {
+  if (!to) return '';
+  var pre = 'https://mail.google.com/mail/?view=cm&fs=1&to=' + encodeURIComponent(to) +
+            '&su=' + encodeURIComponent(subject || '') + '&body=';
+  return pre + waFitText(body, 1900 - pre.length);      // headroom under 2048
+}
+
 function openExternalLink(url) {
   try {
     if (window.electronAPI && window.electronAPI.openExternal) {
@@ -28,13 +82,124 @@ function openExternalLink(url) {
 // ── ID & date helpers ─────────────────────────────────────────────────────────
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
-function nextStudentId() {
-  var maxNum = 0;
-  DB.students.forEach(function (s) {
-    var n = parseInt(String(s.id), 10);
+/* ── ONE SAVE AT A TIME (bug audit BUG-006, 2026-09-28) ──────────────────────
+   Every money-writing button called its submit function directly, and none of
+   them refused to run while the previous press was still saving. A double-click
+   — or a second press while `await saveDB()` was in flight — posted the money
+   twice: two expenses, two owner-fund movements, a reversal taken back twice,
+   a "Receive pending" recorded twice (docs/BUG_AUDIT_2026-09-28.md).
+
+   submitOnce(key, fn) runs `fn` unless a call with the same key is still
+   running, in which case it DOES NOT run it again: it hands back the running
+   call's promise, so a caller that awaits still waits for the one real save.
+   The key names the operation, and the record where it matters
+   ('payment:reverse:' + id), so reversing two different payments at once is
+   not blocked. The button that was pressed is disabled and marked busy until
+   the save settles — success or failure — so the second click has nothing to
+   land on. A submit that stops at validation settles at once and frees the key,
+   so correcting the form and pressing again works as before. */
+const _submitRunning = new Map();
+function submitOnce(key, fn) {
+  if (_submitRunning.has(key)) return _submitRunning.get(key);
+  /** @type {HTMLButtonElement|null} */
+  let btn = null;
+  try {
+    const a = /** @type {HTMLButtonElement|null} */ (typeof document !== 'undefined' && document ? document.activeElement : null);
+    if (a && a.tagName === 'BUTTON' && !a.disabled) {
+      btn = a; btn.disabled = true; btn.setAttribute('aria-busy', 'true');
+    }
+  } catch (_) { btn = null; }
+  const release = () => {
+    _submitRunning.delete(key);
+    if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); }
+  };
+  let run;
+  try { run = Promise.resolve(fn()); }
+  catch (e) { run = Promise.reject(e); }
+  const tracked = run.then(v => { release(); return v; }, e => { release(); throw e; });
+  _submitRunning.set(key, tracked);
+  return tracked;
+}
+
+/* ── A STUDENT NUMBER IS NEVER HANDED OUT TWICE (bug audit BUG-008) ──────────
+   The next number was "highest number among the students on file + 1". But
+   deleting a student removes them from DB.students and — deliberately — keeps
+   their payments, which still carry their id. So deleting the top student
+   freed their number while their records still pointed at it, and the next
+   person admitted was given it and inherited them: reproduced, the new #003
+   owed the deleted #003's pending 5,000 (docs/BUG_AUDIT_2026-09-28.md).
+
+   The next number is now one past the highest that has EVER been used:
+     · every student on file,
+     · every record that still names a student (STUDENT_REF_TABLES — the same
+       list the renumbering below walks, plus the ledger and concessions),
+     · and DB.settings.studentSeq, a counter that only ever goes up, so a
+       number is not re-issued even after every record naming it is gone.
+   nextStudentId() only LOOKS — the Add Student form shows it as a preview —
+   and noteStudentId() records a number once a student is actually saved. */
+var STUDENT_REF_TABLES = ['payments', 'cancellations', 'roomShifts', 'checkinlog', 'fines',
+  'archive', 'complaints', 'issues', 'billSplits', 'studentLedger', 'concessions'];
+
+function _highestStudentNumber() {
+  var maxNum = Number(DB.settings && DB.settings.studentSeq) || 0;
+  (DB.students || []).forEach(function (s) {
+    var n = parseInt(String(s && s.id), 10);
     if (!isNaN(n) && n > maxNum) maxNum = n;
   });
-  return String(maxNum + 1).padStart(3, '0');
+  STUDENT_REF_TABLES.forEach(function (col) {
+    (DB[col] || []).forEach(function (r) {
+      if (!r) return;
+      [r.studentId, r.raisedById].forEach(function (sid) {
+        if (sid == null || !_isStudentCode(String(sid))) return;
+        var n = parseInt(String(sid), 10);
+        if (n > maxNum) maxNum = n;
+      });
+    });
+  });
+  return maxNum;
+}
+
+/* ── EXPENSES ARE RED, EVERYWHERE (owner, 2026-09-28) ─────────────────────────
+   One colour for "money spent", read from the `dh-red` tone — the pending-
+   payments row of Needs Action, which the owner named — so every chart that
+   draws expenses (the dashboard trend, the Reports financial chart) and every
+   legend key agrees, in both themes, and cannot drift from that tone. A probe
+   carrying the class is how a CSS custom property set by a class is read. */
+function expenseColor() {
+  try {
+    const probe = document.createElement('span');
+    probe.className = 'dh-red';
+    probe.style.display = 'none';
+    document.body.appendChild(probe);
+    const v = getComputedStyle(probe).getPropertyValue('--dh').trim();
+    probe.remove();
+    if (/^#[0-9a-f]{6}$/i.test(v)) return v;
+  } catch (_) { /* headless: fall through */ }
+  return '#C0402F';
+}
+
+/* DISPLAY REFERENCE SERIES THAT NEVER REUSE A NUMBER (bug audit BUG-011).
+   CAN-####, MA-#### and CO-#### were max(existing)+1, so deleting the newest
+   record freed its number for the next one. `highestOnFile` is the caller's
+   max over live records; the stored mark covers the ones since deleted. Takes
+   the number: call it once, when the record is created. */
+function refSeqTake(series, highestOnFile) {
+  if (!DB.settings) DB.settings = {};
+  if (!DB.settings.refSeq || typeof DB.settings.refSeq !== 'object') DB.settings.refSeq = {};
+  const next = Math.max(Number(DB.settings.refSeq[series]) || 0, Number(highestOnFile) || 0) + 1;
+  DB.settings.refSeq[series] = next;
+  return next;
+}
+
+function nextStudentId() {
+  return String(_highestStudentNumber() + 1).padStart(3, '0');
+}
+
+/** Record that a student number is now taken, so it is never issued again. */
+function noteStudentId(sid) {
+  if (!DB.settings || !_isStudentCode(String(sid))) return;
+  var n = parseInt(String(sid), 10);
+  if (n > (Number(DB.settings.studentSeq) || 0)) DB.settings.studentSeq = n;
 }
 
 // A student code is a plain number, zero-padded to at least three digits —
@@ -79,7 +244,9 @@ function migrateStudentIdsToNumeric() {
     }
   });
 
-  // Pass 2 — everyone else takes the next free number, in roster order.
+  // Pass 2 — everyone else takes the next free number, in roster order — free
+  // meaning never used by ANY record either (BUG-008), not only by a student.
+  maxNum = Math.max(maxNum, _highestStudentNumber());
   students.forEach(function (s) {
     if (keeps.indexOf(s) !== -1) return;
     var sid = String(s.id);
@@ -88,6 +255,7 @@ function migrateStudentIdsToNumeric() {
     taken[next] = true;
     if (!(sid in idMap)) idMap[sid] = next;   // first claimant of an ambiguous old id
     s.id = next;
+    noteStudentId(next);
   });
 
   if (!Object.keys(idMap).length) return;
@@ -95,10 +263,15 @@ function migrateStudentIdsToNumeric() {
   // Every table that stores a studentId. DB.archive holds the payments that
   // retention moved out of DB.payments — miss it and the older half of the
   // ledger is re-pointed at the wrong people.
-  ['payments', 'cancellations', 'roomShifts', 'checkinlog', 'fines',
-   'archive', 'complaints', 'issues', 'billSplits'].forEach(function (col) {
+  STUDENT_REF_TABLES.forEach(function (col) {
     (DB[col] || []).forEach(function (r) {
-      if (r && r.studentId && idMap[r.studentId]) r.studentId = idMap[r.studentId];
+      if (!r) return;
+      if (r.studentId && idMap[r.studentId]) r.studentId = idMap[r.studentId];
+      /* `raisedById` is the SAME LINK under the other name — a maintenance
+         ticket's resident. It was never remapped because maintenance was not in
+         this list at all; now that both kinds live in `issues`, missing it would
+         point every "raised by" at whoever inherits that code. */
+      if (r.raisedById && idMap[r.raisedById]) r.raisedById = idMap[r.raisedById];
     });
   });
 
@@ -112,25 +285,6 @@ function migrateStudentIdsToNumeric() {
 }
 
 // ── DOM helpers ───────────────────────────────────────────────────────────────
-function toggleClearBtn(inputId, btnId) {
-  const inp = /** @type {HTMLInputElement} */ (document.getElementById(inputId));
-  const btn = document.getElementById(btnId);
-  if (!inp || !btn) return;
-  btn.classList.toggle('visible', inp.value.length > 0);
-}
-
-// Safe window.open() wrapper — handles popup blocker gracefully
-function safeOpenWindow(width, height) {
-  width  = width  || 1000;
-  height = height || 720;
-  var w = window.open('', '_blank', 'width=' + width + ',height=' + height + ',scrollbars=yes,resizable=yes');
-  if (!w) {
-    if (typeof toast === 'function')
-      toast('⚠️ Popup blocked — allow popups for this page and try again.', 'error');
-    return null;
-  }
-  return w;
-}
 
 // ── Date & money formatters ───────────────────────────────────────────────────
 /* ── CALENDAR DATES ARE LOCAL, NEVER UTC ─────────────────────────────────────
@@ -214,6 +368,38 @@ function fmtCompact(n) {
      the same thing. Only the zeros go — 5.20B keeps its 2. */
   const num = (abs / div).toFixed(2).replace(/\.?0+$/, '');
   return sign + num + suffix;
+}
+
+/* ── KPI MONEY: WHOLE RUPEES, MILLIONS FROM TEN MILLION (owner, 2026-09-29) ──
+   "some hostel warden asked for whole number". A KPI card is a figure a warden
+   reads against the cash drawer, and ".00" on every one of them was noise:
+   rent is charged and paid in whole rupees. So a KPI shows the exact whole
+   figure up to 9,999,999, and from ten million (1,00,00,000) it switches to
+   millions — 10M, 12.35M — because an eight-digit figure is where a card runs
+   out of width. Billions and trillions as before.
+
+   KPI CARDS ONLY. Tables and the Expenses register keep fmtCompact()'s
+   two-decimal rule, which the owner asked for on 2026-09-15 for those places.
+   The exact figure stays in the title, as with every compact value. */
+function _kpiShort(abs) {
+  const div = abs >= 1e12 ? 1e12 : abs >= 1e9 ? 1e9 : 1e6;
+  const suffix = abs >= 1e12 ? 'T' : abs >= 1e9 ? 'B' : 'M';
+  return (abs / div).toFixed(2).replace(/\.?0+$/, '') + suffix;
+}
+function fmtKpi(n) {
+  const v = Number(n) || 0;             // text or NaN reads as 0, never "NaNM"
+  const abs = Math.round(Math.abs(v));
+  const sign = v < 0 && abs > 0 ? '-' : '';
+  return sign + (abs < 1e7 ? abs.toLocaleString('en-PK') : _kpiShort(abs));
+}
+/* Charts: whole rupees, and millions from ONE million — a chart label or a
+   donut's centre has less room than a KPI card, and "9,999,999" across a ring
+   is exactly the break the owner asked to avoid. Charts only. */
+function fmtChart(n) {
+  const v = Number(n) || 0;             // text or NaN reads as 0, never "NaNM"
+  const abs = Math.round(Math.abs(v));
+  const sign = v < 0 && abs > 0 ? '-' : '';
+  return sign + (abs < 1e6 ? abs.toLocaleString('en-PK') : _kpiShort(abs));
 }
 
 /* ── COMPACT MONEY, FROM THE THOUSAND UP ─────────────────────────────────────
@@ -307,6 +493,87 @@ function methodHue(name) {
       spare.set(j, METHOD_SPARE[spare.size % METHOD_SPARE.length]);
     });
   return spare.get(k) || '#94A3B8';
+}
+
+/* ── EXPENSE-CATEGORY COLOUR — THE ONLY PLACE THAT ANSWERS "WHAT COLOUR IS GAS"
+
+   Same rule as methodHue() above, and it is here for that reason plus one
+   more: the categories became DRAGGABLE in Settings on 2026-09-21.
+
+   Reports picked this colour with `_RPT_HUES[i % len]`, where `i` was the
+   category's POSITION in DB.settings.expenseCategories. That was defensible
+   while the list could only be appended to. The moment the owner can drag a
+   row it becomes the bug methodHue() already documents: reordering the list
+   repaints the whole Expense Breakdown, and a category is a different colour
+   between two visits to the same report for a reason nobody can see.
+
+   So the colour follows the NAME, and dragging changes the order of the list
+   without touching the chart.
+
+   ALLOCATED BY WALKING THE NAMES IN A STABLE ORDER, NOT BY HASHING ONE. A hash
+   can collide however long the ramp is, and the failure is invisible until two
+   particular categories happen to be configured together. Alphabetical is the
+   one ordering the owner cannot change by dragging, which is the whole point.
+
+   THE RAMP moved here from reports.js, where it was `_RPT_HUES`. Expenses are
+   money going out, so a warm ramp led by red reads correctly; these identify a
+   series and are not status signals. */
+const EXPENSE_CAT_HUES = ['#ef4444','#f97316','#f59e0b','#22c55e','#14b8a6',
+                          '#3b82f6','#8b5cf6','#ec4899','#84cc16','#06b6d4'];
+
+/* ONE STABLE LIST, INDEXED EVENLY.
+
+   The colour a category takes must be (a) the same on every screen and every
+   call, (b) unchanged when the owner DRAGS the categories into a new order in
+   Settings, and (c) as far from its neighbours' as a ten-hue ramp allows.
+
+   The version before this built its list per call, from Settings plus
+   whichever single name was being asked about. So the list — and therefore
+   every index in it — changed depending on the question: asking about
+   "Plumbing" produced an 11-name list and asking about "Owner Transfer"
+   produced a 12-name one, and the two landed on the SAME hue from different
+   positions. Two categories, one colour, on a page that had just started using
+   colour to tell them apart.
+
+   A hash of the name was the obvious repair and is the wrong one: djb2 over a
+   ten-entry ramp put sixteen real categories onto seven hues with three-way
+   collisions while three hues went unused. A hash spreads well over a large
+   space and badly over a tiny one.
+
+   So: ONE universe of names, built the same way whoever is asking — every
+   category Settings knows plus every category actually written on a record —
+   sorted, and indexed. Even spread by construction, identical from any call
+   site, and a drag in Settings cannot move it because the list is sorted
+   rather than taken in the owner's order.
+
+   ADDING a category can still shift the hues after it alphabetically. That is
+   the one cost, it is cosmetic, and it is the trade the even spread is worth:
+   a reader notices two categories sharing a colour today far more than they
+   notice a category changing colour the day a new one is created.
+
+   Past ten categories the ramp repeats, which no arithmetic can avoid. The
+   chip carries an icon and the word as well, which is why a repeat is a
+   repeat and not a collision of meaning. */
+function _expCatNames() {
+  const out = new Set();
+  const add = v => { const s = String(v || '').trim().toLowerCase(); if (s) out.add(s); };
+  if (typeof DB !== 'undefined' && DB) {
+    ((DB.settings && DB.settings.expenseCategories) || []).forEach(add);
+    (DB.expenses || []).forEach(e => add(e && e.category));
+    (DB.issues   || []).forEach(i => add(i && i.category));
+  }
+  return [...out].sort();
+}
+
+function expenseCatHue(name) {
+  const k = String(name || '').trim().toLowerCase();
+  if (!k) return '#94A3B8';
+  const names = _expCatNames();
+  let i = names.indexOf(k);
+  // A name nothing has heard of yet — a category being typed into the form —
+  // sorts into the same list rather than falling to a grey.
+  if (i < 0) { const all = [...names, k].sort(); i = all.indexOf(k); }
+  return EXPENSE_CAT_HUES[i % EXPENSE_CAT_HUES.length];
 }
 
 /* ── CHARGES RESOLVER — the ONLY place that answers "what is owed per month" ──
@@ -478,6 +745,54 @@ function resolveCharges(student, opts) {
 
    Everything derived is floored at 0 — a record whose collections already
    cover the charge is settled, not in credit. */
+/* ── MONEY HANDED BACK THAT ALSO SETTLED THE DEBT ─────────────────────────────
+   (owner, 2026-09-23: "there is an issue with the refunded amount and reverse
+   amount, that it still goes back to the unpaid amount")
+
+   A reversal undoes a collection, and until now there was only one kind of it.
+   That made one line of arithmetic tell a lie:
+
+       owed = bill − collected
+
+   A reversal lowers `collected` and leaves `bill` alone, so `owed` HAS to rise.
+   For the case reversePayment() was written for — a warden keys 15,000 where
+   they meant 1,500 — that is exactly right: the money never came in, so the
+   debt re-opens. But for money genuinely handed BACK to a student, it is
+   wrong twice over: the record flips to Pending and the student appears to owe
+   the very amount they were just given.
+
+   THE TWO ARE NOW DIFFERENT EVENTS, told apart by `kind` on the reversal:
+
+     correction — the money never really arrived. The debt re-opens. (Default,
+                  and what every reversal recorded before today is read as, so
+                  no figure already on disk moves.)
+     refund     — the hostel gave it back and the obligation went with it. What
+                  is owed does not move.
+
+   THIS SUMS ONLY THE PART THAT CAME OUT OF APPLIED MONEY. A refund drawn from
+   a CREDIT — the cancellation settlement path — never re-opened anything in
+   the first place, because that money was never set against a bill; it would
+   be relieved twice if counted here. reversePayment() records the split on
+   each entry as `fromApplied`, so this is read, not re-derived.
+
+   The BILL ITSELF DOES NOT MOVE (owner's ruling, 2026-09-23): the month still
+   reads what the hostel charged, and the refund stands beside it as its own
+   figure, so a report says "billed 14,500 · collected 14,500 · refunded 1,000"
+   rather than quietly pretending only 13,500 was ever charged. */
+function refundRelief(p) {
+  const list = p && Array.isArray(p.reversals) ? p.reversals : [];
+  let s = 0;
+  for (const r of list) {
+    if (!r || r.kind !== 'refund') continue;
+    /* `fromApplied` is written by reversePayment(). A refund-kind entry that
+       predates it cannot have its split reconstructed — the credit the record
+       held at that moment is gone — so the whole amount is taken as applied,
+       which is what a refund recorded through the UI will almost always be. */
+    s += Number(r.fromApplied != null ? r.fromApplied : r.amount) || 0;
+  }
+  return s;
+}
+
 function outstandingOf(p) {
   if (!p) return 0;
   if (p.unpaid != null) return Number(p.unpaid) || 0;
@@ -517,10 +832,16 @@ function outstandingOf(p) {
         ? p.extraCharges.reduce((s, c) => s + (Number(c && c.amount) || 0), 0)
         : 0);
 
+  /* Refunds are subtracted alongside what was collected. A record with no
+     stored balance derives one from its own fields, and `p.amount` has already
+     had the refund taken out of it — so without this the refund would re-open
+     the debt here exactly as it used to in the stored path. See
+     refundRelief() above for why this is only the applied part. */
   return Math.max(0, rent + mess + extras
                    + Number(p.admissionFee || p.fee || 0)
                    - Number(p.concession   || p.discount || 0)
-                   - Number(p.amount       || 0));
+                   - Number(p.amount       || 0)
+                   - refundRelief(p));
 }
 
 /* ── THE DEFAULT STUDENT AVATAR ───────────────────────────────────────────────
@@ -684,7 +1005,8 @@ function moneyValue(amount, opts) {
      a clipped card becomes a readable one without the precise number going
      anywhere. Used by the KPI row, where the space is fixed and the values are
      unbounded. */
-  const shown = opts.compact ? fmtCompact(amount) : fmtNum(amount);
+  // `compact` is the KPI row — whole rupees, millions from ten million.
+  const shown = opts.compact ? fmtKpi(amount) : fmtNum(amount);
   const exact = opts.compact && shown !== fmtNum(amount)
     ? ` title="${currency} ${fmtNum(amount)}"` : '';
   return `<span class="money-value money-value--${size}${cls}" ${color}${exact}>`
@@ -725,15 +1047,27 @@ function fmtDate(d) {
   } catch (e) { return d; }
 }
 
-// Dashboard month selector (null = real current month, 'YYYY-MM' = selected)
-let _dashboardMonth = null;
+/* THE CALENDAR MONTH, AND THE MONTH THE DASHBOARD IS SHOWING, ARE TWO THINGS.
+   thisMonth() used to return the dashboard's picked month, so picking August to
+   look at it also moved every write that asks "which month is it?": ending a
+   concession ended it in August, a mess exemption took the charge off August's
+   record, and Add Payment and Generate Month defaulted to August. The owner
+   ruled (2026-09-17) that the picked month belongs to the dashboard alone, so
+   thisMonth() is the real month again and only dashboard code reads
+   dashMonth(). Every other screen has its own month filter in its toolbar. */
+let _dashboardMonth = null;   // null = the real month; 'YYYY-MM' = picked on the dashboard
 function thisMonth() {
-  return _dashboardMonth || ym(new Date());
+  return ym(new Date());
 }
-function thisMonthLabel() {
-  const [y, m] = thisMonth().split('-').map(Number);
+function dashMonth() {
+  return _dashboardMonth || thisMonth();
+}
+function _monthKeyLabel(key) {
+  const [y, m] = key.split('-').map(Number);
   return new Date(y, m - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' });
 }
+function thisMonthLabel() { return _monthKeyLabel(thisMonth()); }
+function dashMonthLabel() { return _monthKeyLabel(dashMonth()); }
 function thisYear() { return new Date().getFullYear().toString(); }
 
 /* A stored month key rendered for a person. `p.month` is 'YYYY-MM' on newer
@@ -801,10 +1135,6 @@ function escHtml(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
-function csvEsc(s) {
-  const v = String(s == null ? '' : s);
-  return '"' + v.replace(/"/g, '""') + '"';
-}
 
 // ── Input formatters ──────────────────────────────────────────────────────────
 function formatRoomNumber(inp) {
@@ -814,12 +1144,6 @@ function formatRoomNumber(inp) {
 }
 function capFirstChar(inp) {
   if (inp.value.length === 1) inp.value = inp.value.toUpperCase();
-}
-function formScrollNext(inp) {
-  const field = inp.closest ? inp.closest('.field') : null;
-  if (!field) return;
-  const next = field.nextElementSibling;
-  if (next) next.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 // Capitalize ASCII only — protects Urdu/Arabic names
 function autoCapName(inp) {
@@ -998,23 +1322,6 @@ const COURSE_LIST = [
   'Digital Marketing Course', 'Content Writing Course'
 ];
 
-function toggleOccField(val) {
-  const custom = document.getElementById('f-tocccustom');
-  const wrap   = document.getElementById('f-tocc-wrap');
-  const main   = /** @type {HTMLInputElement} */ (document.getElementById('f-tocc'));
-  if (val === 'other') {
-    if (wrap)   wrap.style.display   = 'none';
-    if (custom) { custom.style.display = 'block'; custom.style.marginTop = '0'; }
-  } else {
-    if (wrap)   wrap.style.display   = 'block';
-    if (custom) custom.style.display = 'none';
-    if (main)   main.placeholder = val === 'Student'
-      ? 'Type course e.g. BS Computer Science…'
-      : val === 'Job'      ? 'e.g. Software Engineer, Govt. Teacher…'
-      : val === 'Business' ? 'e.g. Shop Owner, Contractor…'
-      : 'Describe…';
-  }
-}
 
 function courseAutocomplete(inp) {
   const val = inp.value.trim().toLowerCase();
@@ -1101,6 +1408,15 @@ function courseKeyNav(e) {
 //       CCCC-CCCC = HMAC-SHA256('V4:EEEE:SSSS', SECRET) hex, first 8.
 //
 // A v4 licence runs to the END of its expiry day (23:59:59.999 local).
+//
+//   v5  HOSTEL-EEEE-SSSS-CCCC-CCCC     (same layout as v4)
+//       CCCC-CCCC = HMAC-SHA256('V5:EEEE:SSSS', SECRET) hex, first 8.
+//       Issued only by the control plane, and it must be ACTIVATED ONLINE ONCE
+//       (owner, 2026-09-24): that first activation is what binds the key to one
+//       PC. A v5 key cannot be told from a v4 key by eye — only by which tag its
+//       checksum was taken under — so parseLicenseKey() reports the layout and
+//       resolveKeyVersion() the version. A build that predates v5 fails its
+//       checksum and refuses the key outright, which is the safe direction.
 const LICENSE_KEY_RE_V3 = /^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
 const LICENSE_KEY_RE_V4 = /^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
 
@@ -1120,6 +1436,7 @@ function parseLicenseKey(key) {
 // What the checksum is taken over. The 'V4:' tag stops a v4 key from ever
 // colliding with the v3 key that happens to share its first group.
 function licenseChecksumPayload(parsed) {
+  if (parsed.version === 5) return 'V5:' + parsed.expPart + ':' + parsed.serial;
   return parsed.version === 4
     ? 'V4:' + parsed.expPart + ':' + parsed.serial
     : parsed.expPart;
@@ -1147,15 +1464,26 @@ function validateKeyFormat(key) {
   return parseLicenseKey(key) !== null;
 }
 
-function validateKeyChecksum(key, secret) {
+// 3, 4 or 5 for a key whose checksum holds, 0 for anything else. A v4-layout
+// key is tried as v4 first, then v5.
+function resolveKeyVersion(key, secret) {
   try {
     const parsed = parseLicenseKey(key);
-    if (!parsed) return false;
-    return parsed.checksum === licenseChecksum(parsed, secret);
+    if (!parsed) return 0;
+    if (parsed.checksum === licenseChecksum(parsed, secret)) return parsed.version;
+    if (parsed.version === 4
+        && parsed.checksum === licenseChecksum(Object.assign({}, parsed, { version: 5 }), secret)) {
+      return 5;
+    }
+    return 0;
   } catch (e) {
     console.error('[HOSTYLLO] Key checksum validation failed:', e.message);
-    return false;
+    return 0;
   }
+}
+
+function validateKeyChecksum(key, secret) {
+  return resolveKeyVersion(key, secret) !== 0;
 }
 
 // The expiry instant a key encodes. v3 keys keep their original meaning to the
@@ -1185,10 +1513,12 @@ function licenseSerial() {
 
 // Issue a key. `serial` is injectable for the tests only; every production
 // caller omits it and gets a fresh random one.
-function buildLicenseKey(year, month, day, secret, serial) {
+// `version` 5 cuts a key that must be activated online once (see v5 above).
+function buildLicenseKey(year, month, day, secret, serial, version) {
   const expPart = licenseDayNumber(year, month, day).toString(36).toUpperCase().padStart(4, '0');
   const ser     = String(serial || licenseSerial()).toUpperCase();
-  const chk     = licenseChecksum({ version: 4, expPart: expPart, serial: ser }, secret);
+  const ver     = version === 5 ? 5 : 4;
+  const chk     = licenseChecksum({ version: ver, expPart: expPart, serial: ser }, secret);
   return 'HOSTEL-' + expPart + '-' + ser + '-' + chk.slice(0, 4) + '-' + chk.slice(4, 8);
 }
 
@@ -1246,11 +1576,101 @@ function studentsByRoom(list) {
   });
 }
 
+/* ─── ONE ISSUES REGISTER — the shared transform ─────────────────────────────
+
+   Maintenance and complaints became one `issues` collection on 2026-09-21
+   (owner). Two places have to perform that fold and they must agree exactly:
+
+     migrations/003-issues-merge.js   the SQLite tables, once, on upgrade
+     _initDBFields() in modals.js     a RESTORED BACKUP written before the merge
+
+   The second is not optional. A backup file taken last month carries
+   `maintenance` and `complaints` and no `issues`, and restoreBackup() hands it
+   straight to _initDBFields(). Without the fold the register comes back EMPTY
+   and nothing says so — the records are in the file, just not where anything
+   looks.
+
+   So the transform lives HERE, in the module the renderer loads as globals and
+   node can require, and both callers use this one copy. The alternative is two
+   implementations of a data migration that must agree forever, which is the
+   mistake the vendored server copy exists to avoid.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/** The middle state, for both kinds, since the merge. */
+const ISSUE_MIDDLE_STATUS = 'InProgress';
+
+/**
+ * One maintenance ticket or complaint, as an issues record.
+ *
+ * Starts from a copy of the WHOLE record and applies three named changes — a
+ * whitelist would silently drop whatever it forgot, and it forgets the next
+ * field somebody adds to the form.
+ *
+ *   kind              stamped; it is what MA-/CO- reads
+ *   subject → title   one thing had two names, and one form cannot have both
+ *   UnderReview → InProgress   one register, one word for the middle state
+ *
+ * `seq` is stamped when absent, from the record's position in its ORIGINAL
+ * collection. Records written before `seq` existed fall back to that position
+ * for their reference number, and after the fold there is no such position —
+ * so this is the last moment MA-0004 can be kept at MA-0004.
+ *
+ * @param {'maintenance'|'complaint'} kind
+ * @param {object} rec
+ * @param {number} position  1-based, within its own original collection
+ */
+function issueMergeRecord(kind, rec, position) {
+  const out = Object.assign({}, rec);
+  out.kind = kind;
+  if (kind === 'complaint') {
+    // Both spellings can sit on a record edited across versions; `subject` wins
+    // because it is what the complaint form wrote.
+    out.title = String(rec.subject || rec.title || '');
+    delete out.subject;
+  } else {
+    out.title = String(rec.title || '');
+  }
+  if (out.status === 'UnderReview') out.status = ISSUE_MIDDLE_STATUS;
+  if (!Number(out.seq)) out.seq = Number(position) || 1;
+  return out;
+}
+
+/**
+ * Fold a pre-merge database shape into `d.issues`. Idempotent, and ONCE.
+ *
+ * The flag is load-bearing rather than tidy. Without it, every load would fold
+ * the legacy arrays again — and since those arrays are deliberately left
+ * populated as the rollback path, an issue the warden DELETED would come back
+ * on the next launch. So the fold happens once per database and is recorded.
+ */
+function issuesFoldLegacy(d) {
+  if (!d) return d;
+  if (!Array.isArray(d.issues)) d.issues = [];
+  if (!d.settings) d.settings = {};
+  if (d.settings.issuesMergedAt) return d;
+
+  const have = new Set(d.issues.map(function (x) { return x && x.id; }).filter(Boolean));
+  const take = function (arr, kind) {
+    (Array.isArray(arr) ? arr : []).forEach(function (rec, i) {
+      if (!rec || !rec.id || have.has(rec.id)) return;
+      d.issues.push(issueMergeRecord(kind, rec, i + 1));
+      have.add(rec.id);
+    });
+  };
+  take(d.maintenance, 'maintenance');
+  take(d.complaints, 'complaint');
+
+  d.settings.issuesMergedAt = new Date().toISOString().slice(0, 10);
+  return d;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    validateKeyFormat, validateKeyChecksum, parseLicenseKey, licenseKeyExpiry,
+    validateKeyFormat, validateKeyChecksum, resolveKeyVersion, parseLicenseKey, licenseKeyExpiry,
     licenseDayNumber, licenseDayToDate, licenseSerial,
-    buildLicenseKey, buildLegacyLicenseKey, cmpRoomNo
+    buildLicenseKey, buildLegacyLicenseKey, cmpRoomNo,
+    ISSUE_MIDDLE_STATUS, issueMergeRecord, issuesFoldLegacy, waLink, waFitText, gmailLink,
+    fmtKpi, fmtChart, moneyValue
   };
 }
 /* ─── BACKUP VALIDATION ──────────────────────────────────────────────────────
@@ -1290,7 +1710,10 @@ if (typeof module !== 'undefined' && module.exports) {
    naming an internal field.                                                  */
 const BACKUP_COLLECTIONS = [
   'students', 'rooms', 'payments', 'expenses', 'cancellations', 'maintenance',
-  'complaints', 'checkinlog', 'notices', 'fines', 'activityLog', 'inspections',
+  // `issues` is where maintenance and complaints live since 2026-09-21. The two
+  // older names stay listed so a backup written before the merge still counts as
+  // a valid file — restoreBackup() folds them in on the way through.
+  'complaints', 'issues', 'checkinlog', 'notices', 'fines', 'activityLog', 'inspections',
   'billSplits', 'transfers', 'roomShifts', 'archive',
   // The student ledger: camelCase from Settings → Export Data, the table name
   // from the menu backup. Both are lists of records with ids.
@@ -1299,13 +1722,18 @@ const BACKUP_COLLECTIONS = [
   'wardenCollections', 'warden_collections', 'handovers', 'handoverItems', 'handover_items',
   // Standing concessions (warden ledger step 8).
   'concessions',
+  // Owner Funds (2026-09-28), under both spellings.
+  'ownerFunds', 'owner_funds',
+  // Staff & Payroll (2026-09-30).
+  'employees', 'salaryAdvances', 'salary_advances', 'payslips', 'bonuses',
 ];
 // Collections whose records are written to SQLite by id, so an id is mandatory.
 const BACKUP_ID_REQUIRED = [
   'students', 'rooms', 'payments', 'expenses', 'cancellations', 'transfers', 'archive',
   'studentLedger', 'student_ledger',
   'wardenCollections', 'warden_collections', 'handovers', 'handoverItems', 'handover_items',
-  'concessions',
+  'concessions', 'ownerFunds', 'owner_funds',
+  'employees', 'salaryAdvances', 'salary_advances', 'payslips', 'bonuses',
 ];
 const BACKUP_MAX_RECORDS = 200000;   // ~40x the largest real hostel seen
 const BACKUP_MAX_DEPTH   = 24;
@@ -1586,5 +2014,146 @@ function statusDateNote(t) {
   const s = statusDateText(t);
   if (!s) return '';
   const full = (String(t.status) === 'Left' ? 'Left ' : 'Vacates ') + fmtDate(statusDate(t));
-  return '<div class="lk-statdate" title="' + escHtml(full) + '">' + escHtml(s) + '</div>';
+  /* THE APP'S OWN HOVER CARD, not the OS tooltip (owner, 2026-09-23). This line
+     prints a SHORTENED date — "Vacates 30-Sept" — so the full one is exactly
+     the kind of value the card exists for, and every register that draws a
+     status draws this. */
+  return '<div class="lk-statdate" data-tip="' + escHtml(full) + '" data-tip-always>'
+       + escHtml(s) + '</div>';
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE HOVER CARD FOR A CLIPPED VALUE (owner, 2026-09-23)
+
+   Every register clips values it has no room for and put the full text on a
+   native `title`. That was the owner's own request on 2026-09-15 and their
+   complaint on 2026-09-23: the OS tooltip is the one surface in this app the
+   theme cannot reach, so it stays a pale Windows box on a dark page.
+
+   HOW IT IS USED. Put `data-tip="the full value"` on the element instead of
+   `title`, and optionally `data-tip-label="Guardian"` for a caption above it.
+   Nothing else: one delegated listener covers every register, and a cell
+   rendered by a template literal needs no wiring.
+
+   IT ONLY OPENS WHEN THE TEXT IS ACTUALLY CLIPPED, which is the whole point —
+   a hover card over a value you can already read in full is noise. Pass
+   `data-tip-always` for the cases where the tip says something the cell does
+   not (whose number a phone is, what a mask hides).
+
+   ONE ELEMENT, ON <body>. A tooltip inside its trigger would be clipped by the
+   same `overflow:hidden` that clipped the text.
+   ════════════════════════════════════════════════════════════════════════════ */
+let _uiTipEl = null, _uiTipTimer = null, _uiTipFor = null;
+
+function _uiTipNode() {
+  if (_uiTipEl && _uiTipEl.isConnected) return _uiTipEl;
+  _uiTipEl = document.createElement('div');
+  _uiTipEl.className = 'ui-tip';
+  _uiTipEl.setAttribute('role', 'tooltip');
+  _uiTipEl.hidden = true;
+  document.body.appendChild(_uiTipEl);
+  return _uiTipEl;
+}
+
+/** Is this element's own text wider (or taller) than the box it was given? */
+function _uiTipClipped(el) {
+  if (el.hasAttribute('data-tip-always')) return true;
+  if (el.scrollWidth - el.clientWidth > 1 || el.scrollHeight - el.clientHeight > 1) return true;
+  /* A cell that clips through a CHILD — `.stu-who__name` inside its button —
+     reports no overflow itself. One level down covers every case on the
+     registers without walking the whole subtree on each hover. */
+  for (const c of el.children) {
+    if (c.scrollWidth - c.clientWidth > 1) return true;
+  }
+  return false;
+}
+
+function uiTipShow(el) {
+  const text = el.getAttribute('data-tip');
+  if (!text || !_uiTipClipped(el)) return;
+  const tip = _uiTipNode();
+  const label = el.getAttribute('data-tip-label');
+  tip.innerHTML = (label ? '<span class="ui-tip__l">' + escHtml(label) + '</span>' : '')
+                + escHtml(text);
+  tip.hidden = false;
+  _uiTipFor = el;
+
+  /* Placed against the viewport, above the trigger, nudged back inside when it
+     would run off an edge. `position:fixed`, so the page's own scrolling needs
+     no listener — a scroll hides it instead (see below), which is also what a
+     reader expects when the thing they were pointing at moves. */
+  const r = el.getBoundingClientRect();
+  const t = tip.getBoundingClientRect();
+  const gap = 8;
+  let top = r.top - t.height - gap;
+  if (top < gap) top = r.bottom + gap;                 // no room above: go under
+  let left = r.left + (r.width - t.width) / 2;
+  left = Math.max(gap, Math.min(left, window.innerWidth - t.width - gap));
+  tip.style.top = Math.round(top) + 'px';
+  tip.style.left = Math.round(left) + 'px';
+  requestAnimationFrame(() => tip.classList.add('is-on'));
+}
+
+function uiTipHide() {
+  clearTimeout(_uiTipTimer);
+  _uiTipFor = null;
+  if (!_uiTipEl) return;
+  _uiTipEl.classList.remove('is-on');
+  _uiTipEl.hidden = true;
+}
+
+/* Delegated, once, for the whole app. `mouseover` rather than `mouseenter`
+   because only the bubbling one can be delegated; the `closest()` guard makes
+   moving WITHIN a trigger a no-op rather than a re-open. */
+(function _uiTipBind() {
+  /* THIS FILE IS LOADED HEADLESSLY. finance.test.js and three other node suites
+     run utils.js inside a vm context with a stubbed `document` and no `window`
+     at all — they are testing the money helpers, not the DOM — so a binder that
+     assumes a browser takes those suites down at require() time with
+     "window.addEventListener is not a function".
+
+     Both objects are checked, and for the METHOD rather than the name: a stub
+     that defines `document` without addEventListener is exactly the shape that
+     got through the first guard. */
+  if (typeof document === 'undefined' || !document || typeof document.addEventListener !== 'function') return;
+  if (typeof window === 'undefined' || !window || typeof window.addEventListener !== 'function') return;
+  /* An Event's `target` is an EventTarget, which has no closest() — text nodes
+     and the document itself reach these handlers too. One reader, typed once,
+     rather than three `&& e.target.closest` guards that typecheck cannot see
+     through. */
+  const trigger = e => {
+    const n = /** @type {Node} */ (e.target);
+    return n && n.nodeType === 1
+      ? /** @type {Element} */ (n).closest('[data-tip]')
+      : null;
+  };
+  document.addEventListener('mouseover', e => {
+    const el = trigger(e);
+    /* A re-render removes the trigger from under the cursor, and a removed
+       element never fires mouseout — so the card stayed floating over the next
+       page ("PAID ON" over Expenses, 2026-09-28). Whatever the cursor reaches
+       next, a tip whose trigger is gone closes. navigate() also closes it. */
+    if (_uiTipFor && !_uiTipFor.isConnected) uiTipHide();
+    if (!el || el === _uiTipFor) return;
+    clearTimeout(_uiTipTimer);
+    // Long enough not to flash while the cursor crosses a row on its way
+    // somewhere else; short enough to feel like the app answering.
+    _uiTipTimer = setTimeout(() => uiTipShow(el), 140);
+  }, true);
+  document.addEventListener('mouseout', e => {
+    const el = trigger(e);
+    if (el && el === _uiTipFor) uiTipHide();
+    else if (el) clearTimeout(_uiTipTimer);
+  }, true);
+  // Keyboard reaches it too: a tabbable trigger shows its tip on focus.
+  document.addEventListener('focusin', e => {
+    const el = trigger(e);
+    if (el) uiTipShow(el);
+  }, true);
+  document.addEventListener('focusout', uiTipHide, true);
+  /* Anything that moves the trigger closes it rather than leaving a card
+     floating over the wrong row. */
+  document.addEventListener('scroll', uiTipHide, true);
+  window.addEventListener('resize', uiTipHide);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') uiTipHide(); }, true);
+})();

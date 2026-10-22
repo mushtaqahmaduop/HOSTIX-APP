@@ -112,6 +112,7 @@ let DB = {
   cancellations: [],
   maintenance:   [],
   complaints:    [],
+  issues:        [],
   checkinlog:    [],
   notices:       [],
   fines:         [],

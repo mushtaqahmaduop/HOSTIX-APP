@@ -91,7 +91,7 @@ async function seedExpiredLicence(profile, daysAgo) {
 async function login(win) {
   await win.waitForSelector('#login-input', { state: 'visible', timeout: 60000 });
   await win.waitForTimeout(600);
-  await win.fill('#login-user', 'warden1');
+  await win.selectOption('#login-user', 'warden1');
   await win.fill('#login-input', 'admin123');
   await win.click('#login-btn');
   await win.waitForFunction(() => typeof CUR_USER !== 'undefined' && !!CUR_USER,
@@ -138,6 +138,29 @@ test('an EXPIRED licence goes read-only — it does NOT lock the hostel out', as
 
     const del = await win.evaluate(() => window.electronAPI.dbDelete('rooms', 'anything'));
     expect(del.ok).toBe(false);
+
+    /* THE WHOLE-SAVE CHANNEL IS GATED TOO (finance Phase 7). saveDB() no longer
+       walks the tables row by row — it sends one changeset — so a lockout that
+       only guarded the per-row channels would have let every save straight
+       through. The gate runs for every table in the changeset before anything
+       is written, so a blocked table refuses the save whole rather than
+       committing the allowed tables around it. */
+    const cs = await win.evaluate(() => window.electronAPI.dbApplyChangeset({
+      tables: { students: { upsert: [{ id: 'enf-cs-1', name: 'Blocked by changeset' }], remove: [] } },
+    }));
+    expect(cs.ok, 'an expired licence accepted a whole-save changeset').toBe(false);
+    expect(cs.code).toBe('LICENCE_READ_ONLY');
+    const afterCs = await win.evaluate(() => window.electronAPI.dbAll('students'));
+    expect(afterCs.some((s) => s && s.id === 'enf-cs-1'),
+      'a refused changeset still wrote a row').toBe(false);
+
+    // A changeset carrying ONLY the activity log is still allowed — §18 keeps
+    // the audit trail recording through a lockout, and that must survive the
+    // move to one channel.
+    const csLog = await win.evaluate(() => window.electronAPI.dbApplyChangeset({
+      tables: { activitylog: { upsert: [{ id: 'enf-cs-log', action: 'test' }], remove: [] } },
+    }));
+    expect(csLog.ok, 'the audit trail stopped recording during a lockout').toBe(true);
 
     // Configuration is a write too. §18 lists "configuration mutation" among
     // the operations a read-only install must block, but db:setSetting checked

@@ -36,7 +36,7 @@ async function login(win) {
   await win.waitForFunction(
     () => typeof WARDENS !== 'undefined' && WARDENS.warden1 && WARDENS.warden1.pw,
     null, { timeout: 30000 });
-  await win.fill('#login-user', 'warden1');
+  await win.selectOption('#login-user', 'warden1');
   await win.fill('#login-input', 'admin123');
   await win.click('#login-btn');
   await win.waitForFunction(
@@ -101,8 +101,8 @@ test('one wallet is one slice, however it was spelled', async () => {
   expect(rows.map(r => r.name)).toEqual(
     ['Cash', 'EasyPaisa', 'JazzCash', 'Bank Transfer', 'Cheque', 'Other']);
   // Exact below a million, two decimals (owner, 2026-09-15) — it was "Rs. 80K".
-  expect(rows[0].amt).toBe('Rs. 80,000.00');
-  expect(rows.filter(r => r.amt === 'Rs. 0.00').map(r => r.name))
+  expect(rows[0].amt).toBe('Rs. 80,000');   // whole rupees since 2026-09-29
+  expect(rows.filter(r => r.amt === 'Rs. 0').map(r => r.name))
     .toEqual(['JazzCash', 'Bank Transfer', 'Cheque']);
 
   /* AND THE STRANGER IS NOT DISCARDED. 'Barter' is not a configured method,
@@ -110,10 +110,10 @@ test('one wallet is one slice, however it was spelled', async () => {
      a total the slices no longer add up to. It is folded into one 'Other'
      rather than given a name of its own. */
   expect(rows[rows.length - 1].name).toBe('Other');
-  expect(rows[rows.length - 1].amt).toBe('Rs. 5,000.00');
+  expect(rows[rows.length - 1].amt).toBe('Rs. 5,000');
 
   const centre = await win.evaluate(() => document.querySelector('.dl-coll .dnut__fig').textContent);
-  expect(centre).toBe('100,000.00');     // 80 + 15 + 5, nothing lost or doubled
+  expect(centre).toBe('100,000');     // 80 + 15 + 5, nothing lost or doubled
 
   await app.close();
 });

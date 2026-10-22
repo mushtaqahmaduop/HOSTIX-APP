@@ -33,7 +33,12 @@ function pool() {
       : undefined,
     max: parseInt(process.env.PG_POOL_MAX || '10', 10),
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000
+    connectionTimeoutMillis: 10000,
+    // No statement may hold a pooled connection longer than this. One stuck
+    // query must not become a pool exhausted by ten of them, which is how a
+    // slow database turns into every hostel's sync failing at once.
+    statement_timeout: parseInt(process.env.PG_STATEMENT_TIMEOUT_MS || '10000', 10),
+    idle_in_transaction_session_timeout: 30000
   });
   _pool.on('error', (err) => {
     // A pooled connection dropping is normal on managed Postgres. Losing the

@@ -23,8 +23,12 @@ const _TABLE_MAP = {
   payments:      'payments',
   expenses:      'expenses',
   cancellations: 'cancellations',
+  /* ONE REGISTER (owner, 2026-09-21). `issues` is the live collection; the
+     other two are kept so a restore of a pre-merge backup has somewhere to
+     land, and as migration 003's rollback path. Nothing reads them. */
   maintenance:   'maintenance',
   complaints:    'complaints',
+  issues:        'issues',
   checkinlog:    'checkinlog',
   notices:       'notices',
   fines:         'fines',
@@ -38,7 +42,14 @@ const _TABLE_MAP = {
   handovers:         'handovers',
   handoverItems:     'handover_items',
   // Warden ledger step 8 — standing concessions: requested, decided, ended.
-  concessions:       'concessions'
+  concessions:       'concessions',
+  // Owner Funds (2026-09-28) — money between the owner and the hostel.
+  ownerFunds:        'owner_funds',
+  // Staff & Payroll (2026-09-30) — the rules are in src/payroll.js.
+  employees:         'employees',
+  salaryAdvances:    'salary_advances',
+  payslips:          'payslips',
+  bonuses:           'bonuses'
 };
 
 // ── Load DB ───────────────────────────────────────────────────────────────────
@@ -110,9 +121,23 @@ async function loadDB() {
     _loadFromLocalStorage();
   }
 
+  /* A FOLD DONE HERE MUST REACH THE DISK (bug audit BUG-013, 2026-09-28).
+     _initDBFields() folds a pre-merge maintenance/complaints shape into
+     `issues` and stamps settings.issuesMergedAt. The snapshot below is taken
+     AFTER that, so the folded rows looked already saved and were never
+     written — while the stamp, in settings, was saved by the next saveDB().
+     Restart: no issues, and the stamp stops the fold from ever running again.
+     Reproduced by restoring a pre-merge backup. Forgetting only the rows the
+     fold added (not ones already on disk, whose deletes must still be seen)
+     makes the next save write them alongside the stamp. */
+  const _foldPending = !(DB.settings && DB.settings.issuesMergedAt);
+  const _issuesOnDisk = new Set((DB.issues || []).map(r => r && r.id));
   if (typeof _initDBFields === 'function') DB = _initDBFields(DB);
   if (typeof ledgerLoaded === 'function') ledgerLoaded();
   _takeFullSnapshot();
+  if (_foldPending && _dbSnapshot.issues) {
+    for (const id of Array.from(_dbSnapshot.issues.keys())) if (!_issuesOnDisk.has(id)) _dbSnapshot.issues.delete(id);
+  }
   _checkBackupReminder();
 }
 
@@ -231,8 +256,80 @@ function _showSaveFailure(detail) {
 }
 
 // ── Save DB ───────────────────────────────────────────────────────────────────
+/* ── WHAT THIS SAVE CHANGES ──────────────────────────────────────────────────
+   The diff the surgical save has always computed, lifted out so it can be sent
+   as one changeset instead of driven as a loop of IPC calls. `remove` rather
+   than `delete`, which is a reserved word and reads badly as a property.     */
+function _buildChangeset() {
+  const tables = {};
+  let n = 0;
+  for (const [dbKey, table] of Object.entries(_TABLE_MAP)) {
+    const prev = _dbSnapshot[dbKey] || new Map();
+    const cur  = DB[dbKey] || [];
+    const seen = new Set();
+    const upsert = [], remove = [];
+    for (const r of cur) {
+      if (!r || r.id == null) continue;
+      seen.add(r.id);
+      if (prev.get(r.id) !== JSON.stringify(r)) upsert.push(r);
+    }
+    for (const id of prev.keys()) if (!seen.has(id)) remove.push(id);
+    if (upsert.length || remove.length) { tables[table] = { upsert, remove }; n += upsert.length + remove.length; }
+  }
+  return { tables, count: n };
+}
+
 async function saveDB() {
   if (typeof enforceDataRetention === 'function') enforceDataRetention();
+
+  /* ── ONE SAVE, ONE TRANSACTION (finance Phase 7, audit G10) ────────────────
+     This walked the tables and awaited an IPC call PER CHANGED ROW, then the
+     settings, then the ledger — each its own implicit transaction. A crash, a
+     power cut or a licence refusal partway through left some of the save on
+     disk and the rest gone: a payment written while the student's balance was
+     not, or money recorded with no ledger entry behind it.
+
+     The whole save now goes as one changeset, applied inside a single
+     db.transaction() in the main process. The ledger travels with it, so the
+     records and the entries that explain them commit together or not at all.
+
+     THE OLD PATH IS KEPT BELOW, not deleted: an installed build whose preload
+     predates this channel still has to be able to save. */
+  if (window.electronAPI && window.electronAPI.dbApplyChangeset) {
+    try {
+      const cs = _buildChangeset();
+      const pending = (typeof ledgerPending === 'function') ? ledgerPending() : [];
+      const res = await window.electronAPI.dbApplyChangeset({
+        tables: cs.tables, settings: DB.settings, ledger: pending,
+      });
+      /* A REFUSAL IS NOT A REASON TO FALL BACK. The main process answering
+         ok:false is a decision — the licence blocks this table, the file is
+         damaged, the ledger will not have history rewritten — and the whole
+         transaction has already rolled back. Retrying it down the full-rewrite
+         path would write every table with dbBulkReplace and only THEN hit the
+         same refusal, leaving on disk exactly the records the refusal existed
+         to prevent. The fallback below is for a broken CHANNEL, not a No. */
+      if (res && res.ok === false) {
+        console.error('[HOSTYLLO] save refused:', res.error, res.code || '');
+        _showSaveFailure(res.error);
+        return false;
+      }
+      if (!res) throw new Error('The save got no answer.');
+      // Only once the transaction has committed. Dropping these earlier would
+      // lose the only immutable record of a money movement on a failed save.
+      if (pending.length && typeof ledgerMarkFlushed === 'function') ledgerMarkFlushed(pending.length);
+      _takeFullSnapshot();
+      _clearSaveFailure();
+      if (typeof updateSidebar         === 'function') updateSidebar();
+      if (typeof renderSidebarCalendar === 'function') renderSidebarCalendar();
+      return true;
+    } catch (e) {
+      // The channel itself broke — not an answer, so there is nothing to trust
+      // about what is on disk. The full rewrite is the safety net for that.
+      console.error('[HOSTYLLO] changeset save could not be sent, rewriting in full:', e);
+      return _saveDBFull();
+    }
+  }
 
   if (window.electronAPI && window.electronAPI.dbUpsert) {
     try {
@@ -374,7 +471,8 @@ if (window.electronAPI) {
       return;
     }
     const exportData = {
-      db:         result.data,
+      db:         Object.assign({}, result.data,
+                    typeof staffAccountsForBackup === 'function' ? { staffAccounts: staffAccountsForBackup() } : {}),
       exportedAt: new Date().toISOString(),
       version:    '4.0'
     };
@@ -410,55 +508,108 @@ if (window.electronAPI) {
         if (typeof toast === 'function') toast('Backup file is too large or invalid', 'error');
         return;
       }
-      const data   = JSON.parse(jsonString);
-      const dbData = data.db || data;
-
-      /* One validator, shared with Settings -> Import Data. The checks that used
-         to live here — rooms/students are arrays, every record has an id — are
-         a subset of what validateBackup() does, and having two import paths
-         disagree about what a valid backup is meant a file could be refused in
-         one place and accepted in the other. It also adds the check neither
-         path had: reserved keys such as __proto__ anywhere in the document. */
-      if (!Array.isArray(dbData.rooms) || !Array.isArray(dbData.students)) {
-        if (typeof toast === 'function') toast('Invalid backup file — it has no rooms or students', 'error');
-        return;
+      const data = JSON.parse(jsonString);
+      const r = await importBackupData(data.db || data);
+      if (r.ok) {
+        if (typeof renderPage === 'function') renderPage('dashboard');
+        if (typeof toast === 'function') toast('Backup imported successfully', 'success');
       }
-      if (typeof validateBackup === 'function') {
-        const check = validateBackup(dbData);
-        if (!check.ok) {
-          if (typeof toast === 'function') toast(check.reason, 'error', 'Backup rejected');
-          if (typeof logActivity === 'function') logActivity('Backup Import Rejected', check.reason, 'Settings');
-          return;
-        }
-      }
-
-      const MAX_STUDENTS = 10000, MAX_PAYMENTS = 100000;
-      if (Array.isArray(dbData.students) && dbData.students.length > MAX_STUDENTS) {
-        if (typeof toast === 'function') toast('Backup contains too many student records', 'error');
-        return;
-      }
-      if (Array.isArray(dbData.payments) && dbData.payments.length > MAX_PAYMENTS) {
-        if (typeof toast === 'function') toast('Backup contains too many payment records', 'error');
-        return;
-      }
-
-      const result = await window.electronAPI.dbImportFull(dbData);
-      if (!result.ok) {
-        if (typeof toast === 'function') toast('Import failed: ' + result.error, 'error');
-        return;
-      }
-      await loadDB();
-      // A backup from before the ledger restores an empty one; rebuild it from
-      // the records that were just restored.
-      if (typeof ledgerImportIfEmpty === 'function' && ledgerImportIfEmpty() > 0) await saveDB();
-      if (typeof handoverSync === 'function' && handoverSync() > 0) await saveDB();
-      if (typeof updateSidebar === 'function') updateSidebar();
-      if (typeof renderPage    === 'function') renderPage('dashboard');
-      if (typeof toast         === 'function') toast('Backup imported successfully', 'success');
-      markBackupDone();
     } catch (e) {
       console.error('[HOSTYLLO] Import failed:', e);
       if (typeof toast === 'function') toast('Import failed: ' + e.message, 'error');
     }
   });
+}
+
+/* ── ONE RESTORE (bug audit BUG-009, 2026-09-28) ───────────────────────────────
+   There were three ways to put a backup back — File → Import, the Backup
+   page's "Restore this file", and pasted JSON — and only the first went through
+   the main process's db:importFull: validate, snapshot the live database to a
+   *.pre-restore-*.bak, replace every table in one transaction. The other two
+   replaced DB in memory and saved it like any edit: no safety copy, and only a
+   rooms/students/settings presence check instead of validateBackup(). A wrong
+   or old file restored from the Backup page could not be undone.
+
+   Every path calls this now. It validates (the shared validator, plus size
+   limits), hands the document to db:importFull, and reloads from disk — so what
+   is on screen afterwards is what the database actually holds. Returns
+   {ok, reason, preRestoreBackup}; refusals are toasted here. */
+/* What a backup file holds: the database, and the staff accounts that live
+   outside it (BUG-012). Every "download a backup" button writes this. */
+function backupDocument() {
+  const doc = Object.assign({}, DB);
+  if (typeof staffAccountsForBackup === 'function') doc.staffAccounts = staffAccountsForBackup();
+  return doc;
+}
+
+async function importBackupData(dbData) {
+  const fail = (reason, title) => {
+    if (typeof toast === 'function') toast(reason, 'error', title);
+    return { ok: false, reason: reason };
+  };
+  if (!dbData || typeof dbData !== 'object') return fail('Invalid backup file — not a Hostyllo backup');
+  if (!Array.isArray(dbData.rooms) || !Array.isArray(dbData.students)) {
+    return fail('Invalid backup file — it has no rooms or students');
+  }
+  if (typeof validateBackup === 'function') {
+    const check = validateBackup(dbData);
+    if (!check.ok) {
+      if (typeof logActivity === 'function') logActivity('Backup Import Rejected', check.reason, 'Settings');
+      return fail(check.reason, 'Backup rejected');
+    }
+  }
+  const MAX_STUDENTS = 10000, MAX_PAYMENTS = 100000;
+  if (dbData.students.length > MAX_STUDENTS) return fail('Backup contains too many student records');
+  if (Array.isArray(dbData.payments) && dbData.payments.length > MAX_PAYMENTS) {
+    return fail('Backup contains too many payment records');
+  }
+  if (!window.electronAPI || !window.electronAPI.dbImportFull) return fail('Restore is only available in the desktop app');
+
+  /* NUMBERS ALREADY HANDED OUT STAY HANDED OUT (bug audit BUG-014, 2026-09-28).
+     A restore replaces settings wholesale, so restoring last week's file put
+     receiptCounter back to last week's value and the next receipt reused a
+     number already printed on paper. The same held for studentSeq (BUG-008's
+     counter). Each counter keeps the higher of this PC's and the file's. */
+  const _cs = (typeof DB !== 'undefined' && DB && DB.settings) || {};
+  const _highWater = { receiptCounter: Number(_cs.receiptCounter) || 0, studentSeq: Number(_cs.studentSeq) || 0 };
+  const _refHigh = Object.assign({}, (_cs.refSeq && typeof _cs.refSeq === 'object') ? _cs.refSeq : {});
+  // The accounts are not database tables; they are put back after it (BUG-012).
+  const _staff = dbData.staffAccounts;
+  if (_staff !== undefined) { dbData = Object.assign({}, dbData); delete dbData.staffAccounts; }
+  const result = await window.electronAPI.dbImportFull(dbData);
+  if (!result || !result.ok) return fail('Import failed: ' + ((result && result.error) || 'unknown error'));
+  await loadDB();
+  if (DB.settings) {
+    let raised = false;
+    for (const k of Object.keys(_highWater)) {
+      if ((Number(DB.settings[k]) || 0) < _highWater[k]) { DB.settings[k] = _highWater[k]; raised = true; }
+    }
+    // The reference series (BUG-011) follow the same rule, each on its own.
+    for (const k of Object.keys(_refHigh)) {
+      if (!DB.settings.refSeq || typeof DB.settings.refSeq !== 'object') DB.settings.refSeq = {};
+      if ((Number(DB.settings.refSeq[k]) || 0) < (Number(_refHigh[k]) || 0)) { DB.settings.refSeq[k] = Number(_refHigh[k]); raised = true; }
+    }
+    if (raised) await saveDB();
+  }
+  // A backup from before the ledger restores an empty one; rebuild it from
+  // the records that were just restored.
+  if (typeof ledgerImportIfEmpty === 'function' && ledgerImportIfEmpty() > 0) await saveDB();
+  if (typeof handoverSync === 'function' && handoverSync() > 0) await saveDB();
+  if (typeof updateSidebar === 'function') updateSidebar();
+  markBackupDone();
+  let staff = { restored: 0, signedOut: false, reason: 'none in file' };
+  if (_staff !== undefined && typeof restoreStaffAccounts === 'function') {
+    staff = restoreStaffAccounts(_staff);
+    if (staff.reason && staff.reason !== 'none in file' && typeof toast === 'function') {
+      toast('The records were restored, but not the staff accounts: ' + staff.reason +
+            '. The accounts on this PC were kept.', 'warning', 'Accounts not restored');
+    }
+    if (staff.signedOut) {
+      if (typeof toast === 'function') toast('Your account is not in this backup — sign in with one that is.', 'info', 'Signed out');
+      setTimeout(() => { if (typeof logout === 'function') logout(); }, 1800);
+    } else if (staff.restored && typeof applyPermissionsToChrome === 'function') {
+      applyPermissionsToChrome();
+    }
+  }
+  return { ok: true, preRestoreBackup: result.preRestoreBackup || null, staff };
 }

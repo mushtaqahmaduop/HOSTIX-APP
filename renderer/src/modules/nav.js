@@ -110,6 +110,9 @@ const pageConfig = {
   // The owner's reference (pay page.png, 2026-09-15): the page's own name and one line on what it is for.
   payments:      { title:'Payments', sub:'Manage student payments, receive pending amounts and track collection status.', action:'Add Payment' },
   expenses:      { title:'Expenses', sub:'', action:'Add Expense' },
+  // Owner Funds (2026-09-28): money between the owner and the hostel.
+  ownerfunds:    { title:'Owner Funds', sub:'Money the owner gives to or takes from the hostel.', action:'Record Movement' },
+  payroll:       { title:'Staff & Payroll', sub:'Employees, salaries, advances and payslips.', action:'Add Employee' },
   // The owner's reference (cancellations2.png, 2026-09-15).
   cancellations: { title:'Cancellations', sub:'Manage student cancellations, track settlements and restore records.', action:'Add Cancellation' },
   /* Former Students was a MODAL behind the account menu until 2026-09-10.
@@ -218,6 +221,17 @@ function filtersAreSet(key) {
 function navigate(page, isBack=false) {
   // Auto-close sidebar on navigation (mobile)
   closeSidebar();
+  // A hover card belongs to the page it was opened on (utils.js, uiTipHide).
+  if (typeof uiTipHide === 'function') uiTipHide();
+  // The month picked on the dashboard is the dashboard's alone (owner,
+  // 2026-09-17): leaving it goes back to the real month.
+  if (page !== 'dashboard') {
+    _dashboardMonth = null;
+    /* ...and the picker has to be told, or its label keeps naming the month
+       you left. Nothing else repaints it on a page change: it is painted at
+       boot, on a DB write, on the day rolling over, and when it is opened. */
+    if (typeof renderSidebarCalendar === 'function') renderSidebarCalendar();
+  }
   // A visit starts clean — see FILTER_REGISTRY above.
   if (page !== currentPage) resetFilters();
   /* ONLY A CHANGE OF PAGE IS A STEP. `navigate(currentPage)` is how several
@@ -231,9 +245,27 @@ function navigate(page, isBack=false) {
   }
   currentPage = page;
   _syncBackBtn();
-  // BUG FIX: Reset reportDetail on every fresh navigation to reports so the
-  // overview badges always show first instead of the last opened detail panel.
-  if (page === 'reports') reportDetail = null;
+  /* A VISIT TO REPORTS STARTS ON THIS MONTH (owner, 2026-09-23: "the reports
+     month dropdown are not coming to its default month when the page is closed
+     or exited").
+
+     `reportMonth` is module state, so a warden who looked at March, left for
+     Students and came back found March still on the bar — with every figure on
+     the page describing March under a heading that gives no hint the window is
+     historical. The period is a property of the VISIT, not of the session.
+
+     Reset on arrival rather than on departure: there is one way in (navRail →
+     navigate) and several ways out, and nothing on the page calls
+     navigate('reports') to re-render — it uses renderPage(), which is exactly
+     the distinction that makes resetting here safe.
+
+     reportDetail was already reset here, so the overview shows first instead of
+     the last opened detail panel. */
+  if (page === 'reports') {
+    reportDetail = null;
+    reportMonth  = thisMonth();
+    reportYearly = false;
+  }
   const cfg = pageConfig[page] || { title: page, sub: '', action: null };
   // The header Back button was removed; sub-pages carry their own exit.
   // goBack()/pageHistory stay — the command palette and in-page controls use them.
@@ -298,7 +330,11 @@ function applyHeaderChrome(page) {
   if (_s) {
     const txt = cfg.sub || '';
     _s.textContent = txt;
+    _s.title = txt;
     _s.style.display = txt ? 'block' : 'none';
+    // A two-line title block needs the compact title size to fit the header
+    // (chrome.css, .hdr-title-wrap.has-sub).
+    if (_s.parentElement) _s.parentElement.classList.toggle('has-sub', !!txt);
   }
 
   /* THE DASHBOARD GREETING rides in the header's spare width, and only there -
@@ -323,7 +359,10 @@ function applyHeaderChrome(page) {
      without passing through here. */
   // 'add', not 'edit', since the two split on 2026-09-10 — this button only
   // ever opens an Add form.
-  const mayAdd = typeof canDo !== 'function' || canDo('add');
+  // Owner Funds records with its own permission, not 'add' (owner-funds.js).
+  const mayAdd = page === 'ownerfunds' ? (typeof ofAllowed === 'function' && ofAllowed())
+               : page === 'payroll' ? (typeof prAllowed === 'function' && prAllowed())
+               : (typeof canDo !== 'function' || canDo('add'));
   const btn = document.getElementById('hdr-action');
   if (btn) {
     if (cfg.action && mayAdd) {
@@ -342,6 +381,8 @@ function headerAction() {
   else if(currentPage==='students') showAddStudentModal();
   else if(currentPage==='payments') openAddPayment();
   else if(currentPage==='expenses') showAddExpenseModal();
+  else if(currentPage==='ownerfunds') showOwnerFundModal();
+  else if(currentPage==='payroll') showEmployeeForm();
   else if(currentPage==='cancellations') showAddCancellationModal();
   else if(currentPage==='issues') showAddIssueModal();
 }
@@ -415,6 +456,13 @@ const _dPayments = debounce(()=>searchRenderPage('payments','search-payments'));
 const _dExpenses = debounce(()=>searchRenderPage('expenses','search-expenses'));
 
 function renderPage(p, resetScroll=false) {
+  /* THE CAMERA IS NOT PART OF THE DOM IT WAS OPENED IN. Add Student is a
+     PAGE, so leaving it replaces #content wholesale — the <video> goes and
+     the MediaStream behind it does not, holding the device until the app is
+     restarted. That is the "camera is in use by another app" production
+     reported on 2026-09-23; the other app was this one. See
+     stopStudentCamera() in students.js. */
+  if (typeof stopStudentCamera === 'function') stopStudentCamera();
   const el = document.getElementById('content');
   // Save scroll position before re-render so it can be restored
   const savedScroll = el.scrollTop || document.getElementById('main')?.scrollTop || 0;
@@ -463,6 +511,8 @@ function renderPage(p, resetScroll=false) {
     if(_s) {
       const _hostel = (typeof DB !== 'undefined' && DB.settings && DB.settings.hostelName) || '';
       _s.textContent = [_hostel, cfg?.sub].filter(Boolean).join(' · ');
+      _s.title = _s.textContent;
+      if (_s.parentElement) _s.parentElement.classList.toggle('has-sub', _s.style.display !== 'none' && !!_s.textContent);
     }
     const actionBtn=document.getElementById('hdr-action');
     const _mayAdd2 = typeof canDo !== 'function' || canDo('add');
@@ -490,7 +540,7 @@ function renderPage(p, resetScroll=false) {
         return;
       }
 
-      const _needs = { settings:'settings', reports:'reports', archive:'reports' }[basePage];
+      const _needs = { settings:'settings', reports:'reports', archive:'reports', ownerfunds:'ownerFunds', payroll:'payroll' }[basePage];
       if (_needs && typeof canDo === 'function' && !canDo(_needs)) {
         el.innerHTML = '<div style="padding:48px 24px;text-align:center;color:var(--text3)">'
           + '<div style="font-size:15px;font-weight:700;color:var(--text2);margin-bottom:6px">Not permitted</div>'
@@ -503,11 +553,19 @@ function renderPage(p, resetScroll=false) {
       else if(basePage==='students') el.innerHTML = renderStudents();
       else if(basePage==='payments') el.innerHTML = renderPayments();
       else if(basePage==='expenses') el.innerHTML = renderExpenses();
+      else if(basePage==='ownerfunds') el.innerHTML = renderOwnerFunds();
+      else if(basePage==='payroll') el.innerHTML = renderPayroll();
       else if(basePage==='cancellations') el.innerHTML = renderCancellations(cancFilter);
       else if(basePage==='former') el.innerHTML = renderFormerStudents();
       else if(basePage==='reports') el.innerHTML = renderReports();
-      else if(basePage==='maintenance') { issuesTab='maintenance'; el.innerHTML = renderIssues(); }
-      else if(basePage==='complaints') { issuesTab='complaints'; el.innerHTML = renderIssues(); }
+      /* All three routes render the SAME register (owner, 2026-09-21: one
+         register). /maintenance and /complaints are kept because older alerts,
+         bookmarks and hand-written navigate() calls still use them — they no
+         longer filter, because there is nothing left to filter by kind. Each
+         used to set `issuesTab` first; nothing reads it any more, so the two
+         assignments were writing to a global no longer connected to anything. */
+      else if(basePage==='maintenance') el.innerHTML = renderIssues();
+      else if(basePage==='complaints') el.innerHTML = renderIssues();
       else if(basePage==='issues') el.innerHTML = renderIssues();
       else if(basePage==='addstudent') el.innerHTML = renderAddStudent();
       else if(basePage==='addpayment') el.innerHTML = renderAddPayment();
@@ -538,7 +596,12 @@ function renderPage(p, resetScroll=false) {
     if (!resetScroll) _restoreFocus(savedFocus);
     // Same deferred pattern as the dashboard: the canvases must exist and be
     // laid out before Chart.js measures them.
-    if(basePage==='reports') setTimeout(function(){ drawReportCharts(); }, 50);
+    if(basePage==='reports') setTimeout(function(){
+      drawReportCharts();
+      // The tab strip scrolls; this is what says so and what brings the
+      // selected tab into view. See rptTabsInit() in reports.js.
+      if (typeof rptTabsInit === 'function') rptTabsInit();
+    }, 50);
     if(basePage==='settings') bindSettingsEvents();
     if(basePage==='addstudent') asfInit();
     if(basePage==='dashboard') setTimeout(function(){ drawTrendChart(); drawRoomDonut(); }, 50);
@@ -566,7 +629,7 @@ function updateSidebar() {
   const pendingCancels = (DB.cancellations||[]).filter(c=>c.status==='Pending').length;
   if(cancelBadge) { cancelBadge.textContent = pendingCancels; cancelBadge.style.display = pendingCancels>0?'flex':'none'; }
   const issuesBadge = document.getElementById('issues-badge');
-  const openIssues = (DB.maintenance||[]).filter(m=>m.status==='Open').length + (DB.complaints||[]).filter(c=>c.status==='Open').length;
+  const openIssues = (DB.issues||[]).filter(i=>i.status==='Open').length;
   if(issuesBadge) { issuesBadge.textContent = openIssues; issuesBadge.style.display = openIssues>0?'flex':'none'; }
 
   refreshChromeUser();
@@ -658,8 +721,11 @@ function chromeAlerts() {
   if (typeof DB === 'undefined' || !DB || !DB.payments) return [];
   const out = [];
   const pending = DB.payments.filter(p => p.status === 'Pending');
-  const openMaint = (DB.maintenance || []).filter(m => m.status === 'Open').length;
-  const openComp  = (DB.complaints  || []).filter(c => c.status === 'Open').length;
+  /* One register, two kinds. The alerts stay separate because "3 open
+     maintenance jobs" and "2 unresolved complaints" are different things to a
+     warden — but both now open the same page. */
+  const openMaint = (DB.issues || []).filter(i => i.kind === 'maintenance' && i.status === 'Open').length;
+  const openComp  = (DB.issues || []).filter(i => i.kind !== 'maintenance' && i.status === 'Open').length;
   const pendCancel= (DB.cancellations || []).filter(c => c.status === 'Pending').length;
 
   if (pending.length) {
@@ -669,12 +735,12 @@ function chromeAlerts() {
       icon:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>' });
   }
   if (openMaint) {
-    out.push({ hue:'dh-blue', go:"navigate('maintenance')",
+    out.push({ hue:'dh-blue', go:"navigate('issues')",
       msg: openMaint + ' open maintenance request' + (openMaint>1?'s':''),
       icon:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>' });
   }
   if (openComp) {
-    out.push({ hue:'dh-red', go:"navigate('complaints')",
+    out.push({ hue:'dh-red', go:"navigate('issues')",
       msg: openComp + ' unresolved complaint' + (openComp>1?'s':''),
       icon:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>' });
   }

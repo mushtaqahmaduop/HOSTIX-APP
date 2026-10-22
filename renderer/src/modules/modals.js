@@ -54,11 +54,23 @@ function showModal(size, title, body, footer='') {
   document.getElementById('modal-container').innerHTML=html;
 }
 function closeModal() {
-  // Stop any active camera streams before destroying modal
-  ['add-student-cam-video','edit-student-cam-video'].forEach(id=>{
-    const vid = document.getElementById(id);
-    if(vid?.srcObject){ vid.srcObject.getTracks().forEach(t=>t.stop()); vid.srcObject=null; }
-  });
+  /* CLOSING A QUESTION IS ANSWERING IT "NO" (bug audit BUG-001, 2026-09-28).
+     showConfirm() ran its Cancel callback only from its Cancel button; ×,
+     Escape and a click outside closed the dialog through here and skipped it.
+     Code that set state when it asked and cleared it in Cancel was left with
+     that state set for the whole session — which is how one ordinary click on
+     Post payment came to create a duplicate month record. The Confirm and
+     Cancel buttons take their callback before closing (_confirmYes/_confirmNo),
+     so a question still open when anything else closes the dialog was
+     dismissed, and its Cancel runs. */
+  const _dismissed = (_pendingConfirmCb || _pendingConfirmCancelCb) ? _pendingConfirmCancelCb : undefined;
+  _pendingConfirmCb = null;
+  _pendingConfirmCancelCb = null;
+  /* Release the camera before the markup holding it is destroyed. This used
+     to walk the two <video> elements itself, which only works while they
+     still exist — stopStudentCamera() also holds the stream off the DOM, so
+     it frees one whose element has already gone (students.js). */
+  if (typeof stopStudentCamera === 'function') stopStudentCamera();
   document.getElementById('modal-container').innerHTML='';
   /* The student slide-over sits UNDER modals and stays open while one is up,
      so whatever the form just changed has to be re-read on the way out —
@@ -67,9 +79,26 @@ function closeModal() {
   if (typeof refreshStudentPanel === 'function') refreshStudentPanel();
   // The account slide-over (users.js) follows an edit made in a dialog over it.
   if (typeof refreshAccountPanel === 'function') setTimeout(refreshAccountPanel, 0);
+  if (typeof _dismissed === 'function') {
+    try { _dismissed(); } catch (e) { console.error('[confirm] cancel on dismiss:', e); }
+  }
 }
 let _pendingConfirmCb = null;
 let _pendingConfirmCancelCb = null;
+/* The two buttons of showConfirm(). Each takes its callback and clears BOTH
+   before closing, so closeModal() does not also treat it as a dismissal. */
+function _confirmYes() {
+  const cb = _pendingConfirmCb;
+  _pendingConfirmCb = null; _pendingConfirmCancelCb = null;
+  closeModal();
+  if (typeof cb === 'function') cb();
+}
+function _confirmNo() {
+  const cb = _pendingConfirmCancelCb;
+  _pendingConfirmCb = null; _pendingConfirmCancelCb = null;
+  closeModal();
+  if (typeof cb === 'function') cb();
+}
 /* A <div>, NOT A <p>. Callers pass HTML — confirmDeleteStudent() passes a whole
    <div> explaining what happens to the payment records — and a <div> inside a
    <p> implicitly CLOSES the paragraph. The dialog still looked right, because
@@ -86,7 +115,7 @@ function showConfirm(title, text, onConfirm, onCancel) {
   _pendingConfirmCancelCb = onCancel || null;
   showModal('modal-sm', title,
     `<div class="confirm-text">${text}</div>`,
-    `<button class="btn btn-secondary" onclick="closeModal();if(_pendingConfirmCancelCb){_pendingConfirmCancelCb();_pendingConfirmCancelCb=null;}">Cancel</button><button class="btn btn-danger" onclick="closeModal();if(_pendingConfirmCb){_pendingConfirmCb();_pendingConfirmCb=null;}">Confirm</button>`
+    `<button class="btn btn-secondary" onclick="_confirmNo()">Cancel</button><button class="btn btn-danger" onclick="_confirmYes()">Confirm</button>`
   );
 }
 // ════════════════════════════════════════════════════════════════════════════
@@ -202,7 +231,7 @@ async function showBackupRestoreModal() {
 }
 
 async function exportBackup(mode) {
-  const json = JSON.stringify(DB, null, 2);
+  const json = JSON.stringify(backupDocument(), null, 2);
   const now = new Date();
   const filename = 'Hostyllo_Backup_' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + '.json';
   if(mode==='json') {
@@ -233,10 +262,6 @@ async function exportBackup(mode) {
 // ─────────────────────────────────────────────────────────────────────────────
 // (Google Drive backup functions removed — backup is now download-only)
 // Stub no-ops to avoid errors from any remaining call sites:
-function getNextBackupLabel()        { return ''; }
-function updateBackupScheduleLabel() {}
-function sendBackupToDrive()         { exportBackup('json'); }
-function sendBackupToGmail()         { exportBackup('json'); }
 function checkAutoBackupSchedule()   {}
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -264,10 +289,28 @@ function _initDBFields(d) {
   if (!Array.isArray(d.handovers))         d.handovers = [];
   if (!Array.isArray(d.handoverItems))     d.handoverItems = [];
   if (!Array.isArray(d.concessions))       d.concessions = [];   // concessions.js (step 8)
+  if (!Array.isArray(d.ownerFunds))        d.ownerFunds = [];    // owner-funds.js
+  if (!Array.isArray(d.employees))         d.employees = [];     // payroll.js
+  if (!Array.isArray(d.salaryAdvances))    d.salaryAdvances = [];
+  if (!Array.isArray(d.payslips))          d.payslips = [];
+  if (!Array.isArray(d.bonuses))           d.bonuses = [];
   if (!d.settings) d.settings = {};
-  // Init roomTypes BEFORE generateRooms so rooms get correct default rents
-  // roomTypes already initialized above (before generateRooms)
-  if (!d.rooms || d.rooms.length === 0) d.rooms = generateRooms(d.settings.roomTypes);
+
+  /* ONE ISSUES REGISTER (owner, 2026-09-21).
+
+     This runs for loadDB() AND for restoreBackup(), which is the point: a
+     backup file written before the merge carries `maintenance` and
+     `complaints` and no `issues`, and without this the register comes back
+     empty with the records sitting in the file, unread. The fold is recorded
+     in settings and happens once — see issuesFoldLegacy() for why running it
+     twice would resurrect deleted records. */
+  issuesFoldLegacy(d);
+  /* NO DEMO ROOMS (owner, 2026-09-24). An empty room set used to be filled with
+     42 invented rooms across 4 floors — on first boot, on every load that found
+     none, and on restoreBackup(). A new hostel's first sight of the product was
+     42 rooms it does not have (ENTERPRISE_LIVE_STATUS §10). A hostel starts with
+     none and creates its own, on the setup rooms step or with Add Room. */
+  if (!Array.isArray(d.rooms)) d.rooms = [];
   // Core identity — previously missing from restoreBackup path
   if (!d.settings.appName) d.settings.appName = 'HOSTYLLO'; // ← Customisable system name
   if (!d.settings.hostelName) d.settings.hostelName = 'Hostel Name';
@@ -349,7 +392,13 @@ async function restoreBackup() {
           const btn = document.querySelector('.btn-danger');
           if (btn) { btn.disabled = true; btn.textContent = 'Restoring…'; }
           try {
-            DB = _initDBFields(parsed);
+            /* THROUGH THE ONE SAFE RESTORE (bug audit BUG-009): validated,
+               the live database snapshotted to a *.pre-restore-*.bak, every
+               table replaced in one transaction, then reloaded from disk —
+               importBackupData() in storage.js. This used to replace DB in
+               memory and save it like an edit, with no safety copy. */
+            const r = await importBackupData(parsed);
+            if (!r.ok) return;
             /* THE RESTORE IS RECORDED IN THE DATA IT RESTORED. A restore
                replaces everything, so the row belongs to the database that is
                here afterwards — restoring an older backup brings that backup's
@@ -357,15 +406,9 @@ async function restoreBackup() {
             if (typeof bkRecord === 'function') {
               await bkRecord('restoreHistory', {
                 at: new Date().toISOString(), file: file.name,
-                students: count, ok: true,
+                students: count, ok: true, safetyCopy: r.preRestoreBackup || null,
               });
-            } else {
-              await saveDB();
             }
-            // The backup's own ledger replaces this one; a backup from before
-            // the ledger is rebuilt from its records (ledger.js).
-            await ledgerAdopt(DB.studentLedger);
-            updateSidebar();
             navigate('dashboard');
             toast('Data restored successfully from backup!', 'success');
             closeModal();
@@ -395,17 +438,15 @@ async function restoreFromPaste() {
     showConfirm('Restore from Pasted Data?',
       `This will replace ALL current data (${count} students found in backup). This cannot be undone!`,
       async ()=>{
-        DB = _initDBFields(parsed);
+        // The one safe restore — see restoreBackup() above (BUG-009).
+        const r = await importBackupData(parsed);
+        if (!r.ok) return;
         if (typeof bkRecord === 'function') {
           await bkRecord('restoreHistory', {
             at: new Date().toISOString(), file: 'Pasted text',
-            students: count, ok: true,
+            students: count, ok: true, safetyCopy: r.preRestoreBackup || null,
           });
-        } else {
-          await saveDB();
         }
-        await ledgerAdopt(DB.studentLedger);
-        updateSidebar();
         navigate('dashboard');
         toast('Data restored from pasted backup!', 'success');
         closeModal();
@@ -421,7 +462,8 @@ async function restoreFromPaste() {
 // HELPERS
 // ════════════════════════════════════════════════════════════════════════════
 function statusBadge(s) {
-  const map={Paid:'badge-green',Pending:'badge-gold',Active:'badge-green',Left:'badge-gray',Blacklisted:'badge-red',Cancelling:'badge-red'};
+  // Partial is amber like Pending (colour audit S1): it fell through to grey.
+  const map={Paid:'badge-green',Pending:'badge-gold',Partial:'badge-gold',Active:'badge-green',Left:'badge-gray',Blacklisted:'badge-red',Cancelling:'badge-red'};
   const icons={Active:MODAL_ICONS.statusActive,Left:MODAL_ICONS.statusLeft,Blacklisted:MODAL_ICONS.statusX,Cancelling:MODAL_ICONS.statusBan,Paid:MODAL_ICONS.statusCheck,Pending:MODAL_ICONS.statusClock};
   return `<span class="badge ${map[s]||'badge-gray'}">${icons[s]||''} ${escHtml(s||'—')}</span>`;
 }

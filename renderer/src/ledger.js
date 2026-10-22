@@ -24,6 +24,7 @@
      instalment      each new partialPayments entry      payment
      collected       amount not explained by the trail   payment / adjustment
      reversal        each new reversals entry            adjustment (+)
+     refund          a reversal whose kind is 'refund'    adjustment (−)
      deleted         the record was deleted              adjustment (− its net)
 
    A figure's FIRST posting is a charge or concession with its own reason. A
@@ -135,7 +136,14 @@ function _ledgerConcession(p) {
 function _ledgerBill(p) {
   const due    = calculateOutstanding(p);
   const credit = due > 0 ? 0 : calculateRefund(p).refundable;
-  return Math.max(0, due + money(p.amount) - credit);
+  /* A refund lowers what was collected WITHOUT raising what is owed, so this
+     derivation would read the month as billing less than the hostel charged —
+     and the diff would then post a charge reduction on top of the refund
+     allowance, taking the balance below zero for a student who owes nothing.
+     Adding the relief back keeps this equal to calculateBill(), which is the
+     whole point of deriving it: one answer to what the month billed. */
+  const relief = typeof refundRelief === 'function' ? refundRelief(p) : 0;
+  return Math.max(0, due + money(p.amount) + relief - credit);
 }
 
 /* The month's charges as separately named parts, and its concession. The
@@ -207,6 +215,13 @@ function _ledgerPosted(recordId) {
         else s.collected -= a;
         break;
       case 'reversal': s.reversals++; break;
+      /* The allowance that pairs with a refund. It is posted in the same pass
+         as its reversal and counted by the same cursor, so it needs no counter
+         of its own — but it MUST have a case here, or the default branch files
+         it under `parts`, where _ledgerDiff() reads every key as a charge part
+         and would post an adjustment to "remove" a charge that never existed.
+         Its effect on the balance is already in s.net. */
+      case 'refund':   break;
       case 'deleted':  s.deleted = true; break;
       default:
         if (e.part) s.parts[e.part] = (s.parts[e.part] || 0) + a;
@@ -270,7 +285,9 @@ function _ledgerDiff(p, posted, why) {
       out.push({ type: 'payment', amount: amt, part: 'instalment',
                  date: t.date || p.paidDate || recDate,
                  method: t.method || p.method || '', byName: t.collectedBy || '',
-                 reference: t.reference || '' });
+                 reference: t.reference || '',
+                 // The hand-over this instalment belonged to (audit G5).
+                 receiptId: t.receiptId || '' });
       dp -= amt;
     }
     // Money the record holds that no instalment explains — a form that wrote
@@ -284,12 +301,39 @@ function _ledgerDiff(p, posted, why) {
                reason: 'Amount collected changed ' + n(posted.collected) + ' → ' + n(collected) + tail + also });
   }
 
-  // Reversals — money handed back raises what is owed.
+  /* Reversals — money handed back raises what is owed.
+
+     A REFUND IS POSTED AS A PAIR (owner, 2026-09-23). The balance here is
+     charges − payments ± adjustments, and `collected` above deliberately adds
+     every reversal back, so the payment side still stands at what was ever
+     collected. Under that definition a single entry cannot tell the truth
+     about a refund: the money left the drawer, AND the obligation left with
+     it. One entry would have to be either +amount, which re-opens a debt the
+     student does not owe, or −amount, which says the hostel now owes THEM.
+
+     So both halves are posted, and they net to zero on the balance:
+
+       adjustment +amount  part 'reversal'  the collection is no longer held
+       adjustment −amount  part 'refund'    and the charge it settled is released
+
+     A correction posts only the first, which is why its debt re-opens. Both
+     entries carry the same date, reason and receipt, so a statement reads them
+     as the one event they are — and the warden attribution at
+     _ledgerCollectedKind() still matches only the 'reversal' half, so money out
+     of a drawer is counted against that warden exactly once. */
   for (const r of reversals.slice(posted.reversals)) {
     const said = String(r.reason || '').trim();
-    out.push({ type: 'adjustment', amount: money(r.amount), part: 'reversal',
-               date: r.date || recDate, method: r.method || '', byName: r.by || '',
-               reason: 'Collection reversed' + (said ? ': ' + said : '') + tail });
+    const ref  = r.kind === 'refund';
+    const base = { date: r.date || recDate, method: r.method || '', byName: r.by || '',
+                   receiptId: r.receiptId || '' };
+    out.push(Object.assign({}, base, {
+      type: 'adjustment', amount: money(r.amount), part: 'reversal',
+      reason: (ref ? 'Refunded' : 'Collection reversed') + (said ? ': ' + said : '') + tail }));
+    if (ref) {
+      out.push(Object.assign({}, base, {
+        type: 'adjustment', amount: -money(r.amount), part: 'refund',
+        reason: 'Charge released by the refund' + tail }));
+    }
   }
   return out;
 }
@@ -310,8 +354,17 @@ function _ledgerPost(p, d, opts) {
     createdBy: o.imported ? null : (user && typeof CUR_ROLE !== 'undefined' ? CUR_ROLE : null),
     createdByName: d.byName || (o.imported ? String(p.collectedBy || '') : (user && user.name) || ''),
     approvedBy: null,
-    // Schema Q6 (b): one receipt number per month record, shared by its entries.
-    receiptId: p.receiptNo || null,
+    /* Schema Q6 (b) gave every entry of a month record the record's printed
+       receipt number. That is per RECORD, so one hand-over clearing August and
+       paying September landed under two different numbers — or, since
+       `receiptNo` is only assigned when a receipt is actually printed, under
+       two nulls (audit G5).
+
+       The posting's own id wins where the draft carries one: it is assigned at
+       collection time and is the same across every record that one hand-over
+       touched. The printed number stays the fallback, so nothing that used to
+       be grouped by it stops being grouped. */
+    receiptId: d.receiptId || p.receiptNo || null,
     runningBalance: prev + ledgerEffect(d),
     createdAt: o.imported
       ? (d.date ? d.date + 'T00:00:00' : new Date().toISOString())
@@ -412,6 +465,17 @@ function ledgerImportIfEmpty() {
 }
 
 /** Hand unsaved entries to the main process. Called by saveDB(); throws on refusal. */
+/* The entries a save still has to carry, and the acknowledgement that it did.
+   saveDB() sends them INSIDE its changeset so the records and the entries that
+   explain them commit together (finance Phase 7); ledgerFlush() below stays for
+   the fallback path and for browser dev mode. Nothing else may empty the queue:
+   dropping an entry loses the only immutable record of a money movement. */
+function ledgerPending() { return _ledgerUnsaved.slice(); }
+
+function ledgerMarkFlushed(n) {
+  _ledgerUnsaved = _ledgerUnsaved.slice(Math.max(0, Number(n) || 0));
+}
+
 async function ledgerFlush() {
   if (!_ledgerUnsaved.length) return true;
   const api = (typeof window !== 'undefined') ? window.electronAPI : null;
@@ -534,8 +598,16 @@ function ledgerDrift() {
   const want = new Map();
   _ledgerHistory().forEach(p => {
     if (_ledgerPosted(p.id).deleted) return;
-    // What the Payments page says: still owed, less any credit held.
-    want.set(p.studentId, (want.get(p.studentId) || 0) + _ledgerBill(p) - money(p.amount));
+    /* What the Payments page says: still owed, less any credit held.
+
+       `_ledgerBill − collected` was that figure until refunds existed. A
+       refund lowers `collected` and adds the same amount back into
+       _ledgerBill(), so the subtraction leaves the refund behind and this
+       reports a drift against a record that is settled. Taking the relief off
+       reduces the expression to `owed − credit` again, which is what the line
+       above it says it computes. */
+    want.set(p.studentId,
+      (want.get(p.studentId) || 0) + _ledgerBill(p) - money(p.amount) - refundRelief(p));
   });
   const have = new Map();
   _ledgerList().forEach(e => {
@@ -623,6 +695,20 @@ function ledgerHistoryFor(studentId, recordId, n) {
 }
 
 /** A month record's entries, in the order they were posted. */
+/* EVERYTHING ONE HAND-OVER DID (audit G5). The entries of a single posting,
+   oldest first, across however many month records it touched — which is the
+   question "what was on this receipt?" and the one the trail could not answer
+   before the posting had an id of its own.
+
+   An empty id matches nothing on purpose: entries written before this existed
+   carry no posting, and they must not all group together as one enormous
+   hand-over that never happened. */
+function ledgerEntriesForReceipt(receiptId) {
+  const want = String(receiptId || '');
+  if (!want) return [];
+  return _ledgerList().filter(e => e && String(e.receiptId || '') === want);
+}
+
 function ledgerEntriesForRecord(recordId) {
   return (_ledgerByRecord.get(recordId) || []).slice();
 }

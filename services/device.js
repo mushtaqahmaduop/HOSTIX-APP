@@ -183,8 +183,41 @@ class DeviceService {
     return { ok: true, deviceId: data.deviceId };
   }
 
+  /**
+   * Register a key that is NOT yet in the licence file — the online first
+   * activation a v5 key requires (owner's decision D3). main.js calls this
+   * BEFORE writing license.enc, so a key the server refuses (already bound to
+   * another PC, never issued, revoked) is never activated at all.
+   *
+   * Resolves with the server's answer; never throws.
+   */
+  async registerKey(licenseKey) {
+    if (!config.isConfigured()) return { ok: false, errorCode: 'E_NOT_CONFIGURED' };
+    const machineId = this._machineId();
+    if (!licenseKey || !machineId) return { ok: false, errorCode: 'E_NO_LICENCE' };
+    const res = await api.request({
+      method: 'POST',
+      path: '/devices/register',
+      body: { licenseKey, machineId, appVersion: this.cfg.appVersion || undefined, os: process.platform },
+      maxAttempts: 2,
+      idempotencyKey: api.newIdempotencyKey ? api.newIdempotencyKey() : undefined
+    });
+    const body = res.data || {};
+    if (!res.ok) {
+      return { ok: false, errorCode: res.errorCode, status: res.status,
+        code: body.code || null, message: body.message || res.errorMessage || null };
+    }
+    const data = body.data || body;
+    if (!data.deviceId || !data.deviceSecret) return { ok: false, errorCode: 'E_BAD_RESPONSE' };
+    this._saveCredentials({ deviceId: data.deviceId, deviceSecret: data.deviceSecret });
+    this._token = null;
+    log.info('device_registered_on_activation', { deviceId: data.deviceId, keyVersion: data.keyVersion });
+    return { ok: true, deviceId: data.deviceId, effectiveStatus: data.effectiveStatus || null,
+      keyVersion: data.keyVersion || null };
+  }
+
   /** A live token, registering and exchanging as needed. */
-  async _ensureToken() {
+  async _ensureToken(_retried) {
     if (this._token && this._token.expiresAt - TOKEN_SKEW_MS > Date.now()) {
       return this._token.value;
     }
@@ -207,12 +240,18 @@ class DeviceService {
       // deactivated, or an admin rotated it. Registering again is the
       // documented way back, and it is what the customer would otherwise have
       // to call support for.
-      if (res.errorCode === 'E_UNAUTHORIZED') {
+      //
+      // Re-register BEFORE discarding the old credentials, and at most once per
+      // call (f79b114). Clearing first meant a register that failed — a 403, a
+      // network drop — left the machine with NO identity at all, permanently
+      // unregistered and running on its cached entitlement: the exact state in
+      // which a revocation can never reach it.
+      if (res.errorCode === 'E_UNAUTHORIZED' && !_retried) {
         log.info('device_secret_rejected_reregistering');
-        this.clearCredentials();
-        const reg = await this.register();
+        this._token = null;
+        const reg = await this.register();   // overwrites the credentials only on success
         if (!reg.ok) return null;
-        return this._ensureToken();
+        return this._ensureToken(true);
       }
       this._lastError = res.errorCode;
       return null;
@@ -288,7 +327,11 @@ class DeviceService {
       // pushed to the windows and the change sat invisible until the hourly
       // poll. A licence change the customer cannot see is a support call.
       const signature = (st) => st && JSON.stringify({
-        state: st.state, features: st.features, expiresAt: st.expiresAt, policy: st.policy
+        state: st.state, features: st.features, expiresAt: st.expiresAt, policy: st.policy,
+        // The owner's controls (2026-09-24): a switch flipped, a reason or an
+        // end date changed — each must reach the windows, not wait for a poll.
+        restrictions: st.restrictions, level: st.level, reason: st.reason, until: st.until,
+        revision: st.revision
       });
       const before = this.entitlement ? signature(this.entitlement.getStatus()) : null;
       const result = await this.entitlement.refresh(token);

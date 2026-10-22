@@ -157,6 +157,13 @@ const PERMS = [
   { key: 'backup',   label: 'Backup & restore',     hint: 'Export and import the database' },
   { key: 'settings', label: 'Change settings',      hint: 'Hostel details, room types, rent' },
   { key: 'users',    label: 'Manage users',         hint: 'Add users and set permissions' },
+  /* OWNER FUNDS (2026-09-28): money between the owner and the hostel. Only
+     means anything where the control plane has switched the feature on for
+     this hostel — the Users page hides the tick everywhere else. */
+  { key: 'ownerFunds', label: 'Owner funds',        hint: 'See and record money the owner gives or takes' },
+  /* STAFF & PAYROLL (2026-09-30): employees, salaries and advances. Paying and
+     voiding also need Manage users (docs/STAFF_PAYROLL_PLAN_2026-09-30.md §9.1). */
+  { key: 'payroll',  label: 'Staff & payroll',      hint: 'Staff records, salaries and advances' },
 ];
 const PERM_KEYS = PERMS.map(p => p.key);
 
@@ -224,6 +231,21 @@ function _migrateUsers(cfg) {
       u.perms.add = u.perms.edit === true;
       changed = true;
     }
+    /* OWNER FUNDS IS NOT HANDED TO EVERYONE (2026-09-28). The blanket rule below
+       grants a new permission to every account so nobody is silently locked
+       out of something they used to do — but nobody used to see the owner's
+       own money, and a warden should not start seeing it because the app
+       updated. It goes to the accounts that manage users; an administrator
+       ticks it for anyone else. */
+    if (u.perms.ownerFunds === undefined) {
+      u.perms.ownerFunds = u.perms.users === true;
+      changed = true;
+    }
+    // Salaries are private in the same way: payroll starts with the admins.
+    if (u.perms.payroll === undefined) {
+      u.perms.payroll = u.perms.users === true;
+      changed = true;
+    }
     // A later version may add a permission; grant it rather than silently deny.
     for (const k of PERM_KEYS) {
       if (u.perms[k] === undefined) { u.perms[k] = true; changed = true; }
@@ -266,6 +288,62 @@ async function _loadWardenConfig() {
 
 function saveWardenConfig() {
   _setJSON(_key('wardens'), WARDENS);
+}
+
+/* STAFF ACCOUNTS TRAVEL WITH THE BACKUP (bug audit BUG-012, 2026-09-28).
+   The accounts live in this profile's localStorage, not in hostix.db, so no
+   backup carried them: restoring onto a new PC brought back every record and
+   no staff logins, and handovers named account ids that pointed at nobody.
+
+   Decided 2026-09-28 (owner delegated the call): include them. Passwords are
+   only ever the salted PBKDF2 {hash, salt, v} — never plain — and the file
+   already holds every resident's name, phone and payment, so the hashes add
+   little to what a lost backup exposes. A backup without the section (older
+   files) leaves this PC's accounts alone. */
+function staffAccountsForBackup() {
+  return { v: 1, users: JSON.parse(JSON.stringify(WARDENS || {})) };
+}
+
+/** { ok } or { ok:false, reason } — reason is shown to the warden. */
+function validateStaffAccounts(sa) {
+  const plain = x => x !== null && typeof x === 'object' && !Array.isArray(x);
+  if (!plain(sa) || !plain(sa.users)) return { ok: false, reason: 'the staff accounts section is damaged' };
+  const ids = Object.keys(sa.users);
+  if (!ids.length || ids.length > 200) return { ok: false, reason: 'the staff accounts section is damaged' };
+  let admin = false;
+  for (const id of ids) {
+    const u = sa.users[id];
+    if (!/^[\w.@-]{1,64}$/.test(id) || !plain(u)) return { ok: false, reason: 'a staff account in it is damaged' };
+    const pw = u.pw;
+    const pwOk = (typeof pw === 'string' && pw.length > 0 && pw.length <= 512) ||
+      (plain(pw) && typeof pw.hash === 'string' && /^[0-9a-f]{16,256}$/i.test(pw.hash) &&
+       typeof pw.salt === 'string' && /^[0-9a-f]{8,256}$/i.test(pw.salt));
+    if (!pwOk) return { ok: false, reason: 'a staff account in it has no usable password' };
+    if (u.perms !== undefined && !plain(u.perms)) return { ok: false, reason: 'a staff account in it is damaged' };
+    if (u.active !== false && (!u.perms || u.perms.users === true)) admin = true;
+  }
+  // A restore must never leave the hostel with nobody who can manage users.
+  if (!admin) return { ok: false, reason: 'it has no account that can manage users' };
+  return { ok: true };
+}
+
+/**
+ * Put a backup's accounts on this PC. Returns { restored, signedOut, reason }.
+ * The account signed in now is signed out when the backup does not have it
+ * (or has it switched off) — its permissions came from accounts that are gone.
+ */
+function restoreStaffAccounts(sa) {
+  if (sa === undefined || sa === null) return { restored: 0, signedOut: false, reason: 'none in file' };
+  const check = validateStaffAccounts(sa);
+  if (!check.ok) return { restored: 0, signedOut: false, reason: check.reason };
+  const users = JSON.parse(JSON.stringify(sa.users));
+  _migrateUsers(users);
+  WARDENS = users;
+  saveWardenConfig();
+  const s = _getSession();
+  const me = s && WARDENS[s.role];
+  const signedOut = !!s && (!me || me.active === false);
+  return { restored: Object.keys(users).length, signedOut, reason: '' };
 }
 
 /** Find a user id by username, case-insensitively. Returns the id or null. */
@@ -552,7 +630,7 @@ async function checkLogin() {
   const plain    = inp.value.trim();
   const typedUsr = uinp ? uinp.value.trim() : '';
 
-  if (!typedUsr) { if (uinp) uinp.focus(); _setLoginState('error', 'Enter your username.'); return; }
+  if (!typedUsr) { if (uinp) uinp.focus(); _setLoginState('error', 'Choose an account.'); return; }
   if (!plain)    { inp.focus(); return; }
 
   const id = findUserByUsername(typedUsr);
@@ -714,6 +792,10 @@ function applyPermissionsToChrome() {
   // nav.js renderPage(). Keep the two in step or the rail offers a page that
   // then refuses to render.
   showNav('archive',  canDo('reports'));
+  // Owner Funds: hidden unless the permission is held AND the hostel has the
+  // opt-in feature (the feature pass below also hides it when switched off).
+  showNav('ownerfunds', canDo('ownerFunds') && (typeof hasFeature !== 'function' || hasFeature('ownerFunds')));
+  showNav('payroll', canDo('payroll') && (typeof hasFeature !== 'function' || hasFeature('payroll')));
   // Settings is no longer in the account menu — showNav('settings') above is
   // the only gate it needs now that the rail item is the single entry point.
 
@@ -724,6 +806,36 @@ function applyPermissionsToChrome() {
   if (typeof applyFeaturesToChrome === 'function') {
     try { applyFeaturesToChrome(); } catch (e) { console.error('[features]', e); }
   }
+
+  /* ══ THE WINDOW MENU IS CHROME TOO (owner, 2026-09-23) ═════════════════
+     "the help option in the windows header opens the license setting which is
+     not to be opened and the import, export options".
+
+     Three items in the title bar bypassed every permission in this file. Help
+     offered License Settings — activation, deactivation, the machine binding —
+     to any account that could reach a keyboard, and File offered Import
+     Backup, which replaces the whole database. A warden had no business with
+     either, and neither has a gate anywhere else because until now nothing
+     could reach them except an admin sitting at the app.
+
+     Import and Export are HIDDEN, NOT REMOVED — an admin still has both
+     exactly where they were. License Settings was later removed from Help
+     altogether (2026-09-24): Help is also on the licence screen, where it let a
+     suspended hostel copy its key and re-activate its way back in. Admins open
+     it from Settings.
+
+     Backup EXPORT is gated on 'backup' rather than 'users': taking a copy out
+     is what that permission is for, and a hostel that trusts a warden to make
+     backups should not have to make them an administrator. Import is the
+     destructive half and stays with the admins. */
+  const menuItem = (action, ok) => {
+    document.querySelectorAll('#hz-titlebar [data-action="' + action + '"]').forEach(el => {
+      el.style.display = ok ? '' : 'none';
+    });
+  };
+  // License Settings has since left the Help menu entirely (2026-09-24).
+  menuItem('importBackup',    canDo('users'));
+  menuItem('exportBackup',    canDo('backup') || canDo('users'));
 }
  
 // ─────────────────────────────────────────────────────────────────────────────
@@ -753,51 +865,78 @@ function logout() {
   location.reload();
 }
 
-/* ── SWITCH ACCOUNT (owner, 2026-09-15) ─────────────────────────────────────
-   Steps through the usernames remembered on this PC. It only ever fills the
-   username: the password box is emptied and focused, so whoever is switching
-   still types their own password. Shown while Remember me is ticked and more
-   than one name is remembered. × in the username box forgets the name shown,
-   on this PC only — the account itself is not touched. */
-function loginPaintRemembered() {
-  const list   = _rememberedUsers();
-  const uinp   = _ui('login-user');
-  const box    = _ui('login-remember');
-  const swap   = _ui('login-swap');
-  const forget = _ui('login-forget');
-  const typed  = uinp ? uinp.value.trim().toLowerCase() : '';
-  const known  = !!typed && list.some(u => u.toLowerCase() === typed);
-  if (swap)   swap.hidden   = !(box && box.checked && list.length > 1);
-  if (forget) forget.hidden = !known;
+/* THE SWAP SIGN AND THE FORGET × ARE GONE (owner, 2026-09-23). Both existed to
+   fill a username BOX without retyping — loginSwitchAccount() stepped through
+   the remembered names, loginSwapToggle()/Pick() opened them as a list, and
+   loginForgetUser() dropped one. #login-user is a <select> of every account on
+   this PC now, so picking one IS the list, and there is nothing to forget: the
+   remembered name only decides where the list opens.
+
+   loginPaintRemembered() survives as a no-op-safe stub because the boot path
+   and the session restore still call it. */
+function loginPaintRemembered() { loginPaintAccounts(); }
+
+/* ══ THE ACCOUNT LIST (owner, 2026-09-23) ══════════════════════════
+   #login-user is a <select> now, so it still carries a .value and checkLogin()
+   reads it exactly as it read the text box. What changed is where the value
+   comes from: the accounts on this machine, each labelled with the role its
+   ticks actually add up to — usrRole() derives that from the permissions, so a
+   user whose ticks were edited by hand shows Custom rather than a stale label.
+
+   INACTIVE ACCOUNTS ARE LEFT OUT. checkLogin() refuses them anyway; offering
+   one is offering a door that cannot open.
+
+   REMEMBER ME NOW MEANS 'START HERE'. It no longer fills a box — there is no
+   box — it decides which account the list opens on. The name is still all that
+   is kept, and the password is still typed every launch.
+
+   ADMINS FIRST, then by name. On a hostel PC the admin is the account that
+   signs in when something is wrong, and a list that opens on it saves the one
+   interaction this control exists to remove. */
+function loginPaintAccounts() {
+  const sel = _ui('login-user');
+  if (!sel || typeof WARDENS === 'undefined' || !WARDENS) return;
+
+  const roleOf = u => (typeof usrRole === 'function' ? usrRole(u) : (u && u.role) || 'User');
+  const rows = Object.keys(WARDENS)
+    .map(id => ({ id: id, u: WARDENS[id] }))
+    .filter(x => x.u && x.u.active !== false)
+    .map(x => ({
+      user: String(x.u.username || x.id),
+      name: String(x.u.name || x.u.username || x.id),
+      role: roleOf(x.u),
+      admin: !!(x.u.perms && x.u.perms.users === true),
+    }))
+    .sort((a, b) => (b.admin - a.admin) || a.name.localeCompare(b.name));
+
+  if (!rows.length) {
+    sel.innerHTML = '<option value="">No accounts on this PC</option>';
+    return;
+  }
+
+  /* The remembered account decides where the list opens; whatever is already
+     chosen wins over it, so re-painting mid-session does not move the cursor
+     out from under someone. */
+  const keep = String(sel.value || '').toLowerCase();
+  const want = keep || String(_rememberedUser() || '').toLowerCase();
+  const esc = s => (typeof escHtml === 'function' ? escHtml(String(s)) : String(s));
+  sel.innerHTML = rows.map(r =>
+    '<option value="' + esc(r.user) + '">' + esc(r.name) + ' — ' + esc(r.role) + '</option>'
+  ).join('');
+  const hit = rows.find(r => r.user.toLowerCase() === want);
+  sel.value = hit ? hit.user : rows[0].user;
 }
 
-function loginSwitchAccount() {
-  const list = _rememberedUsers();
-  const uinp = _ui('login-user');
+/* Changing account clears whatever password was typed for the previous one and
+   drops the cursor into the box — the same contract the swap sign had, for the
+   same reason: a password belongs to one account and must never be carried
+   across to another. */
+function loginPickAccount() {
   const pinp = _ui('login-input');
-  if (!uinp || list.length < 2) return;
-  const at = list.findIndex(u => u.toLowerCase() === uinp.value.trim().toLowerCase());
-  uinp.value = list[(at + 1) % list.length];
-  if (pinp) { pinp.value = ''; pinp.type = 'password'; pinp.focus(); }
+  if (pinp) { pinp.value = ''; pinp.type = 'password'; }
   _setLoginState('reset');
-  loginPaintRemembered();
+  if (pinp) pinp.focus();
 }
-
-function loginForgetUser() {
-  const uinp = _ui('login-user');
-  const pinp = _ui('login-input');
-  if (!uinp) return;
-  const name = uinp.value.trim().toLowerCase();
-  const rest = _rememberedUsers().filter(u => u.toLowerCase() !== name);
-  _saveRememberedUsers(rest);
-  uinp.value = rest[0] || '';
-  if (pinp) pinp.value = '';
-  const box = _ui('login-remember');
-  if (box && !rest.length) box.checked = false;
-  loginPaintRemembered();
-  ((rest.length && pinp) ? pinp : uinp).focus();
-}
- 
 // ─────────────────────────────────────────────────────────────────────────────
 // 15. LOGIN SCREEN — BRANDING SYNC  (runs before first paint)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -871,16 +1010,20 @@ var CUR_USER = null;
   } else {
     // ── No valid session — show login ─────────────────────────────────────
     _killSession(); // clear any stale/invalid session data
-    // A remembered warden gets their name back, and the cursor goes to the one
-    // box they still have to fill.
+    /* The list is built first, THEN the remembered account is selected on it —
+       setting .value on an empty <select> selects nothing, which is how a
+       remembered name silently stopped being remembered. */
     const uinp = _ui('login-user');
     const pinp = _ui('login-input');
     const remembered = _rememberedUser();
     const rememberEl = _ui('login-remember');
     if (rememberEl) rememberEl.checked = !!remembered;
-    if (uinp && remembered) uinp.value = remembered;
-    loginPaintRemembered();
-    const focusTarget = (remembered && pinp) ? pinp : uinp;
+    loginPaintAccounts();
+    if (uinp && remembered) {
+      const hit = [...uinp.options].find(o => o.value.toLowerCase() === remembered.toLowerCase());
+      if (hit) uinp.value = hit.value;
+    }
+    const focusTarget = pinp || uinp;
     if (focusTarget) setTimeout(() => focusTarget.focus(), 120);
   }
  

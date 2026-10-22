@@ -10,6 +10,7 @@
 'use strict';
 
 const { test, expect, _electron: electron } = require('@playwright/test');
+const { settleFreshInstall } = require('./_fresh-install');
 const path = require('path');
 const { resetProfile } = require('./_profile');
 
@@ -29,12 +30,13 @@ async function login(win) {
   await win.waitForFunction(
     () => typeof WARDENS !== 'undefined' && WARDENS.warden1 && WARDENS.warden1.pw,
     null, { timeout: 30000 });
-  await win.fill('#login-user', 'warden1');
+  await win.selectOption('#login-user', 'warden1');
   await win.fill('#login-input', 'admin123');
   await win.click('#login-btn');
   await win.waitForFunction(
     () => { const s = document.getElementById('login-screen'); return s && s.style.display === 'none'; },
     null, { timeout: 30000 });
+  await settleFreshInstall(win);   // setup done + the 42 rooms these specs expect
   await win.waitForFunction(
     () => typeof _ledgerReady !== 'undefined' && _ledgerReady === true, null, { timeout: 30000 });
 }
@@ -163,6 +165,30 @@ test('a warden sees their own collections; an administrator sees every account',
     await win.click('.usr-wtable tbody tr[data-account="w_sara"]');
     await win.waitForSelector('#usr-panel.is-open .usr-coltable', { timeout: 15000 });   // slide-over (owner, 2026-09-14)
     expect(await win.evaluate(() => document.querySelectorAll('#usr-panel .usr-coltable tbody tr').length)).toBe(2);
+
+    // Each collection opens the student's receipt, signed by the warden who
+    // took the money, not by the administrator looking (owner, 2026-09-29).
+    expect(await win.evaluate(() => document.querySelectorAll('#usr-panel .usr-coltable tbody .usr-rcpt').length)).toBe(2);
+    // A receipt is never issued under the placeholder name (hostel-name.js).
+    await win.evaluate(() => { DB.settings.hostelName = 'Collections Test Hostel'; });
+    await win.click('#usr-panel .usr-coltable tbody tr:first-child .usr-rcpt');
+    await win.waitForSelector('#rc-print', { timeout: 8000 });
+    const rcpt = await win.evaluate(() => ({
+      text: document.getElementById('rc-print').textContent.replace(/\s+/g, ' '),
+      no: DB.payments[0].receiptNo || '',
+      panelStillOpen: !!document.querySelector('#usr-panel.is-open'),
+    }));
+    expect(rcpt.text).toContain('Collections Student');
+    expect(rcpt.text).toContain('Sara Warden');
+    expect(rcpt.no).toMatch(/^RCP-\d{6}$/);
+    expect(rcpt.text).toContain(rcpt.no);
+    expect(rcpt.panelStillOpen).toBe(true);
+    await win.evaluate(() => closeModal());
+    // Numbered once: opening it again shows the same number, and the chip now carries it.
+    await win.evaluate(() => { const no = DB.payments[0].receiptNo; usrOpenReceipt(DB.payments[0].id);
+      window.__rcNo = no === DB.payments[0].receiptNo; closeModal(); });
+    expect(await win.evaluate(() => window.__rcNo)).toBe(true);
+
     await win.evaluate(() => closeAccountPanel());
     await win.waitForFunction(() => !document.querySelector('#usr-panel'), null, { timeout: 5000 });
 

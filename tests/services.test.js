@@ -1515,7 +1515,25 @@ ok('a fresh entitlement outranks the local file', () => {
   });
   assert.strictEqual(d.state, 'SUSPENDED');
   assert.strictEqual(d.source, 'entitlement');
-  assert.strictEqual(d.readOnly, true);
+  // Suspended LOCKS the app (owner's decision D1, 2026-09-24) — it was
+  // read-only before. Locked means blocked, with every output refused.
+  assert.strictEqual(d.blocked, true);
+  assert.deepStrictEqual(d.restrictions, { dataEntry: false, printing: false, exporting: false });
+});
+
+ok('the states line up with the ruling: expired read-only, suspended blocked', () => {
+  const at = (state) => enf.resolve({ licence: licenceValid(), entitlement: { state, policy: enf.DEFAULT_POLICY } });
+  const shape = (d) => d.readOnly + '/' + d.blocked;
+  assert.strictEqual(shape(at('ACTIVE')),    'false/false');
+  assert.strictEqual(shape(at('EXPIRED')),   'true/false',  'expiry must stay usable and printable');
+  assert.strictEqual(shape(at('SUSPENDED')), 'false/true',  'a suspension must lock the app');
+  assert.strictEqual(shape(at('REVOKED')),   'false/true');
+  // Whichever way it is refused, the write is refused — and the audit trail
+  // still records what happened during the lockout.
+  for (const st of ['EXPIRED', 'SUSPENDED', 'REVOKED']) {
+    assert.strictEqual(enf.writeBlocked(at(st), 'students'), true, st);
+    assert.strictEqual(enf.writeBlocked(at(st), 'activitylog'), false, st + ' audit trail');
+  }
 });
 
 ok('a STALE or missing entitlement falls back to the licence file', () => {
@@ -1941,6 +1959,86 @@ await okAsync('lastSyncAt still means the last SUCCESSFUL read', async () => {
   assert.ok(after, 'a successful sync recorded no time at all');
 });
 
+/* ── A REFUSED TOKEN MUST NOT COST THE MACHINE ITS IDENTITY ──────────────────
+
+   `_ensureToken()` cleared the credentials file BEFORE trying to re-register.
+   register() never needed them — it presents the licence key and the machine
+   fingerprint — so clearing first bought nothing, and when the re-registration
+   was refused the machine was left with no credentials and no way to earn new
+   ones. It then failed at register on every subsequent sync, forever, and ran
+   on from the local licence file with nothing the control plane said ever
+   reaching it again.
+
+   The control plane used to refuse registration for a revoked licence, so this
+   is precisely how revoking a hostel came to do nothing. The server no longer
+   does that (see server/src/routes/devices.js), and this holds the app's half
+   closed whatever any server answers. */
+
+/** A device service with a credentials file already on disk. */
+function registeredDevice(userDataDir, entitlementStub) {
+  const dev = new DeviceService({
+    userDataDir,
+    machineIdProvider: () => 'MID-TEST',
+    licenceProvider: () => ({ key: 'HOSTEL-0FYR-RS3M-ABCD', valid: true }),
+    entitlement: entitlementStub || {
+      getStatus: () => ({ state: 'NONE', features: null, expiresAt: null, policy: null }),
+      refresh: async () => ({ ok: true, status: { state: 'ACTIVE', features: {}, expiresAt: null, policy: null } })
+    },
+    cfg: { minSyncGapMs: 0 }
+  });
+  dev._saveCredentials({ deviceId: 'dev-1', deviceSecret: 'x'.repeat(40) });
+  return dev;
+}
+
+await okAsync('a refused re-registration leaves the credentials file intact', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hostyllo-creds-'));
+  config.load({ userDataDir: dir, overrides: { apiBase: 'https://example.invalid' } });
+  const dev = registeredDevice(dir);
+  const file = dev.credentialsFile;
+  assert.ok(fs.existsSync(file), 'the fixture did not write credentials');
+
+  // The old control plane's answers: 401 to the token, 403 to the re-register.
+  api._setFetch(async (url) => String(url).indexOf('/devices/register') !== -1
+    ? fakeResponse(403, { success: false, code: 'LICENSE_REVOKED' })
+    : fakeResponse(401, { success: false, code: 'DEVICE_UNAUTHORIZED' }));
+
+  const out = await dev.sync({ force: true });
+  api._setFetch(null);
+
+  assert.strictEqual(out.ok, false);
+  assert.ok(fs.existsSync(file),
+    'the machine threw away its credentials and could not replace them — it is now '
+    + 'permanently unable to hear anything the control plane says');
+  assert.deepStrictEqual(dev._loadCredentials(), { deviceId: 'dev-1', deviceSecret: 'x'.repeat(40) });
+});
+
+await okAsync('a 401 re-registers ONCE and then reports, rather than bouncing', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hostyllo-creds2-'));
+  config.load({ userDataDir: dir, overrides: { apiBase: 'https://example.invalid' } });
+  const dev = registeredDevice(dir);
+
+  // A server that hands out credentials and then refuses them — the shape a
+  // retry loop would spin on.
+  let tokenCalls = 0, registerCalls = 0;
+  api._setFetch(async (url) => {
+    if (String(url).indexOf('/devices/register') !== -1) {
+      registerCalls++;
+      return fakeResponse(201, { success: true, data: { deviceId: 'dev-2', deviceSecret: 'y'.repeat(40) } });
+    }
+    tokenCalls++;
+    return fakeResponse(401, { success: false, code: 'DEVICE_UNAUTHORIZED' });
+  });
+
+  const out = await dev.sync({ force: true });
+  api._setFetch(null);
+
+  assert.strictEqual(out.ok, false);
+  assert.strictEqual(registerCalls, 1, 're-registered ' + registerCalls + ' times');
+  assert.strictEqual(tokenCalls, 2, 'asked for a token ' + tokenCalls + ' times');
+  // The new credentials are kept: they are the freshest thing this machine has.
+  assert.strictEqual(dev._loadCredentials().deviceId, 'dev-2');
+});
+
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\nconnectivity.js — start() is safe while a probe is in flight');
 // ══════════════════════════════════════════════════════════════════════════
@@ -1988,6 +2086,285 @@ await okAsync('start() after an unconfigured boot still starts, once an address 
   assert.ok(probes >= 1, 'the machine never polled after adopting an address');
   api._setFetch(null);
 });
+
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\nowner controls (2026-09-24) — levels, restrictions, the live channel');
+// ══════════════════════════════════════════════════════════════════════════
+
+{
+  const enf2 = require('../services/enforcement');
+  const entSvc = require('../services/entitlement');
+  const { LicenceStream } = require('../services/stream');
+  const { DeviceService } = require('../services/device');
+  const DAY2 = 86400000;
+  const lic = () => ({ valid: true, expiry: new Date(Date.now() + 90 * DAY2).toISOString() });
+  const fresh = (over) => Object.assign({ state: 'ACTIVE', policy: enf2.DEFAULT_POLICY,
+    expiresAt: lic().expiry }, over || {});
+
+  ok('read-only from the portal stops saves and nothing else', () => {
+    const d = enf2.resolve({ licence: lic(), entitlement: fresh({
+      restrictions: { dataEntry: false, printing: true, exporting: true }, reason: 'Dues', level: 'readonly' }) });
+    assert.strictEqual(d.blocked, false);
+    assert.strictEqual(d.readOnly, true, 'the write gate must see it');
+    assert.strictEqual(enf2.writeBlocked(d, 'students'), true);
+    assert.strictEqual(enf2.writeBlocked(d, 'activitylog'), false, 'the audit trail stays writable');
+    assert.strictEqual(enf2.outputBlocked(d, 'printing'), false);
+    assert.strictEqual(enf2.outputBlocked(d, 'exporting'), false);
+    assert.match(enf2.message(d, { supportContact: 'support' }).text, /data entry.*Reason: Dues/);
+  });
+
+  ok('restricted: no saves, no printing, no exporting — and it says why', () => {
+    const d = enf2.resolve({ licence: lic(), entitlement: fresh({
+      restrictions: { dataEntry: false, printing: false, exporting: false }, reason: 'Audit' }) });
+    assert.strictEqual(enf2.outputBlocked(d, 'printing'), true);
+    assert.strictEqual(enf2.outputBlocked(d, 'exporting'), true);
+    assert.match(enf2.outputRefusal(d, 'exporting'), /Exporting is switched off.*Audit/);
+  });
+
+  ok('one switch alone: exporting off, saving and printing untouched', () => {
+    const d = enf2.resolve({ licence: lic(), entitlement: fresh({ restrictions: { exporting: false } }) });
+    assert.strictEqual(d.readOnly, false);
+    assert.strictEqual(enf2.outputBlocked(d, 'printing'), false);
+    assert.strictEqual(enf2.outputBlocked(d, 'exporting'), true);
+  });
+
+  ok('no entitlement means no opinion: everything allowed, as in the field today', () => {
+    const d = enf2.resolve({ licence: lic(), entitlement: null });
+    assert.deepStrictEqual(d.restrictions, { dataEntry: true, printing: true, exporting: true });
+    assert.strictEqual(enf2.outputBlocked(d, 'printing'), false);
+  });
+
+  ok('an EXPIRED licence still prints and exports (D-3) — only saving stops', () => {
+    const d = enf2.resolve({ licence: { valid: true, expiry: new Date(Date.now() - 60 * DAY2).toISOString() } });
+    assert.strictEqual(d.state, 'EXPIRED');
+    assert.strictEqual(d.readOnly, true);
+    assert.strictEqual(enf2.outputBlocked(d, 'printing'), false);
+    assert.strictEqual(enf2.outputBlocked(d, 'exporting'), false);
+  });
+
+  ok('suspended and revoked lock everything and name the owner’s reason and end date', () => {
+    const until = new Date(Date.now() + 7 * DAY2).toISOString();
+    const s1 = enf2.resolve({ licence: lic(), entitlement: fresh({ state: 'SUSPENDED', reason: 'Seven-day ban', until }) });
+    assert.strictEqual(s1.blocked, true);
+    assert.match(enf2.message(s1, {}).text, /suspended until .*locked.*Seven-day ban/);
+    const r1 = enf2.resolve({ licence: lic(), entitlement: fresh({ state: 'REVOKED',
+      reason: 'This computer has been removed from the licence.' }) });
+    assert.strictEqual(r1.blocked, true);
+    assert.match(enf2.message(r1, {}).text, /^This computer has been removed/);
+  });
+
+  // ── Claims: the new fields are optional, but never malformed ──────────────
+  const kp = crypto.generateKeyPairSync('ed25519');
+  const KEYS = { t: kp.publicKey.export({ type: 'spki', format: 'pem' }) };
+  const sign = (claims) => {
+    const h = Buffer.from(JSON.stringify({ alg: 'EdDSA', typ: 'JWT', kid: 't' })).toString('base64url');
+    const p = Buffer.from(JSON.stringify(claims)).toString('base64url');
+    const sig = crypto.sign(null, Buffer.from(h + '.' + p), kp.privateKey).toString('base64url');
+    return h + '.' + p + '.' + sig;
+  };
+  const baseClaims = () => ({ ver: 1, deviceId: 'd', licenseId: 'l', machineId: 'm', status: 'ACTIVE',
+    expiresAt: new Date(Date.now() + 90 * DAY2).toISOString(), issuedAt: new Date().toISOString(),
+    notAfter: new Date(Date.now() + 14 * DAY2).toISOString(),
+    policy: { graceDays: 14, readOnlyOnExpiry: true }, features: {} });
+
+  ok('an entitlement from an older control plane (no new fields) still verifies', () => {
+    assert.ok(entSvc.verifyEntitlement(sign(baseClaims()), { keys: KEYS }).valid);
+  });
+
+  ok('the new fields verify when well-formed and are refused when not', () => {
+    const good = Object.assign(baseClaims(), { level: 'readonly', reason: 'Dues', until: null, revision: 4,
+      restrictions: { dataEntry: false, printing: true, exporting: true } });
+    assert.ok(entSvc.verifyEntitlement(sign(good), { keys: KEYS }).valid);
+    for (const bad of [{ restrictions: { printing: 'no' } }, { restrictions: [] }, { level: 'banned' },
+                       { until: 'soon' }, { revision: 'x' }, { reason: 7 }]) {
+      const r = entSvc.verifyEntitlement(sign(Object.assign(baseClaims(), bad)), { keys: KEYS });
+      assert.strictEqual(r.valid, false, 'accepted ' + JSON.stringify(bad));
+    }
+  });
+
+  // ── The live channel ──────────────────────────────────────────────────────
+  function sseResponse(chunks, status) {
+    const enc = new TextEncoder();
+    let i = 0;
+    return {
+      status: status || 200,
+      body: { getReader: () => ({ read: async () => {
+        await new Promise(r => setTimeout(r, 5));
+        return i < chunks.length ? { value: enc.encode(chunks[i++]), done: false } : { value: undefined, done: true };
+      } }) }
+    };
+  }
+
+  await okAsync('a "changed" event makes the app fetch its entitlement — once per burst', async () => {
+    config.load({ userDataDir: TMP, overrides: { apiBase: 'https://example.invalid/v1' } });
+    let syncs = 0;
+    const device = { _ensureToken: async () => 'tok', sync: async () => { syncs++; return { ok: true }; } };
+    const entitlement = { getStatus: () => ({ revision: 5 }) };
+    let calls = 0;
+    const s = new LicenceStream({ device, entitlement, cfg: Object.assign({}, config.get(), { streamRetryMinMs: 5000 }),
+      transport: async (url, opts) => {
+        calls++;
+        assert.match(url, /\/v1\/devices\/stream$/);
+        assert.strictEqual(opts.headers.Authorization, 'Bearer tok');
+        return sseResponse(['event: hello\ndata: {"revision":5}\n\n',
+          ': ping\n\n', 'event: changed\ndata: {"scope":"licence","revision":6}\n\n',
+          'event: changed\ndata: {"scope":"licence","revision":7}\n\n']);
+      } });
+    s.start();
+    await new Promise(r => setTimeout(r, 400));
+    s.stop();
+    assert.strictEqual(calls, 1);
+    assert.strictEqual(syncs, 1, 'two changes in a burst should be one sync; hello at the same revision none');
+  });
+
+  await okAsync('a stream that opens at a different revision syncs at once', async () => {
+    let syncs = 0;
+    const s = new LicenceStream({
+      device: { _ensureToken: async () => 'tok', sync: async () => { syncs++; } },
+      entitlement: { getStatus: () => ({ revision: 3 }) },
+      cfg: Object.assign({}, config.get(), { streamRetryMinMs: 5000 }),
+      transport: async () => sseResponse(['event: hello\ndata: {"revision":9}\n\n'])
+    });
+    s.start();
+    await new Promise(r => setTimeout(r, 350));
+    s.stop();
+    assert.strictEqual(syncs, 1, 'a change made while offline was never picked up');
+  });
+
+  await okAsync('a 401 drops the token and backs off; no internet never throws', async () => {
+    const device = { _token: { value: 'old' }, _ensureToken: async () => 'tok', sync: async () => {} };
+    const s = new LicenceStream({ device, cfg: Object.assign({}, config.get(), { streamRetryMinMs: 5000 }),
+      transport: async () => sseResponse([], 401) });
+    s.start();
+    await new Promise(r => setTimeout(r, 50));
+    s.stop();
+    assert.strictEqual(device._token, null);
+    assert.strictEqual(s.getStatus().lastError, 'E_UNAUTHORIZED');
+    const s2 = new LicenceStream({ device, cfg: Object.assign({}, config.get(), { streamRetryMinMs: 5000 }),
+      transport: async () => { throw new TypeError('fetch failed'); } });
+    s2.start();
+    await new Promise(r => setTimeout(r, 30));
+    s2.stop();
+    assert.strictEqual(s2.getStatus().connected, false);
+  });
+
+  await okAsync('a rejected secret re-registers BEFORE the old identity is thrown away', async () => {
+    const dir = fs.mkdtempSync(path.join(TMP, 'dev-'));
+    const machine = 'c'.repeat(64);
+    const dev = new DeviceService({ userDataDir: dir, cfg: config.get(),
+      machineIdProvider: () => machine, licenceProvider: () => ({ key: 'HOSTEL-AAAA-BBBB-CCCC-DDDD', valid: true }),
+      entitlement: { getStatus: () => ({}), refresh: async () => ({ ok: true, status: {} }) } });
+    dev._saveCredentials({ deviceId: '11111111-1111-1111-1111-111111111111', deviceSecret: 'old-secret-old-secret' });
+    api._setFetch(async (url) => /\/devices\/token$/.test(url)
+      ? fakeResponse(401, { success: false, code: 'DEVICE_UNAUTHORIZED' })
+      : fakeResponse(503, { success: false, code: 'X' }));
+    const tok = await dev._ensureToken();
+    api._setFetch(null);
+    assert.strictEqual(tok, null);
+    dev._creds = null;
+    const kept = dev._loadCredentials();
+    assert.ok(kept && kept.deviceSecret === 'old-secret-old-secret',
+      'a failed re-registration destroyed the only identity this machine had');
+  });
+
+  await okAsync('a v5 key is registered before activation, and a taken seat is reported', async () => {
+    const dir = fs.mkdtempSync(path.join(TMP, 'dev5-'));
+    const dev = new DeviceService({ userDataDir: dir, cfg: config.get(),
+      machineIdProvider: () => 'd'.repeat(64), licenceProvider: () => null, entitlement: null });
+    api._setFetch(async () => fakeResponse(409, { success: false, code: 'DEVICE_LIMIT_REACHED', message: 'taken' }));
+    const r = await dev.registerKey('HOSTEL-AAAA-BBBB-CCCC-DDDD');
+    assert.strictEqual(r.ok, false);
+    assert.strictEqual(r.status, 409);
+    assert.strictEqual(r.code, 'DEVICE_LIMIT_REACHED');
+    api._setFetch(async () => fakeResponse(201, { success: true, data: {
+      deviceId: '22222222-2222-2222-2222-222222222222', deviceSecret: 's'.repeat(43),
+      effectiveStatus: 'ACTIVE', keyVersion: 5 } }));
+    const ok5 = await dev.registerKey('HOSTEL-AAAA-BBBB-CCCC-DDDD');
+    api._setFetch(null);
+    assert.strictEqual(ok5.ok, true);
+    assert.strictEqual(ok5.effectiveStatus, 'ACTIVE');
+    assert.ok(dev._loadCredentials(), 'the credentials from activation were not kept');
+  });
+
+  // ── The loops cannot become the load (owner, 2026-09-24) ─────────────────
+  config.load({ userDataDir: TMP, overrides: { apiBase: 'https://example.invalid/v1' } });
+
+  await okAsync('a fleet-wide nudge waits the delay the server hands out', async () => {
+    let syncs = 0;
+    const s = new LicenceStream({
+      device: { _ensureToken: async () => 'tok', sync: async () => { syncs++; } },
+      entitlement: { getStatus: () => ({ revision: 1 }) },
+      cfg: Object.assign({}, config.get(), { streamRetryMinMs: 5000 }),
+      transport: async () => sseResponse(['event: hello\ndata: {"revision":1}\n\n',
+        'event: changed\ndata: {"scope":"fleet","delayMs":600}\n\n'])
+    });
+    s.start();
+    await new Promise(r => setTimeout(r, 400));
+    assert.strictEqual(syncs, 0, 'synced before its spread delay');
+    await new Promise(r => setTimeout(r, 450));
+    s.stop();
+    assert.strictEqual(syncs, 1);
+  });
+
+  await okAsync('a chatty stream still gives at most one sync per 5 seconds', async () => {
+    let syncs = 0;
+    const burst = [];
+    for (let i = 0; i < 30; i++) burst.push('event: changed\ndata: {"scope":"licence","delayMs":0}\n\n');
+    const s = new LicenceStream({
+      device: { _ensureToken: async () => 'tok', sync: async () => { syncs++; } },
+      entitlement: { getStatus: () => ({ revision: 1 }) },
+      cfg: Object.assign({}, config.get(), { streamRetryMinMs: 5000 }),
+      transport: async () => sseResponse(['event: hello\ndata: {"revision":1}\n\n'].concat(burst))
+    });
+    s.start();
+    await new Promise(r => setTimeout(r, 900));
+    s.stop();
+    assert.strictEqual(syncs, 1, syncs + ' syncs from one burst');
+  });
+
+  await okAsync('a 429 is obeyed to the second, not retried at 2s', async () => {
+    let calls = 0;
+    const s = new LicenceStream({
+      device: { _ensureToken: async () => 'tok', sync: async () => {} },
+      cfg: Object.assign({}, config.get(), { streamRetryMinMs: 10 }),
+      transport: async () => { calls++; return { status: 429, headers: { get: (k) => k === 'retry-after' ? '120' : null }, body: null }; }
+    });
+    s.start();
+    await new Promise(r => setTimeout(r, 300));
+    s.stop();
+    assert.strictEqual(calls, 1, 'retried a 429 after ' + calls + ' calls in 300ms');
+  });
+
+  await okAsync('no token means backing off by the half-minute, not the second', async () => {
+    let tries = 0;
+    const s = new LicenceStream({
+      device: { _ensureToken: async () => { tries++; return null; }, sync: async () => {} },
+      cfg: Object.assign({}, config.get(), { streamRetryMinMs: 10 }),
+      transport: async () => sseResponse([])
+    });
+    s.start();
+    await new Promise(r => setTimeout(r, 300));
+    s.stop();
+    assert.strictEqual(tries, 1);
+    assert.strictEqual(s._noTokenMs, 60000, 'the no-token back-off did not grow');
+  });
+
+  await okAsync('a server-initiated reconnect waits the jitter it names', async () => {
+    let calls = 0;
+    const s = new LicenceStream({
+      device: { _ensureToken: async () => 'tok', sync: async () => {} },
+      entitlement: { getStatus: () => ({ revision: 1 }) },
+      cfg: Object.assign({}, config.get(), { streamRetryMinMs: 10 }),
+      transport: async () => { calls++; return sseResponse(['event: hello\ndata: {"revision":1}\n\n', 'event: reconnect\ndata: {"retryMs":5000}\n\n']); }
+    });
+    s.start();
+    await new Promise(r => setTimeout(r, 400));
+    s.stop();
+    assert.strictEqual(calls, 1, 'reconnected before the server-named delay');
+  });
+
+  config.load({ userDataDir: TMP, overrides: { apiBase: '' } });
+}
 
 // ── Summary ────────────────────────────────────────────────────────────────
 logger.close();

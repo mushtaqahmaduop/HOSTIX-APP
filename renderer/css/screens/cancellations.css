@@ -328,7 +328,14 @@
     color:inherit; font-variant-numeric:tabular-nums;
 }
 
-.canc-reason { max-width:190px; white-space:normal; }
+/* ONE LINE, THE REST ON HOVER (owner review #9, same treatment as former
+   students). A cancellation reason is free text with no length limit, and
+   `white-space: normal` let a long one wrap and set the height of every other
+   cell in its row. The full reason is the title. */
+.canc-reason { max-width:190px; white-space:nowrap; }
+.canc-reason__t {
+    display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
 .canc-dash   { color:var(--text-tertiary); }
 
 /* ── Row actions ── */

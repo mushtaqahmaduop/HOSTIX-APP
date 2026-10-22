@@ -69,6 +69,10 @@ document.addEventListener('keydown', function (e) {
    @param {string} o.excel  the call that writes the workbook
    @param {string} o.pdf    the call that writes the document
    @param {string} [o.cls]  the screen's own button class
+   @param {boolean} [o.up]  open the menu upward — for a control sitting at the
+                           bottom of its container, such as a modal footer,
+                           where a menu dropping DOWN is clipped by the
+                           dialog's own `overflow:hidden`
    @param {string} [o.label]
 */
 function tbExport(o) {
@@ -79,12 +83,12 @@ function tbExport(o) {
             onclick="tbToggleMenu('${mid}',event)" title="Export the current list">
       ${icon('download','xs')} ${escHtml(o.label || 'Export')} ${icon('chevronDown','xs')}
     </button>
-    <div class="tb-menu" id="${mid}" role="menu">
-      <button class="tb-menu__i" role="menuitem" onclick="tbCloseMenus();${o.excel}">
+    <div class="tb-menu${o.up ? ' tb-menu--up' : ''}" id="${mid}" role="menu">
+      <button class="tb-menu__i" role="menuitem" data-output="exporting" onclick="tbCloseMenus();${o.excel}">
         ${icon('fileSpreadsheet','xs')}
         <span><b>Excel workbook</b><i>.xlsx — figures stay numbers</i></span>
       </button>
-      <button class="tb-menu__i" role="menuitem" onclick="tbCloseMenus();${o.pdf}">
+      <button class="tb-menu__i" role="menuitem" data-output="printing" onclick="tbCloseMenus();${o.pdf}">
         ${icon('print','xs')}
         <span><b>PDF document</b><i>A4, ready to print</i></span>
       </button>

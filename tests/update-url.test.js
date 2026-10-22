@@ -47,7 +47,7 @@ function load(arch) {
   return fn(shim, console);
 }
 
-const BASE = 'https://github.com/mushtaqahmaduop/HOSTIX-APP/releases';
+const BASE = 'https://github.com/mushtaqahmaduop/hostyllo-releases/releases';
 
 // The real v5.0.0 feed, as electron-updater parses latest.yml.
 const FEED = {

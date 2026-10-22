@@ -416,7 +416,7 @@ function bkStorageTab() {
         <div class="hi-facts">
           ${[['Students', (DB.students || []).length], ['Rooms', (DB.rooms || []).length],
              ['Payments', (DB.payments || []).length], ['Expenses', (DB.expenses || []).length],
-             ['Complaints', (DB.complaints || []).length + (DB.maintenance || []).length],
+             ['Complaints', (DB.issues || []).length],
              ['Archived years', (DB.archive || []).length]].map(([k, v]) => `
             <div class="hi-fact"><span class="hi-fact__i">${icon('list', 'xs')}</span>
               <span class="hi-fact__l">${escHtml(k)}</span>
@@ -466,8 +466,8 @@ function bkPreview() {
     ['Payments', (DB.payments || []).length],
     ['Expenses', (DB.expenses || []).length],
     ['Cancellations', (DB.cancellations || []).length],
-    ['Complaints', (DB.complaints || []).length],
-    ['Maintenance', (DB.maintenance || []).length],
+    ['Complaints', (DB.issues || []).filter(i => i.kind !== 'maintenance').length],
+    ['Maintenance', (DB.issues || []).filter(i => i.kind === 'maintenance').length],
     ['Activity log', (DB.activityLog || []).length],
     ['Archived years', (DB.archive || []).length],
   ];
@@ -534,7 +534,3 @@ function bkPasteRestore() {
 
 /* The page the old modal used to be. Kept because the command palette, the
    File menu and the backup-due toast all still call it by this name. */
-function showBackupRestorePage() {
-  backupTab = 'main';
-  navigate('backup');
-}

@@ -23,6 +23,7 @@
 'use strict';
 
 const { test, expect, _electron: electron } = require('@playwright/test');
+const { settleFreshInstall } = require('./_fresh-install');
 const path = require('path');
 const { resetProfile } = require('./_profile');
 
@@ -46,12 +47,13 @@ async function launch() {
   await win.waitForFunction(
     () => typeof WARDENS !== 'undefined' && WARDENS.warden1 && WARDENS.warden1.pw,
     null, { timeout: 60000 });
-  await win.fill('#login-user', 'warden1');
+  await win.selectOption('#login-user', 'warden1');
   await win.fill('#login-input', 'admin123');
   await win.click('#login-btn');
   await win.waitForFunction(
     () => { const s = document.getElementById('login-screen'); return s && s.style.display === 'none'; },
     null, { timeout: 60000 });
+  await settleFreshInstall(win);   // setup done + the 42 rooms these specs expect
 
   // One payment taken by cheque and one expense filed under Gas, so retiring
   // and renaming have real records to answer for.
@@ -310,6 +312,81 @@ test('every Add button opens a form — the click, not the function', async () =
     expect(opened, label).toMatchObject({ hasInput: true });
     expect(String(opened.title).length, label + ' has a heading').toBeGreaterThan(3);
   }
+
+  await app.close();
+});
+
+test('expense categories reorder by dragging, and the report does not repaint', async () => {
+  test.setTimeout(240000);
+  const { app, win } = await launch();
+
+  await win.evaluate(async () => {
+    DB.settings.expenseCategories = ['Electricity', 'Gas', 'Food / Mess', 'Internet'];
+    await saveDB();
+  });
+  await openConfig(win);
+  await win.waitForSelector('#expense-cats-list tr', { timeout: 8000 });
+
+  /* Owner, 2026-09-21: "the expenses categries should be dragable not fixed".
+     The array order is the order every expense form lists categories in, so
+     this is a real edit — the same thing the room-type table already does. */
+  const shape = await win.evaluate(() => {
+    const tr = document.querySelector('#expense-cats-list tr');
+    return {
+      grip: !!tr.querySelector('.set-grip__h'),
+      wired: !!tr.getAttribute('ondragstart') && !!tr.getAttribute('ondrop'),
+      // Not draggable until the pointer is on the grip, or text inside the row
+      // cannot be selected.
+      draggable: tr.draggable,
+    };
+  });
+  expect(shape.grip, 'no grip to drag the row by').toBe(true);
+  expect(shape.wired, 'the row carries no drag handlers').toBe(true);
+  expect(shape.draggable, 'the row is permanently draggable, which kills text selection').toBe(false);
+
+  // The colour the report gives a category BEFORE the move.
+  const before = await win.evaluate(() => ({
+    order: DB.settings.expenseCategories.slice(),
+    hues: DB.settings.expenseCategories.map(c => expenseCatHue(c)),
+  }));
+
+  // Drag row 4 (Internet) onto row 1. The handlers are what the row calls.
+  await win.evaluate(async () => {
+    const rows = document.querySelectorAll('#expense-cats-list tr');
+    const fake = (el) => ({ preventDefault() {}, currentTarget: el, dataTransfer: null });
+    ecDragStart(fake(rows[3]), 3);
+    await ecDrop(fake(rows[0]), 0);
+  });
+  await win.waitForTimeout(400);
+
+  const after = await win.evaluate(() => ({
+    order: DB.settings.expenseCategories.slice(),
+    hues: DB.settings.expenseCategories.map(c => expenseCatHue(c)),
+    rows: [...document.querySelectorAll('#expense-cats-list .cfg-name')].map(e => e.textContent.trim()),
+  }));
+
+  expect(after.order, 'the drag did not move the category')
+    .toEqual(['Internet', 'Electricity', 'Gas', 'Food / Mess']);
+  expect(after.rows, 'the table did not redraw in the new order').toEqual(after.order);
+
+  /* THE POINT OF expenseCatHue(). The Expense Breakdown used to colour each bar
+     by the category's POSITION in this array, so this drag would have
+     recoloured every bar on the Reports page. Each category keeps the colour it
+     had — matched by NAME, because the positions are exactly what just moved. */
+  for (const cat of before.order) {
+    const was = before.hues[before.order.indexOf(cat)];
+    const now = after.hues[after.order.indexOf(cat)];
+    expect(now, cat + ' changed colour because the list was reordered').toBe(was);
+  }
+
+  // It survives a reload: the order is stored, not a view state.
+  await win.evaluate(() => navigate('dashboard'));
+  await win.waitForTimeout(250);
+  await openConfig(win);
+  await win.waitForSelector('#expense-cats-list tr', { timeout: 8000 });
+  expect(await win.evaluate(() =>
+    [...document.querySelectorAll('#expense-cats-list .cfg-name')].map(e => e.textContent.trim())))
+    .toEqual(['Internet', 'Electricity', 'Gas', 'Food / Mess']);
 
   await app.close();
 });

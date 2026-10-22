@@ -15,6 +15,7 @@
 'use strict';
 
 const { test, expect, _electron: electron } = require('@playwright/test');
+const { settleFreshInstall } = require('./_fresh-install');
 const fs = require('fs');
 const path = require('path');
 const { resetProfile } = require('./_profile');
@@ -36,12 +37,13 @@ async function login(win) {
   await win.waitForFunction(
     () => typeof WARDENS !== 'undefined' && WARDENS.warden1 && WARDENS.warden1.pw,
     null, { timeout: 30000 });
-  await win.fill('#login-user', 'warden1');
+  await win.selectOption('#login-user', 'warden1');
   await win.fill('#login-input', 'admin123');
   await win.click('#login-btn');
   await win.waitForFunction(
     () => { const s = document.getElementById('login-screen'); return s && s.style.display === 'none'; },
     null, { timeout: 30000 });
+  await settleFreshInstall(win);   // setup done + the 42 rooms these specs expect
   await win.waitForFunction(
     () => typeof _ledgerReady !== 'undefined' && _ledgerReady === true, null, { timeout: 30000 });
 }
@@ -183,7 +185,13 @@ test('admission form: rules versions, the original once, reprints watermarked, p
 
     // ── The Students filter ────────────────────────────────────────────────
     await win.evaluate(() => { closeStudentPanel(); navigate('students'); });
-    await win.waitForSelector('#stu-und-filter', { timeout: 15000 });
+    /* The filter moved off the primary bar into Advanced filters (owner review
+       #8, 2026-09-18), so the page is ready when that button is; the control
+       itself is asserted to be in the popover, and the filtering below is
+       unchanged. */
+    await win.waitForSelector('#stu-pop-btn', { timeout: 15000 });
+    expect(await win.evaluate(() => !!document.querySelector('#stu-pop .stu-pop__und')),
+      'the undertaking filter lives in Advanced filters').toBe(true);
     const shown = await win.evaluate(() => {
       const names = () => [...document.querySelectorAll('#content')].map(n => n.textContent).join(' ');
       studentFilter.month = ''; studentFilter.und = 'noscan'; renderPage('students');

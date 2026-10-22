@@ -52,12 +52,19 @@ function launchOpts() {
 async function login(win) {
   await win.waitForSelector('#login-input', { state: 'visible', timeout: 30000 });
   await win.waitForTimeout(1500);
-  await win.fill('#login-user', 'warden1');
+  await win.selectOption('#login-user', 'warden1');
   await win.fill('#login-input', 'admin123');
   await win.press('#login-input', 'Enter');
   await win.waitForFunction(() => typeof CUR_USER !== 'undefined' && !!CUR_USER, null,
     { timeout: 30000 });
   await win.waitForTimeout(900);
+  // Owner Funds OFF, whatever the live control plane says for the test
+  // licence's hostel — it hides the Fund Transfer category this spec is about.
+  // See tests/_fresh-install.js.
+  await win.evaluate(() => {
+    localStorage.removeItem('hx_feat_on_ownerFunds');
+    if (_enforcement && _enforcement.features) _enforcement.features.ownerFunds = false;
+  });
 }
 
 test('fund transfer hidden, expenses grouped by category, no month mixing', async () => {
@@ -108,7 +115,10 @@ test('fund transfer hidden, expenses grouped by category, no month mixing', asyn
       labels,
       hasTransferCard: labels.some(l => /Funds ?Transfer/i.test(l)),
       // The pill must count the transfer too, since the value beside it does.
-      expPill: expCard?.querySelector('.dash-pill')?.textContent.trim(),
+      // `.ui-chip`, not `.dash-pill`: the KPI row moved onto the shared chip
+      // component in spec stage 5 (2026-09-17). What is asserted here is the
+      // COUNT, which is the same either way.
+      expPill: expCard?.querySelector('.ui-chip')?.textContent.trim(),
       expValue: expCard?.querySelector('.dash-kpi__value')?.textContent.trim(),
       // The standalone feature is gone — no way left to create a transfer
       // outside Add Expense → Fund Transfer.
@@ -174,12 +184,15 @@ test('fund transfer hidden, expenses grouped by category, no month mixing', asyn
   expect(expPage.cats.join('|')).toMatch(/Fund Transfer/);
   // Headline total must equal the rows, transfer included, and not double it.
   expect(expPage.total).toBe('16700');
-  // ...and that same figure as the warden sees it: exact below a million, two
-  // decimals (owner, 2026-09-15) — it was the compact "Rs. 16.7K".
-  expect(expPage.totalShown).toBe('Rs. 16,700.00');
+  // ...and that same figure as the warden sees it: a KPI card, so whole rupees
+  // (owner, 2026-09-29 — it was "Rs. 16,700.00" from 2026-09-15, and before
+  // that the compact "Rs. 16.7K").
+  expect(expPage.totalShown).toBe('Rs. 16,700');
 
   // ── 4. Reports: no Transfers stat, expenses grouped by category ──────────
-  await win.evaluate(() => { reportPeriod = 'month'; reportDetail = null; navigate('reports'); });
+  // `reportPeriod = 'month'` stood here. A month is the only window Reports
+  // has since 2026-09-22, so there is nothing to set.
+  await win.evaluate(() => { reportDetail = null; navigate('reports'); });
   await win.waitForTimeout(1000);
   const rptStats = await win.evaluate(() => ({
     renderError: document.body.innerText.includes('Render Error'),

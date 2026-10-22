@@ -35,7 +35,7 @@ async function login(win) {
   await win.waitForFunction(
     () => typeof WARDENS !== 'undefined' && WARDENS.warden1 && WARDENS.warden1.pw,
     null, { timeout: 30000 });
-  await win.fill('#login-user', 'warden1');
+  await win.selectOption('#login-user', 'warden1');
   await win.fill('#login-input', 'admin123');
   await win.click('#login-btn');
   await win.waitForFunction(
@@ -112,14 +112,34 @@ test('the three fee states are still computed, and the column really is gone', a
     [...document.querySelectorAll('.stu-table thead th')]
       .map(t => t.innerText.replace(/[⇅▲▼]/g, '').trim().toUpperCase()));
 
-  // Every column the spec's §5-§14 require is still present…
-  for (const col of ['ID', 'STUDENT', 'ROOM', 'CONTACT / EMERGENCY', 'CNIC',
-                     'COURSE', 'ADDRESS', 'CHARGES / MONTH', 'STATUS']) {
+  /* Every column the spec's §5-§14 require is still present…
+
+     TWO WERE RENAMED ON 2026-09-22, not removed: "Contact / emergency" is
+     Contacts (the cell's two glyphs already say which number is which, and the
+     heading was the one that had to wrap), and "Charges / month" is Monthly
+     Charges. Both are asserted by their NEW names here rather than loosened to
+     a substring — a heading is what the warden reads, and a test that accepts
+     either name is a test that would not notice the next silent change. */
+  for (const col of ['ID', 'STUDENT', 'ROOM', 'CONTACTS',
+                     'COURSE', 'ADDRESS', 'MONTHLY CHARGES', 'ADMITTED', 'STATUS']) {
     expect(headers, 'missing column: ' + col).toContain(col);
   }
+  /* ADMITTED SITS BESIDE STATUS (owner, 2026-09-22). Asserted as an ORDER, not
+     just as presence: the colgroup and the body cells have to move with the
+     heading, and a `<col>` left behind in the old place is exactly the mistake
+     that silently hands one column's width to another. */
+  expect(headers.indexOf('ADMITTED'), 'Admitted must sit directly before Status')
+    .toBe(headers.indexOf('STATUS') - 1);
+  expect(await win.evaluate(() => document.querySelectorAll('.stu-table col').length),
+    'one <col> per column, or the widths drift').toBe(headers.length);
   // Nationality left the register on 2026-09-15 (owner: "so that the CNIC,
   // course and address should relax a little"); it stays on the form and the PDF.
   expect(headers, 'Nationality was removed on 2026-09-15').not.toContain('NATIONALITY');
+  // CNIC left on 2026-09-21 (owner: "remove the cnic entire column because if a
+  // warden needs a student full detail it is already in the student profile").
+  // Still on the profile, the PDF and the Excel export — only the register
+  // column went, and its 10.6% went back to Student, Contact, Course, Address.
+  expect(headers, 'CNIC was removed on 2026-09-21').not.toContain('CNIC');
   // …and Fee Status is not one of them any more. Asserted, not merely dropped:
   // a column removed by deleting one <th> and leaving its <td> behind is a
   // table whose header and body disagree from that row on.
@@ -255,6 +275,109 @@ test('a student with no payment records at all does not read as unpaid', async (
   expect(f.status).toBe('Paid');
   expect(f.records).toBe(0);
   expect(await win.evaluate(() => stuFeeTitle(_stuFee('004')))).toMatch(/No payment records/i);
+
+  await app.close();
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// THE REGISTER'S OWN CELLS — owner requests of 2026-09-23.
+//
+// Five small rules, each of which reads fine in a screenshot and fails
+// silently in data:
+//
+//   · the room label carries no hash, so a room numbered "A 214" fits;
+//   · an address prints with a capital first letter, WITHOUT rewriting what
+//     the warden typed into the record;
+//   · the admission date carries its YEAR, or a 2025 intake and a 2026 one are
+//     the same string;
+//   · a clipped value opens the app's own hover card, not the OS tooltip that
+//     cannot follow the theme;
+//   · the Active card names both charge plans.
+// ════════════════════════════════════════════════════════════════════════════
+test('the register cells follow the 2026-09-23 rules', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+  await win.waitForTimeout(400);
+
+  const out = await win.evaluate(async () => {
+    DB.settings.serviceModel = 'rent_mess_optional';
+    DB.settings.roomTypes = [{ id: 'rt', name: '3-Seater', capacity: 3,
+                               defaultRent: 8000, defaultMess: 6500, color: '#2ec98a' }];
+    // A LETTERED, LONG room number: the case the hash was costing room for.
+    DB.rooms = [{ id: 'rmA', number: 'A 214', floor: 'Ground', typeId: 'rt' }];
+    DB.students = [
+      { id: '001', name: 'Salman', fatherName: 'Dahrmand', roomId: 'rmA', status: 'Active',
+        joinDate: '2025-07-04', phone: '0314-5698125', address: 'charsadda',
+        occupation: 'MDCAT Preparation', messOptIn: false, mess: 6500,
+        admittedBy: 'warden1', admittedByName: 'Mushtaq Ahmad' },
+      { id: '002', name: 'Hamid Din', fatherName: 'Muhammad Din', roomId: 'rmA', status: 'Active',
+        joinDate: '2026-09-04', phone: '0326-6489880', address: 'D.I. Khan',
+        occupation: 'ADCA', messOptIn: true, mess: 6500 },
+    ];
+    DB.payments = []; await saveDB();
+    navigate('students');
+    await new Promise(r => setTimeout(r, 900));
+
+    const rows = [...document.querySelectorAll('.stu-table tbody tr')];
+    const at = (i, s) => { const e = rows[i].querySelector(s); return e ? e.textContent.trim() : null; };
+    /* CASE-INSENSITIVE, because the KPI labels are set in caps via
+       `text-transform` (owner, 2026-09-23) — innerText reports the RENDERED
+       text, so a case-sensitive match here breaks on a styling change that did
+       not touch the markup. The same trap `.dash-kpi__label` documents. */
+    const active = [...document.querySelectorAll('.stu-stat')]
+      .find(c => /^active/i.test(c.innerText.trim()));
+    return {
+      roomLabel: at(0, '.ui-room__n'),
+      roomTip:   rows[0].querySelector('.ui-room__n').getAttribute('data-tip'),
+      address:   at(0, '.stu-addr__t'),
+      stored:    DB.students[0].address,
+      admitted:  [at(0, '.stu-adm'), at(1, '.stu-adm')],
+      admittedBy: [at(0, '.stu-adm__by'), at(1, '.stu-adm__by')],
+      charge:    [at(0, '.stu-charge'), at(0, '.stu-charge__plan')],
+      planHints: [...active.querySelectorAll('.stu-plan-hint')].map(e => e.textContent.trim()),
+      kpiCards:  document.querySelectorAll('.stu-stat').length,
+      /* Every clipped VALUE goes through the app's card. Controls keep their
+         native title — that is what a title is for on a button, and the OS
+         tooltip is the right surface for "Open student details". So this looks
+         only at non-interactive elements. */
+      tips:      document.querySelectorAll('.stu-table tbody [data-tip]').length,
+      bodyTitles: [...document.querySelectorAll('.stu-table tbody [title]')]
+                    .filter(e => !e.closest('button') && !e.matches('button, input, a, select'))
+                    .map(e => (e.className || e.tagName) + '="' + e.getAttribute('title') + '"'),
+    };
+  });
+
+  // The hash is gone from the LABEL and kept in the hover, where it reads as a
+  // sentence rather than costing a character of a 34px box.
+  expect(out.roomLabel, 'the room label still carries a hash').toBe('A 214');
+  expect(out.roomTip).toBe('Room A 214');
+
+  // Presentation only — the record keeps exactly what was typed.
+  expect(out.address, 'the address prints with a capital').toBe('Charsadda');
+  expect(out.stored, 'the stored address must not be rewritten').toBe('charsadda');
+
+  /* THE YEAR IS THE POINT. These two admissions are both "04" of a month; only
+     the year tells them apart, which is the whole reason the column changed. */
+  expect(out.admitted[0]).toBe('04 Jul 2025');
+  expect(out.admitted[1]).toBe('04 Sep 2026');
+  expect(out.admittedBy[0], 'the admitting account, first name').toBe('Mushtaq');
+  expect(out.admittedBy[1], 'a record with no admittedBy invents nobody').toBeNull();
+
+  // The plan is a caption under the amount, not a second chip beside a status.
+  expect(out.charge[0]).toBe('Rs. 8,000');
+  expect(out.charge[1]).toBe('Rent only');
+
+  // Both plans named on the Active card — one student is off the mess.
+  expect(out.planHints.length, 'both charge plans are named').toBe(2);
+  expect(out.planHints.join(' ')).toMatch(/Rent only/);
+  expect(out.planHints.join(' ')).toMatch(/Rent \+ mess/);
+  expect(out.kpiCards, 'five cards: students, active, cancelling, blacklisted, rooms').toBe(5);
+
+  // The hover card replaced the OS tooltip on every value cell.
+  expect(out.tips).toBeGreaterThan(8);
+  expect(out.bodyTitles, 'a value cell still carries the OS tooltip').toEqual([]);
 
   await app.close();
 });

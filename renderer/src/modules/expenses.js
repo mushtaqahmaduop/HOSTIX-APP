@@ -1,6 +1,6 @@
 ﻿/* ─── HOSTYLLO — EXPENSES MODULE ─────────────────────────────────────────────
    Contains: renderExpenses, showAddExpenseModal, submitAddExpense,
-             showEditExpenseModal, submitEditExpense, deleteExpense
+             showEditExpenseModal, submitExpense, deleteExpense
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
@@ -68,7 +68,11 @@ function expMethodChip(m) {
 function expWhoChip(who) {
   const v = String(who || '').trim();
   if (!v) return '<span class="exp-dash">—</span>';
-  return `<span class="exp-who"><i class="ui-avatar">${escHtml(expInitials(v))}</i>${escHtml(v)}</span>`;
+  /* A vendor name is the one value in this column that can genuinely be long
+     — "WAPDA Office Peshawar" wants 224px in a 150px column — and unlike a
+     date or an amount it reads correctly shortened. It ellipsises and carries
+     the hover card; the columns that must NOT shorten got the width instead. */
+  return `<span class="exp-who" data-tip="${escHtml(v)}" data-tip-label="Vendor"><i class="ui-avatar">${escHtml(expInitials(v))}</i><span class="exp-who__t">${escHtml(v)}</span></span>`;
 }
 
 /* Everyone this hostel has ever handed money to, offered as suggestions. Built
@@ -144,7 +148,8 @@ function expensesScoped() {
       if (!String(e.description || '').toLowerCase().includes(q) &&
           !String(e.category || '').toLowerCase().includes(q) &&
           !String(e.handedTo || '').toLowerCase().includes(q) &&
-          !String(e.method || '').toLowerCase().includes(q)) return false;
+          !String(e.method || '').toLowerCase().includes(q) &&
+          !String(e.refNo || '').toLowerCase().includes(q)) return false;
     }
     return true;
   });
@@ -156,6 +161,7 @@ function expensesScoped() {
     amount:      e => Number(e.amount) || 0,
     method:      e => String(e.method || '').toLowerCase(),
     handedTo:    e => String(e.handedTo || '').toLowerCase(),
+    addedByName: e => String(e.addedByName || '').toLowerCase(),
   });
   if (!expFilter.sortKey) exps = exps.sort((a, b) => String(b.date||'').localeCompare(String(a.date||'')));
   return { scope, scoped, legacyTransfers: _legacyTransfers, rows: exps };
@@ -187,6 +193,64 @@ function expensesFiltered() { return expensesScoped().rows; }
    records none of them — an expense is {date, category, description, amount} —
    and inventing the columns would put empty headings on an owner's document.
    They belong to the expense FORM before they belong to its export.        */
+/* ── THE EXPENSE COLUMNS, IN ONE PLACE (owner, 2026-09-23) ───────────────────
+   "in the expense pdf align date, description column, Vendor, added and amount
+   columns to the above categories in pdfs ... and there is also a difference
+   between the expense page pdf and reports page expense pdf".
+
+   There were two definitions. This page printed nine columns; the Reports
+   page's expense section printed three — Date, Description, Amount — written
+   separately in reports.js. So the same category, exported from two screens on
+   the same day, produced two different documents, and the one a warden reached
+   from Reports was missing the vendor, the method and who entered it.
+
+   One definition, both callers, which is the rule the Payments, Students,
+   Cancellations and Issues sections of the whole-report export already follow:
+   each reads its register's own columns rather than restating them.
+
+   `opts.grouped` drops the Category column. On this page the PDF groups by
+   category and prints the name as the table's own heading, so a Category
+   column would repeat that name on every row — which is the same noise the
+   owner is removing from the subtotals. The workbook keeps it (`excel:false`
+   on the column would have hidden it from a spreadsheet that needs it to
+   filter), so the grouped/ungrouped split is about the PRINTED page only. */
+function expExportColumns(opts) {
+  opts = opts || {};
+  return [
+    { label: 'Date', type: 'date', width: 12, value: e => e.date || '' },
+    { label: 'Category', type: 'text', width: 16, excel: false, pdf: !opts.grouped,
+      value: e => e.category || 'Uncategorised' },
+    { label: 'Description', type: 'wrap', width: 28,
+      value: e => e.description || '',
+      get:   e => escHtml(e.description || '—') +
+                  (e._transfer ? '<span class="sub">funds transfer</span>' : '') },
+    { label: 'Method', type: 'text', width: 12,
+      value: e => e._transfer ? '' : (e.method || '') },
+    /* THE RECEIVER. It was headed "Paid To"; "Vendor" is the word a ledger
+       uses and it is unambiguous beside the Added By column that follows —
+       which is the entering account, and is a different person. */
+    { label: 'Vendor', type: 'text', width: 16,
+      value: e => e._transfer ? '' : (e.handedTo || '') },
+    { label: 'Added By', type: 'text', width: 14,
+      value: e => e._transfer ? '' : (e.addedByName || '') },
+    { label: 'Type', type: 'text', width: 14, pdf: false,
+      value: e => e._transfer ? 'Funds transfer' : 'Expense' },
+    { label: 'Amount', type: 'money', width: 16, total: 'sum',
+      value: e => Number(e.amount || 0),
+      get:   e => '<b>' + fmtPKR(e.amount) + '</b>' },
+    /* THE BILL'S OWN NUMBER (owner, 2026-09-28). Printed as well as exported:
+       matching a register line to the paper bill is what the number is for. */
+    { label: 'Receipt No.', type: 'text', width: 14,
+      value: e => e._transfer ? '' : (e.refNo || '') },
+    { label: 'Receipt', type: 'text', width: 10, pdf: false,
+      value: e => e.receipt ? 'Attached' : '' },
+    /* The app's internal id. It was headed "Reference", which next to a
+       receipt's reference number would have been two different things under
+       one word. */
+    { label: 'Record ID', type: 'id', width: 16, pdf: false, value: e => String(e.id || '') },
+  ];
+}
+
 function _expExportDef(rows) {
   const one   = expFilter.cat !== 'All';
   const total = rows.reduce((s, e) => s + Number(e.amount || 0), 0);
@@ -206,43 +270,32 @@ function _expExportDef(rows) {
   const ordered  = [...byCat.entries()].sort((a, b) => catTotal(b[1]) - catTotal(a[1]));
   const largest  = rows.reduce((m, e) => Math.max(m, Number(e.amount || 0)), 0);
 
-  /* Description gave up 12 of its 40 so Method and Added By could be on the
-     printed page as well as in the workbook. They are blank on a funds
-     transfer, which is not an expense record and has no form behind it, and
-     blank on any record written before the two fields were captured — §21's
-     dash, not a guess at who was on shift. */
-  const columns = [
-    { label: 'Date', type: 'date', width: 12, value: e => e.date || '' },
-    { label: 'Category', type: 'text', width: 16, excel: false,
-      value: e => e.category || 'Uncategorised' },
-    { label: 'Description', type: 'wrap', width: 28,
-      value: e => e.description || '',
-      get:   e => escHtml(e.description || '—') +
-                  (e._transfer ? '<span class="sub">funds transfer</span>' : '') },
-    { label: 'Method', type: 'text', width: 12,
-      value: e => e._transfer ? '' : (e.method || '') },
-    // The receiver, and the export heading has to say so too - a workbook
-    // column headed "Added By" is unreadable by anyone who did not enter it.
-    { label: 'Paid To', type: 'text', width: 16,
-      value: e => e._transfer ? '' : (e.handedTo || '') },
-    { label: 'Type', type: 'text', width: 14, pdf: false,
-      value: e => e._transfer ? 'Funds transfer' : 'Expense' },
-    { label: 'Amount', type: 'money', width: 16, total: 'sum',
-      value: e => Number(e.amount || 0),
-      get:   e => '<b>' + fmtPKR(e.amount) + '</b>' },
-    { label: 'Receipt', type: 'text', width: 10, pdf: false,
-      value: e => e.receipt ? 'Attached' : '' },
-    { label: 'Reference', type: 'id', width: 16, pdf: false, value: e => String(e.id || '') },
-  ];
+  // Grouped by category on the printed page, so the Category column would
+  // repeat each table's own heading on every row.
+  const columns = expExportColumns({ grouped: true });
 
+  /* SUB-TOTAL, NOT THE CATEGORY NAME A THIRD TIME (owner, 2026-09-23: "remove
+     Total-category because [it] just repeats the category name again and again
+     which gives the report a messy look, only the Sub-Total for that category
+     should be used").
+
+     The name was already the table's heading and already on its meta line; a
+     footer reading "Electricity total" said it once more, directly under a
+     block of Electricity rows. On a register with ten categories that is ten
+     redundant restatements down one page.
+
+     The grouped table prints each category's name as its own heading, so
+     "Sub-Total" is unambiguous — it can only be the sub-total of the table it
+     sits in. The single-category export keeps the name, because there is no
+     grouping heading above it to be unambiguous against. */
   const groups = one
-    ? [{ rows, total: { label: expFilter.cat + ' total', value: fmtPKR(total) } }]
+    ? [{ rows, total: { label: expFilter.cat + ' — Sub-Total', value: fmtPKR(total) } }]
     : ordered.map(([cat, list]) => ({
         label: cat,
         meta: list.length + ' record' + (list.length === 1 ? '' : 's') +
               (total > 0 ? ' · ' + Math.round(catTotal(list) / total * 100) + '% of spend' : ''),
         rows: list,
-        total: { label: cat + ' total', value: fmtPKR(catTotal(list)) },
+        total: { label: 'Sub-Total', value: fmtPKR(catTotal(list)) },
       }));
 
   return {
@@ -254,6 +307,10 @@ function _expExportDef(rows) {
     scope:  one ? expFilter.cat + ' ' + scope : scope,
     sheet:  'Expenses',
     groupLabel: 'Category',
+    /* One heading row for the whole register, not one per category (owner,
+       2026-09-24) — a category is its own row and its Sub-Total. See
+       exGroupedTable() in export/engine.js. */
+    oneTable: true,
 
     filters: [
       ['Month',    scope],
@@ -409,11 +466,11 @@ function renderExpenses() {
   const stats = `
   <div class="exp-stats">
     ${stat('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>',
-          'Total Expenses', `<span title="${fmtPKR(scopedTotal)}" data-exact="${scopedTotal}">${expMoney(scopedTotal)}</span>`,
+          'Total Expenses', `<span title="${fmtPKR(scopedTotal)}" data-exact="${scopedTotal}">Rs. ${fmtKpi(scopedTotal)}</span>`,
           scopedTrf > 0 ? `${scopeLabel} · incl. ${fmtPKR(scopedTrf)} funds transfer` : scopeLabel,
           _expTrend)}
     ${stat('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m9 15 6-6"/><path d="M15 9h-4"/><path d="M15 9v4"/></svg>',
-          'Average Daily', expMoney(avgDaily),
+          'Average Daily', `<span title="${fmtPKR(avgDaily)}">Rs. ${fmtKpi(avgDaily)}</span>`,
           `Avg per day · ${daysElapsed} day${daysElapsed===1?'':'s'}`)}
     ${stat('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>',
           'Total Records', String(scoped.length), scopeLabel)}
@@ -502,23 +559,77 @@ function renderExpenses() {
   const rows = _pg.slice.map(e => {
     return `<tr>
       <td class="exp-date">${escHtml(fmtDate(e.date))}</td>
+      ${''/* THE CATEGORY CARRIES ITS OWN COLOUR (owner, 2026-09-23). The hue
+             comes from expenseCatHue(), which keys by NAME — see the note on
+             `.ui-chip--cat` for why the chip is outlined where a status chip
+             is not. */}
       <td>
-        <span class="ui-chip ui-chip--neutral">
+        <span class="ui-chip ui-chip--cat" style="--cat:${expenseCatHue(e.category)}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" width="12" height="12">${expCatIcon(e.category)}</svg>
           ${escHtml(e.category || 'Other')}
         </span>
       </td>
-      <td class="exp-desc">${e.description ? escHtml(e.description) : '<span class="exp-dash">—</span>'}</td>
+      ${''/* THE DESCRIPTION TAKES ITS SHARE AND NO MORE (owner, 2026-09-23:
+             "the description should take specified space and if large then
+             hidden it with view on pop hover").
+
+             It was an unconstrained cell, so one long line — "Generator fuel
+             and filter change, plus the mechanic's call-out" — widened its
+             column and squeezed Vendor and Amount for every other row on the
+             page. Fixed width, one line, the rest on the app's own hover
+             card. */}
+      <td class="exp-desc">${e.description
+        ? `<span class="exp-desc__t" data-tip="${escHtml(e.description)}" data-tip-label="Description">${escHtml(e.description)}</span>`
+        : '<span class="exp-dash">—</span>'}</td>
       <td class="exp-amt">${expMoney(e.amount)}</td>
       ${/* A funds transfer is not an expense record and has no form behind it,
             so it carries neither field and says so rather than borrowing one. */''}
       <td>${e._transfer ? '<span class="exp-dash">—</span>' : expMethodChip(e.method)}</td>
       <td>${e._transfer ? '<span class="exp-dash">—</span>' : expWhoChip(e.handedTo)}</td>
+      ${''/* WHO ENTERED IT, beside who it was paid to. A funds transfer has no
+             form behind it and carries neither. */}
+      <td>${e._transfer || !e.addedByName
+        ? '<span class="exp-dash">—</span>'
+        : `<span class="exp-by" data-tip="Entered by ${escHtml(e.addedByName)}" data-tip-label="Added by">${escHtml(ledgerFirstName(e.addedByName))}</span>`}</td>
+      ${''/* THE RECEIPT KEEPS A COLUMN OF ITS OWN (owner, 2026-09-23, third
+             pass: "add column for receipt again because it squeezes the other
+             buttons out of the page").
+
+             It was moved into the Actions group on the second pass, on the
+             reasoning that it opens something and is therefore an action. The
+             measurement says otherwise: three icon buttons made Actions 136px
+             wide in a table that already wanted 1262px inside a 1104px
+             wrapper, so the group pushed Edit and Delete off the visible page.
+
+             A column is also honest about what it is. Whether a receipt EXISTS
+             is a property of the record — the same kind of fact as its vendor
+             or its method — and a dash in that column says "no receipt on
+             file", which is a thing a warden needs to see at a glance while
+             doing a month's reconciliation. As a button that simply was not
+             there, absence said nothing. */}
+      ${''/* THE RECEIPT NUMBER RIDES UNDER THE EYE (owner, 2026-09-28: "the
+             reference number would fit in the receipt column below the eye
+             icon"). Both are the same fact — this record's bill — so they share
+             a column rather than costing the register another one. A number
+             with no file shows alone; a dash only when there is neither. */}
+      <td class="exp-rcptc">${e._transfer || (!e.receipt && !e.refNo)
+        ? '<span class="exp-dash">—</span>'
+        : `${e.receipt ? `<button type="button" class="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon exp-rcpt-btn"
+             onclick="event.stopPropagation();expOpenReceipt('${e.id}')"
+             title="View receipt"
+             aria-label="View the receipt attached to this ${escHtml(e.category || 'expense')} record">
+             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+           </button>` : ''}${e.refNo
+             ? `<span class="exp-refno" data-tip="${escHtml(e.refNo)}" data-tip-label="Receipt no.">${escHtml(e.refNo)}</span>`
+             : ''}`}</td>
       <td>
-        <div class="exp-acts">
+        ${typeof prOwnsExpense === 'function' && prOwnsExpense(e)
+          ? `<button type="button" class="exp-payroll" onclick="event.stopPropagation();expOpenPayroll('${e.id}')"
+               title="Booked by Staff &amp; Payroll — change or void it there">${e.source.kind === 'salary' ? 'Payslip' : e.source.kind === 'bonus' ? 'Bonus' : 'Advance'} ›</button>`
+          : `<div class="exp-acts">
           <button class="ui-btn ui-btn--secondary ui-btn--sm ui-btn--icon" onclick="${e._transfer?`showEditTransferModal('${e.id}')`:`showEditExpenseModal('${e.id}')`}" title="Edit" aria-label="Edit this ${escHtml(e.category || 'expense')} record"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
           <button class="ui-btn ui-btn--danger ui-btn--sm ui-btn--icon" onclick="${e._transfer?`deleteTransfer('${e.id}')`:`deleteExpense('${e.id}')`}" title="Delete" aria-label="Delete this ${escHtml(e.category || 'expense')} record"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
-        </div>
+        </div>`}
       </td>
     </tr>`;
   }).join('');
@@ -532,21 +643,39 @@ function renderExpenses() {
           ${th('category','Category')}
           ${th('description','Description')}
           ${th('amount','Amount','class="exp-amt"')}
-          ${th('method','Payment method')}
-          ${''/* "Paid to", not "Added by" (owner, 2026-09-16: the field
-                   "should say who took the amount for expenses or to whom the
-                   amount is given — only the receiver name"). The field has
-                   always been `handedTo` and has always held the receiver; the
-                   heading named the wrong person entirely, and a warden
-                   reading "Added by" would reasonably have typed their own
-                   name into it. Who ENTERED a record is on the activity log,
-                   which is where that question belongs. */}
-          ${th('handedTo','Paid to')}
+          ${''/* "Paid Via", not "Payment method" (owner, 2026-09-23: "change
+                 payment method to Paid Via that should reduce the taken
+                 space"). Two short words instead of two long ones, and the
+                 column can then be as narrow as its widest CHIP rather than
+                 as wide as its heading. */}
+          ${th('method','Paid via')}
+          ${''/* VENDOR, AND ADDED BY — two columns, because they are two
+                 people (owner, 2026-09-23).
+
+                 `handedTo` has always held the RECEIVER. It was headed "Added
+                 by" until 2026-09-16, which named the wrong person entirely
+                 and invited a warden to type their own name into it; it became
+                 "Paid to" then, and "Vendor" now — the word a ledger uses for
+                 the party money went to, and unambiguous beside a column that
+                 really is the entering account.
+
+                 That note also said who ENTERED a record "is on the activity
+                 log, which is where that question belongs". The log trims at
+                 200 entries, so the answer for an older expense is gone; it is
+                 stamped on the record now, the same as `admittedBy` on a
+                 student. */}
+          ${th('handedTo','Vendor')}
+          ${th('addedByName','Added by')}
+          ${''/* The cell holds one 32px eye and nothing else, so the column is
+                 sized for the button rather than for the word above it
+                 (owner, 2026-09-23). The heading keeps the word — an icon
+                 heading over an icon cell says nothing twice. */}
+          <th class="exp-col-rcpt">Receipt</th>
           <th>Actions</th>
         </tr></thead>
         <tbody>
           ${_pg.total===0
-            ? `<tr><td colspan="7"><div class="ui-empty">
+            ? `<tr><td colspan="9"><div class="ui-empty">
                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>
                  <div class="ui-empty__t">No expenses match these filters.</div></div></td></tr>`
             : rows}
@@ -767,10 +896,17 @@ function _expRepaintReceipt() {
    read whole on every boot; the same bill at 1400px is readable and about
    150KB. PDFs are stored as they came — re-encoding one would mean rendering
    it, and a bill is a document, not a picture of one. */
-function expReceiptLoad(input) {
-  const file = input && input.files && input.files[0];
+/** Is Owner Funds on for this hostel? Then "Fund Transfer" is not offered. */
+function _expOwnerFundsOn() {
+  return typeof ofEnabled === 'function' && ofEnabled();
+}
+
+/* READING A PROOF FILE, shared (2026-09-28): the expense receipt and the Owner
+   Funds proof take the same kinds of file and store them the same way, so one
+   reader does it. `done(rec)` receives {name, type, size, data}; every refusal
+   is toasted here and `done` is simply not called. */
+function expReadReceiptFile(file, done) {
   if (!file) return;
-  input.value = '';
   const type = String(file.type || '');
   const isImg = type.indexOf('image/') === 0;
   const isPdf = type === 'application/pdf';
@@ -782,8 +918,7 @@ function expReceiptLoad(input) {
       toast('That file is too large to store — try a photo instead of a scan', 'error');
       return;
     }
-    _expReceipt = { name: file.name || 'receipt', type: isImg ? 'image/jpeg' : type, size, data: dataUrl };
-    _expRepaintReceipt();
+    done({ name: file.name || 'receipt', type: isImg ? 'image/jpeg' : type, size, data: dataUrl });
   };
 
   const reader = new FileReader();
@@ -812,14 +947,35 @@ function expReceiptLoad(input) {
   reader.readAsDataURL(file);
 }
 
+function expReceiptLoad(input) {
+  const file = input && input.files && input.files[0];
+  if (!file) return;
+  input.value = '';
+  expReadReceiptFile(file, rec => { _expReceipt = rec; _expRepaintReceipt(); });
+}
+
 function expReceiptRemove() { _expReceipt = null; _expRepaintReceipt(); }
 
 /* Images open in a viewer; a PDF is written back to disk, because the window's
    CSP has no frame-src and a data: URL cannot be framed. Both are the stored
    bytes — nothing is re-fetched. */
-function expReceiptView() {
-  const r = _expReceipt;
-  if (!r) return;
+/* ── ONE VIEWER, TWO CALLERS ─────────────────────────────────────────────────
+   The form's View button and the register's eye show the same thing, so they
+   run the same function (owner, 2026-09-23: "the action button doesn't show
+   the receipt, just the view icon button do in the edit expense form").
+
+   The row's eye used to SAVE the file straight to disk, which is not viewing
+   it — a warden checking whether an expense is documented had to write a copy
+   somewhere first. It opens the image now, exactly as the form does, with Save
+   a copy still one press away inside the modal.
+
+   A PDF still goes to the desktop: this app has no PDF viewer, and handing the
+   file to whatever the reader already uses is better than an empty frame. */
+let _expViewing = null;
+
+function _expReceiptShow(r) {
+  if (!r || !r.data) { toast('No receipt is attached to this expense', 'error'); return; }
+  _expViewing = r;
   if (String(r.type || '').indexOf('image/') === 0) {
     showModal('modal-md',
       `<div class="hf-mh"><div class="hf-mh__ico">${icon('clipboard','sm')}</div>
@@ -828,15 +984,17 @@ function expReceiptView() {
       `<div class="exf-rcpt__view"><img src="${escHtml(r.data)}" alt="${escHtml(r.name || 'Receipt')}"></div>`,
       `<div class="hf-actions">
          <button class="btn btn-secondary" onclick="closeModal()">Close</button>
-         <button class="btn btn-primary" onclick="expReceiptSaveCopy()">${icon('download','xs')} Save a copy</button>
+         <button class="btn btn-primary" onclick="expReceiptSaveViewed()">${icon('download','xs')} Save a copy</button>
        </div>`);
     return;
   }
-  expReceiptSaveCopy();
+  expReceiptSaveViewed();
 }
 
-async function expReceiptSaveCopy() {
-  const r = _expReceipt;
+/* Saves whichever receipt is on screen — the one the viewer was opened with,
+   or the form's own when the form is what opened it. */
+async function expReceiptSaveViewed() {
+  const r = _expViewing || _expReceipt;
   if (!r) return;
   if (!window.electronAPI || typeof window.electronAPI.saveDataUrl !== 'function') {
     toast('This build cannot save files', 'error'); return;
@@ -846,6 +1004,21 @@ async function expReceiptSaveCopy() {
   else if (res && res.reason && res.reason !== 'cancelled') toast(res.reason, 'error');
 }
 
+function expReceiptView() { _expReceiptShow(_expReceipt); }
+
+/* The eye in the register: reaches a STORED record by id, which is what a row
+   can offer without opening a form, and hands it to the shared viewer. */
+function expOpenReceipt(id) {
+  const e = (DB.expenses || []).find(x => x && x.id === id);
+  _expReceiptShow(e && e.receipt);
+}
+
+/* `expReceiptSaveCopy()` stood here: the same save, reading the form's
+   `_expReceipt` directly. It had one caller — the viewer's "Save a copy" — and
+   that viewer now opens for a ROW as well as for the form, where `_expReceipt`
+   is null. `expReceiptSaveViewed()` above saves whichever receipt is on screen
+   and falls back to the form's, so there is one save path for both. */
+
 /**
  * The expense form.
  * @param {string} [id] existing expense id; omit to add a new one.
@@ -854,6 +1027,7 @@ function showExpenseModal(id) {
   /* One form for both, so it asks for the permission that matches which of the
      two it is about to be (2026-09-10): `id` present means an existing record
      is being changed. */
+  if (id && _expPayrollOwned(id)) return;
   if (typeof requirePerm === 'function' && !requirePerm(id ? 'edit' : 'add')) return;
   const e = id ? (DB.expenses || []).find(x => x.id === id) : null;
   if (id && !e) return;
@@ -863,7 +1037,14 @@ function showExpenseModal(id) {
   /* An edit offers whatever the record already holds even if the hostel has
      since deleted that category, so re-saving an old expense cannot silently
      re-file it under something else. */
-  const cats = (DB.settings.expenseCategories || []).slice();
+  let cats = (DB.settings.expenseCategories || []).slice();
+  /* NO "FUND TRANSFER" WHERE OWNER FUNDS IS ON (owner, 2026-09-28). Money the
+     owner takes or gives belongs in Owner Funds; entered here as well it would
+     be counted twice — once as an expense that lowers profit, once beside it.
+     Hidden for NEW entries and for re-filing; a record already filed under it
+     keeps it (the line below puts it back), because history is not rewritten. */
+  const _noTransfer = _expOwnerFundsOn();
+  if (_noTransfer) cats = cats.filter(x => x !== FUND_TRANSFER_CAT);
   if (e && e.category && cats.indexOf(e.category) === -1) cats.unshift(e.category);
   const catOpts = cats.map(c =>
     `<option ${e && e.category === c ? 'selected' : ''}>${escHtml(c)}</option>`).join('');
@@ -908,7 +1089,9 @@ function showExpenseModal(id) {
     <datalist id="exp-people">${people.map(n => `<option value="${escHtml(n)}"></option>`).join('')}</datalist>
     <div class="hf-g2">
       ${_expField('Expense category', 'tag',
-        `<select class="form-control" id="f-ecat">${catOpts}</select>`, { req: true, for: 'f-ecat' })}
+        `<select class="form-control" id="f-ecat">${catOpts}</select>`,
+        { req: true, for: 'f-ecat',
+          note: _noTransfer ? 'Money the owner gives or takes is recorded in <a href="#" onclick="closeModal();navigate(\'ownerfunds\');return false">Owner Funds</a>, not here.' : '' })}
       ${_expField('Amount (PKR)', 'money',
         `<input class="form-control" id="f-eamt" type="number" min="1" step="1" placeholder="Enter amount"
                 value="${e ? escHtml(String(e.amount)) : ''}">`, { req: true, for: 'f-eamt' })}
@@ -930,7 +1113,7 @@ function showExpenseModal(id) {
 
              Who entered the record is not lost — it is stamped on the activity
              log, which is the place that question belongs. */}
-      ${_expField('Paid to', 'person',
+      ${_expField('Vendor', 'person',
         `<input class="form-control" id="f-ewho" list="exp-people" autocomplete="off"
                 placeholder="Name of the shop, person or office paid" value="${e ? escHtml(e.handedTo || '') : ''}">`,
         { req: reqWho, full: true, for: 'f-ewho',
@@ -942,6 +1125,17 @@ function showExpenseModal(id) {
         { req: reqDesc, full: true, top: true, for: 'f-edesc' })}
     </div>
     <div class="hi-note exf-count" id="f-edesc-count">${desc.length}/250</div>
+    ${''/* THE RECEIPT NUMBER sits with the receipt file, directly above it:
+           both answer "which bill is this?", and a hostel that files paper
+           bills has the number even when it has no photo. Optional. */}
+    <div class="hf-g2 exf-refrow">
+      ${_expField('Receipt / reference no.', 'receipt',
+        `<input class="form-control" id="f-eref" type="text" maxlength="40" autocomplete="off"
+                placeholder="e.g. INV-20931 or the bill's reference number"
+                value="${e ? escHtml(e.refNo || '') : ''}">`,
+        { full: true, for: 'f-eref',
+          note: 'Optional. The number printed on the bill or receipt, so this entry can be matched to the paper.' })}
+    </div>
     <div id="f-ercpt">${_expReceiptPanel(_expReceipt)}</div>
     <input type="file" id="f-ercpt-file" accept="image/png,image/jpeg,image/webp,application/pdf" hidden
            onchange="expReceiptLoad(this)">`,
@@ -984,7 +1178,11 @@ function showEditExpenseModal(id)  { showExpenseModal(id); }
  * add form gained a payment method and the edit form quietly dropped it.
  * @param {string} [id]
  */
-async function submitExpense(id) {
+/* One press, one save (submitOnce, utils.js — bug audit BUG-006). */
+async function submitExpense(...a) { return submitOnce('expense:' + (a[0] || 'new'), () => _submitExpense(...a)); }
+async function _submitExpense(id) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('An expense')) return;
   // Same split as the form above — gated again here, because the submit can be
   // reached without it.
   if (typeof requirePerm === 'function' && !requirePerm(id ? 'edit' : 'add')) return;
@@ -997,8 +1195,18 @@ async function submitExpense(id) {
   const method = document.getElementById('f-emethod').value;
   const who    = document.getElementById('f-ewho').value.trim();
   const desc   = document.getElementById('f-edesc').value.trim();
+  // Collapsed whitespace, capped at the field's own 40: a pasted number often
+  // carries a trailing newline or a double space from the bill's layout.
+  const refNo  = (document.getElementById('f-eref')?.value || '').replace(/\s+/g, ' ').trim().slice(0, 40);
 
   if (!cat) { toast('Pick a category', 'error'); return; }
+  /* The form no longer offers it where Owner Funds is on; this is the same rule
+     at the write, for a form opened before the feature was switched on. A
+     record already filed under it may keep it. */
+  if (cat === FUND_TRANSFER_CAT && _expOwnerFundsOn() && !(e && e.category === FUND_TRANSFER_CAT)) {
+    toast('Money the owner gives or takes is recorded in Owner Funds, not as an expense', 'error');
+    return;
+  }
   /* > 0, not merely truthy. A minus sign in front of the figure passed the old
      check and wrote a negative expense, which does not reduce what was spent —
      it quietly adds to the month's profit. */
@@ -1023,7 +1231,28 @@ async function submitExpense(id) {
      recorded" filter and the export's dash disagree about the same row. */
   if (method) rec.method = method; else delete rec.method;
   if (who)    rec.handedTo = who;  else delete rec.handedTo;
+  if (refNo)  rec.refNo = refNo;   else delete rec.refNo;
   if (_expReceipt) rec.receipt = _expReceipt; else delete rec.receipt;
+
+  /* WHO ENTERED IT (owner, 2026-09-23: "change paid to into Vendor and added
+     by, the current user").
+
+     These are two different people and the register now shows both: the VENDOR
+     is who the money went to (`handedTo`, unchanged), and this is who typed the
+     record. The 2026-09-16 note on the old heading said the entering account
+     "is on the activity log, which is where that question belongs" — the log
+     trims at 200 entries, so on a hostel of any age the answer for an older
+     expense is simply gone, which is the same finding that put `admittedBy` on
+     a student.
+
+     STAMPED ON CREATE ONLY. An edit does not rewrite it: the question is who
+     RAISED this expense, and a correction six weeks later by somebody else does
+     not change that. Records written before today carry neither key and print
+     a dash rather than guessing at whoever is logged in now. */
+  if (!e) {
+    rec.addedBy     = (typeof CUR_ROLE !== 'undefined' && CUR_ROLE) || null;
+    rec.addedByName = (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) || '';
+  }
 
   if (!e) { if (!DB.expenses) DB.expenses = []; DB.expenses.push(rec); }
 
@@ -1037,8 +1266,6 @@ async function submitExpense(id) {
 
 /* The names the rest of the app calls. */
 async function submitAddExpense()      { return submitExpense(); }
-async function submitEditExpense(id)   { return submitExpense(id); }
-
 /* The deletion itself, with no confirmation of its own — both callers raise
    their own, and nesting them asked the warden the same question twice. */
 async function _expDoDelete(id) {
@@ -1047,14 +1274,38 @@ async function _expDoDelete(id) {
      refusals — this is the line that keeps a future caller from becoming the
      next unguarded delete. */
   if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
+  if (_expPayrollOwned(id)) return;
   const _del_e=DB.expenses.find(x=>x.id===id);
   DB.expenses=DB.expenses.filter(x=>x.id!==id);
   if(_del_e) logActivity('Expense Deleted', _del_e.category+' — '+fmtPKR(_del_e.amount), 'Finance');
   await saveDB(); renderPage(_expReturnPage()); toast('Expense deleted','info');
 }
 
+/* PAYROLL OWNS ITS ROWS (Staff & Payroll, 2026-09-30). A salary or an advance
+   is booked here by src/payroll.js with `source: {kind, id}`; editing or
+   deleting it from this page would leave the payslip or advance saying one
+   thing and the expense another. So both are refused here, with the way to the
+   record that can change it. */
+function _expPayrollOwned(id) {
+  const e = (DB.expenses || []).find(x => x.id === id);
+  if (!(e && typeof prOwnsExpense === 'function' && prOwnsExpense(e))) return false;
+  toast('This ' + e.source.kind + ' was booked by Staff & Payroll — change or void it there', 'info');
+  return true;
+}
+function expOpenPayroll(id) {
+  const e = (DB.expenses || []).find(x => x.id === id);
+  if (!e || !e.source) return;
+  if (typeof prAllowed === 'function' && !prAllowed()) { toast('Your account does not have the Staff & payroll permission', 'info'); return; }
+  if (e.source.kind === 'salary') { navigate('payroll'); setTimeout(() => showPayslip(e.source.id), 200); }
+  else if (e.source.kind === 'bonus') { prView.tab = 'bonuses'; navigate('payroll'); }
+  else { prView.tab = 'advances'; prView.advShow = 'All'; navigate('payroll'); }
+}
+
 async function deleteExpense(id) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('Deleting an expense')) return;
   if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
+  if (_expPayrollOwned(id)) return;
   showConfirm('Delete expense?','This cannot be undone.', () => _expDoDelete(id));
 }
 
@@ -1072,14 +1323,30 @@ async function deleteExpense(id) {
 
 // ════════════════════════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════════════════════════
-let reportPeriod='month';
-/* WHICH month "This Month" means (owner ref: `reports2.png`, which draws a
-   month dropdown in the report bar). It was hard-wired to thisMonth(), so the
-   only way to see August from September was Custom Range with the same month
-   at both ends — three controls for the commonest question this page is asked.
-   Evaluated at load and reset by rptSetPeriod(), so a session left open past
-   the turn of a month still opens on the month it now is. */
+/* WHICH MONTH THE REPORTS PAGE IS SHOWING, and since 2026-09-22 that is the
+   ONLY thing it shows.
+
+   `reportPeriod` lived here too and took 'month' | 'year' | 'custom', drawn as
+   a three-way segment beside this. The owner removed all three (2026-09-22:
+   "remove the month, this year and custom range and make a professional month
+   dropdown in which different month and years can be selected") — one control
+   that answers where the window sits, instead of two that answered where AND
+   how wide and had to agree with each other.
+
+   Evaluated at load, so a session left open past the turn of a month still
+   opens on the month it now is. */
 let reportMonth = thisMonth();
+/* MONTH OR WHOLE YEAR (owner, 2026-09-23: "I want an option in the month
+   picker ... through which I can see monthly or full yearly reports data").
+
+   A flag beside the anchor rather than a second anchor: `reportMonth` still
+   says WHERE the window sits and this says how wide it is, so switching to the
+   year and back returns to the month you were on. It is deliberately NOT the
+   old `reportPeriod` — that took three values and had a 'custom' range with
+   its own pair of inputs, all of which stay gone. Two states, one checkbox.
+
+   Reset to false with reportMonth whenever Reports is entered; see navigate(). */
+let reportYearly = false;
 let reportDetail=null;
 let studentReportFilter='All';
 // PERF: pagination state for Reports KPI-card detail tables. Rendering EVERY row

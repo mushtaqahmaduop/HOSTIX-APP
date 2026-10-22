@@ -13,7 +13,14 @@
     display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
     margin-bottom: 14px;
 }
-.bk-head__t { font-size: 22px; font-weight: 800; letter-spacing: -.02em; color: var(--text); line-height: 1.15; }
+/* SERIF, WEIGHT 400. A heading at --text-lg or larger is a voice rather than
+   chrome (owner, 2026-09-17), and the display face is never bold on the serif
+   — weight comes off the size. Measured 2026-09-17: this was still resolving
+   to Inter while the dashboard's card titles resolved to Georgia. */
+/* Shared by Users and Activity Log as well as this page. */
+.bk-head__t { font-family: var(--font-display); font-size: 22px;
+              font-weight: var(--weight-normal); letter-spacing: -.02em;
+              color: var(--text); line-height: 1.15; }
 .bk-head__s { font-size: 12.5px; color: var(--text3); margin-top: 3px; }
 
 /* The health line. Its colour is an assertion about the last backup, so it is

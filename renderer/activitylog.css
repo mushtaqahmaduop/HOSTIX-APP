@@ -137,7 +137,12 @@
     display: flex; align-items: center; justify-content: center;
     background: var(--dh-bg); color: var(--dh);
 }
-.al-panel__t { font-size: 15px; font-weight: 700; color: var(--text); }
+/* SERIF, WEIGHT 400. A heading at --text-lg or larger is a voice rather than
+   chrome (owner, 2026-09-17), and the display face is never bold on the serif
+   — weight comes off the size. Measured 2026-09-17: this was still resolving
+   to Inter while the dashboard's card titles resolved to Georgia. */
+.al-panel__t { font-family: var(--font-display); font-size: 15px;
+               font-weight: var(--weight-normal); color: var(--text); }
 .al-panel__s { font-size: 12px; color: var(--text3); margin-top: 3px; line-height: 1.45; }
 .al-panel__b { padding: 18px; overflow-y: auto; }
 .al-raw__h {

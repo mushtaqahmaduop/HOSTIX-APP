@@ -157,8 +157,13 @@ function _arcTotals() {
   const pending = _arcOwed(pays);
   const exps    = _arcPeriodExpenses();
   const exp  = exps.reduce((s, e) => s + Number(e.amount || 0), 0);
+  // Available Fund is revenue − expenses (owner, 2026-09-18). The period's cash
+  // stays on the return for anything that wants the drawer figure.
+  const cashIn = calcCashReceivedIn(_arcPayments(), _arcKey());
   return {
-    pays, exps, rev, pending, exp, net: rev - exp,
+    pays, exps, rev, pending, exp, cashIn,
+    net: rev - exp,           // Available Fund — revenue − expenses
+    earned: rev - exp,        // what the period's bills earned, less expenses
     cancels:  _arcPeriodCancels(),
     fines:    _arcPeriodFines(),
     students: _arcPeriodStudents(),
@@ -211,8 +216,10 @@ function renderArchive() {
     <span class="arc-bar__lbl">Month</span>
     <select class="arc-select" onchange="arcSetMonth(this.value)" title="Narrow to one month">${monthOpts}</select>
     <div class="arc-bar__end">
-      <button class="arc-btn" onclick="exportArchiveExcel()" title="Export the whole period to Excel — one sheet per section">${icon('download','xs')} Export Excel</button>
-      <button class="arc-btn arc-btn--primary" onclick="exportArchivePDF()" title="Export the whole period as a PDF document">${icon('print','xs')} Export PDF</button>
+      ${''/* One control, both formats inside it (owner, 2026-09-08 — the rule
+             the seven registers already follow; this screen was missed). */}
+      ${tbExport({ id: 'arc-export', cls: 'arc-btn arc-btn--primary',
+                   excel: 'exportArchiveExcel()', pdf: 'exportArchivePDF()' })}
     </div>
   </div>`;
 
@@ -427,7 +434,8 @@ function _arcOverviewPanel(T, label) {
       const ex = exps.filter(e => String(e.date||'').startsWith(mk)).reduce((s, e) => s + Number(e.amount||0), 0);
       const cn = cans.filter(c => String(_arcCancDate(c)).startsWith(mk)).length;
       const any = mp.length || ex || cn;
-      return { mn, i, mk, rev, pend, ex, cn, net: rev - ex, any };
+      const cash = calcCashReceivedIn(pays, mk);   // Available Fund is cash (Phase 3)
+      return { mn, i, mk, rev, pend, ex, cn, cash, net: rev - ex, any };
     });
     const tot = rows.reduce((a, r) => ({ rev:a.rev+r.rev, pend:a.pend+r.pend, ex:a.ex+r.ex, cn:a.cn+r.cn }),
                             { rev:0, pend:0, ex:0, cn:0 });
@@ -458,6 +466,7 @@ function _arcOverviewPanel(T, label) {
             <td>Year total</td>
             <td class="num" style="color:var(--green)">${fmtPKR(tot.rev)}</td>
             <td class="num" style="color:var(--red)">${fmtPKR(tot.ex)}</td>
+            ${''/* The year's cash, not the sum of twelve billed figures. */}
             <td class="num" style="color:${tot.rev-tot.ex>=0?'var(--green)':'var(--red)'}">${fmtPKR(tot.rev-tot.ex)}</td>
             <td class="num" style="color:var(--amber)">${fmtPKR(tot.pend)}</td>
             <td class="num">${tot.cn}</td>
@@ -507,9 +516,15 @@ function _arcStudentsPanel(T, label) {
   const key = _arcKey();
   const rows = T.students.map(s => {
     const f = _arcStudentFigures(s.id, key);
-    const room = (DB.rooms || []).find(r => r.id === s.roomId);
-    const ch = (typeof resolveCharges === 'function') ? resolveCharges(s) : { total: Number(s.rent||0) };
-    return { s, f, room, charge: ch.total };
+    /* The room they had IN THE PERIOD and what the period billed them — not
+       today's room and today's rate (finance Phase 5). An archive of 2025
+       printed each student in the room they occupy now. */
+    const rid = studentRoomIn(s, key);
+    const room = (DB.rooms || []).find(r => r.id === rid);
+    const billed = f.pays.reduce((t, p) => t + calculateBill(p), 0);
+    const i = studentInPeriodInfo(s, key);
+    const word = !i ? 'Billed' : i.joined && i.left ? 'Joined & left' : i.joined ? 'Joined' : i.left ? 'Left' : 'Resident';
+    return { s, f, room, charge: f.pays.length ? billed : null, word, from: i ? i.stay.from : s.joinDate };
   // Room order, then name inside a room — the same rule every other list and
   // export follows since 2026-08-31.
   }).sort((a, b) => {
@@ -528,16 +543,16 @@ function _arcStudentsPanel(T, label) {
     </div>
     ${rows.length ? `
     <div class="arc-wrap"><table class="arc-table">
-      <thead><tr><th>Student</th><th>Father</th><th>Room</th><th>Joined</th><th>Status</th>
-        <th class="num">Monthly Charge</th><th class="num">Paid</th><th class="num">Pending</th></tr></thead>
+      <thead><tr><th>Student</th><th>Father</th><th>Room</th><th>Joined</th><th>In period</th>
+        <th class="num">Billed</th><th class="num">Paid</th><th class="num">Pending</th></tr></thead>
       <tbody>
         ${rows.map(r => `<tr class="is-click" onclick="showArchiveStudent('${r.s.id}')" title="Open ${escHtml(r.s.name||'')}">
           <td class="nm">${escHtml(r.s.name || '—')}</td>
           <td>${escHtml(r.s.fatherName || '—')}</td>
           <td>${r.room ? '#' + escHtml(String(r.room.number)) : '—'}</td>
-          <td>${escHtml(fmtDate(r.s.joinDate) || '—')}</td>
-          <td>${statusBadge(r.s.status)}</td>
-          <td class="num">${fmtPKR(r.charge)}</td>
+          <td>${escHtml(fmtDate(r.from) || '—')}</td>
+          <td><span class="badge ${r.word==='Resident'?'badge-green':r.word==='Joined'?'badge-blue':'badge-gray'}">${escHtml(r.word)}</span></td>
+          <td class="num">${r.charge != null ? fmtPKR(r.charge) : '—'}</td>
           <td class="num" style="color:${r.f.paid?'var(--green)':'var(--text3)'}">${r.f.paid?fmtPKR(r.f.paid):'—'}</td>
           <td class="num" style="color:${r.f.pending?'var(--red)':'var(--text3)'}">${r.f.pending?fmtPKR(r.f.pending):'—'}</td>
         </tr>`).join('')}
@@ -868,6 +883,7 @@ function _arcExportDef() {
         meta: groups.length + ' categor' + (groups.length === 1 ? 'y' : 'ies'),
         empty: 'Nothing was spent in this period.',
         groupLabel: 'Category',
+        oneTable: true,        // one heading row, not one per category (owner, 2026-09-24)
         columns: [
           { label: 'Date', type: 'date', width: 13, value: e => e.date || '' },
           { label: 'Description', type: 'wrap', width: 44, value: e => e.description || '' },
@@ -912,8 +928,6 @@ function _arcExportDef() {
 function printArchive()        { EXPORT.pdf(_arcExportDef()); }
 function exportArchivePDF()    { EXPORT.pdf(_arcExportDef()); }
 function exportArchiveExcel()  { EXPORT.excel(_arcExportDef()); }
-function downloadArchiveCSV()  { exportArchiveExcel(); }
-
 /* ── ONE STUDENT'S PERIOD RECORD ─────────────────────────────────────────────
    A record document rather than a register: the identity block is `facts`, and
    the single table is that student's payments. §5 puts a document of this

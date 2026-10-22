@@ -16,7 +16,9 @@
     "create-admin": "node --env-file-if-exists=.env src/scripts/create-admin.js",
     "sync-shared": "node scripts/sync-shared.js",
     "prestart": "node scripts/sync-shared.js",
-    "pretest": "node scripts/sync-shared.js"
+    "pretest": "node scripts/sync-shared.js",
+    "test:pg": "node test/pg.js",
+    "test:load": "node test/load.js"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

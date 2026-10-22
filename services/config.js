@@ -99,7 +99,22 @@ const DEFAULTS = {
   // connection, so it is a support-call length rather than a tuning knob: an
   // hour is a customer noticing after lunch, six hours is a customer noticing
   // tomorrow. The request is tiny and there are ~50 of them.
-  entitlementSyncIntervalMs: 3600000,
+  //
+  // 10 minutes since 2026-09-24. The LIVE STREAM (services/stream.js) is what
+  // makes a portal change bite in seconds now; this poll is the fallback for a
+  // router that silently drops long-held connections, so it no longer needs to
+  // be the latency budget — but it should not be an hour either.
+  entitlementSyncIntervalMs: 600000,
+
+  // ── Live licence channel (owner, 2026-09-24) ──────────────────────────────
+  // One held-open request per install that says "your licence changed". It
+  // carries no policy; on a nudge the app fetches the signed entitlement.
+  streamEnabled: true,
+  streamRetryMinMs: 2000,
+  streamRetryMaxMs: 60000,
+  // No bytes for this long (the server pings every 25s) means the connection
+  // is dead even if the socket has not said so — reconnect.
+  streamIdleTimeoutMs: 70000,
 
   /* The floor between two entitlement syncs, whatever asks for one.
      index.js syncs on EVERY connectivity transition into reachable, and

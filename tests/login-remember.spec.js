@@ -59,7 +59,7 @@ async function atLogin(win) {
 
 async function signIn(win, { user = 'warden1', pass = 'admin123', remember }) {
   await atLogin(win);
-  await win.fill('#login-user', user);
+  await win.selectOption('#login-user', user);
   await win.fill('#login-input', pass);
   const box = win.locator('#login-remember');
   if (remember) await box.check(); else await box.uncheck();
@@ -78,8 +78,7 @@ const loginView = win => win.evaluate(() => ({
   user:   document.getElementById('login-user').value,
   pass:   document.getElementById('login-input').value,
   ticked: document.getElementById('login-remember').checked,
-  swap:   !document.getElementById('login-swap').hidden,
-  forget: !document.getElementById('login-forget').hidden,
+  // #login-user is a <select> of the accounts on this PC (owner, 2026-09-23).
 }));
 
 test('remember me keeps the username, never the session: the next launch asks for the password', async () => {
@@ -96,11 +95,9 @@ test('remember me keeps the username, never the session: the next launch asks fo
   await win.waitForTimeout(400);
   const v = await loginView(win);
   expect(v.shown, 'the app opened without asking for the password').toBe(true);
-  expect(v.user, 'the remembered username was not filled in').toBe('warden1');
+  expect(v.user, 'the list did not open on the remembered account').toBe('warden1');
   expect(v.pass).toBe('');
   expect(v.ticked).toBe(true);
-  expect(v.swap, 'Switch account showed with only one remembered name').toBe(false);
-  expect(v.forget).toBe(true);
   await app.close();
 });
 
@@ -123,12 +120,24 @@ test('a session the older build left on disk does not open the app', async () =>
   await app.close();
 });
 
-test('switch account steps through remembered usernames and never fills a password', async () => {
+test('the account list holds every active account, and Remember me decides where it opens', async () => {
+  /* ══ REWRITTEN 2026-09-23 ═════════════════════════════════════
+     This test drove Switch account and the forget × — a text box, a control
+     that stepped through remembered names, and one that dropped a name. The
+     owner replaced the box with a dropdown of every account on this PC, so
+     there is nothing to step through and nothing to forget: picking IS the
+     list, and the remembered name only decides which option it opens on.
+
+     What the old test actually protected is all still asserted: a password is
+     never carried from one account to another, and choosing an account never
+     fills one. */
   let { app, win } = await open();
   await signIn(win, { remember: true });                       // warden1 remembered
   await win.evaluate(async () => {
     WARDENS.w_sara = { username: 'sara', name: 'Sara Warden', active: true,
       perms: { payments: true }, pw: await hashNewPassword('Sara@12345') };
+    WARDENS.w_left = { username: 'left', name: 'Left Staff', active: false,
+      perms: { payments: true }, pw: await hashNewPassword('Left@12345') };
     saveWardenConfig();
   });
   await win.evaluate(() => logout());
@@ -138,35 +147,44 @@ test('switch account steps through remembered usernames and never fills a passwo
   ({ app, win } = await open());
   await atLogin(win);
   await win.waitForTimeout(400);
-  let v = await loginView(win);
-  expect(v.user).toBe('sara');
-  expect(v.swap, 'Switch account is missing with two remembered names').toBe(true);
 
+  const list = await win.evaluate(() => {
+    const s = document.getElementById('login-user');
+    return { tag: s.tagName, values: [...s.options].map(o => o.value), value: s.value,
+             labels: [...s.options].map(o => o.textContent) };
+  });
+  expect(list.tag, 'the account field is not a dropdown').toBe('SELECT');
+  // Every ACTIVE account, and no inactive one — checkLogin() refuses those,
+  // so offering one is offering a door that cannot open.
+  expect(list.values.slice().sort()).toEqual(['sara', 'warden1']);
+  // Each carries the role its permission ticks add up to.
+  expect(list.labels.join(' | ')).toMatch(/Sara Warden — \w+/);
+  // Remember me decided where it opened.
+  expect(list.value, 'the list did not open on the remembered account').toBe('sara');
+
+  // A password typed for one account is never carried to another.
   await win.fill('#login-input', 'typed-before-switching');
-  await win.click('#login-swap');
-  v = await loginView(win);
+  await win.selectOption('#login-user', 'warden1');
+  let v = await loginView(win);
   expect(v.user).toBe('warden1');
   expect(v.pass, 'switching kept the password that was typed').toBe('');
   expect(await win.evaluate(() => document.activeElement && document.activeElement.id)).toBe('login-input');
-  await win.click('#login-swap');
-  expect((await loginView(win)).user).toBe('sara');
 
-  // Switch account belongs to Remember me.
-  await win.locator('#login-remember').uncheck();
-  expect((await loginView(win)).swap).toBe(false);
-  await win.locator('#login-remember').check();
-  expect((await loginView(win)).swap).toBe(true);
+  // And the chosen account is the one that signs in.
+  await win.fill('#login-input', 'Sara@12345');
+  await win.selectOption('#login-user', 'sara');
+  await win.fill('#login-input', 'Sara@12345');
+  await win.click('#login-btn');
+  await insideApp(win);
+  expect(await win.evaluate(() => CUR_USER && CUR_USER.name)).toBe('Sara Warden');
 
-  // × forgets the name shown, on this PC only.
-  await win.click('#login-forget');
-  v = await loginView(win);
-  expect(v.user).toBe('warden1');
-  expect(v.swap).toBe(false);
-  expect((await stored(win)).remember).toEqual({ users: ['warden1'], user: 'warden1' });
-  expect(await win.evaluate(() => !!WARDENS.w_sara), 'forgetting the name touched the account').toBe(true);
-
-  // Signing in unticked takes the name off the list.
-  await signIn(win, { remember: false });
-  expect((await stored(win)).remember).toBeNull();
+  /* Signing in unticked takes THAT name off the list. The whole record is not
+     cleared, because another account is still remembered on this PC — which is
+     the case the single-account test above cannot cover. */
+  await win.evaluate(() => logout());
+  await signIn(win, { user: 'warden1', pass: 'admin123', remember: false });
+  const after = (await stored(win)).remember;
+  expect(after && after.users, 'warden1 was signed in unticked and stayed remembered')
+    .not.toContain('warden1');
   await app.close();
 });

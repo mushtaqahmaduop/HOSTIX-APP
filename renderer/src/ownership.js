@@ -58,6 +58,36 @@ function ownCanEdit(p) {
     reason: 'Collected by ' + who + '. Only ' + (o.id ? _ownFirst(who) + ' or ' : '') + 'an admin can change it.' };
 }
 
+/* ══ RECEIVING MONEY IS NOT EDITING SOMEONE ELSE'S (owner, 2026-09-23) ══════
+   "a payment added by admin then the warden or another user cant receive
+   pending but can only view ... sometimes in hostels the admin is not present
+   so the warden or another users receives payments from students".
+
+   ownCanEdit() answers one question — may this account CHANGE what another
+   account collected — and the Edit form used it for everything, so a record
+   holding the admin's money went view-only for a warden in every respect,
+   including the pending balance nobody had collected yet. A student standing
+   at the desk with the rest of the rent could not be served.
+
+   These are different acts. Taking new money ADDS a collection of your own
+   and is recorded in your name; editing REWRITES a figure someone else is
+   answerable for. The first is what a hostel does all day and needs no
+   ownership at all — only the payments permission. The second stays exactly
+   as locked as it was: step 6 is untouched, and so is who may reverse.
+
+   NOTHING PENDING IS NOT A REFUSAL ABOUT OWNERSHIP, but the form asks this
+   before it decides what to enable, and a settled month has nothing to take.  */
+function ownCanReceive(p) {
+  if (!p) return { ok: false, reason: 'That payment record could not be found.' };
+  if (typeof canDo === 'function' && !canDo('payments')) {
+    return { ok: false, reason: 'Your account may not take payments.' };
+  }
+  const due = typeof calculateOutstanding === 'function' ? calculateOutstanding(p)
+            : (typeof outstandingOf === 'function' ? money(outstandingOf(p)) : 0);
+  if (due <= 0) return { ok: false, reason: 'Nothing is pending on this month.' };
+  return { ok: true, reason: '' };
+}
+
 /** May the signed-in account delete this record? { ok, reason } */
 function ownCanDelete(p) {
   if (!p) return { ok: false, reason: 'That payment record could not be found.' };

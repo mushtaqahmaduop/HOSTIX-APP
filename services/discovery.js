@@ -81,9 +81,13 @@ const logger = require('./logger');
  * file re-points the estate. `tests/discovery.test.js` asserts the owner and
  * repo still match `package.json`'s publish config, so a repository rename
  * cannot leave updates working and discovery pointing at a 404.
+ *
+ * It lives in the PUBLIC releases repository since 6.0.0 (owner, 2026-09-24),
+ * so the source repository can be private without cutting every install off.
+ * Builds before 6.0.0 still read HOSTIX-APP/master.
  */
 const DISCOVERY_URL =
-  'https://raw.githubusercontent.com/mushtaqahmaduop/HOSTIX-APP/master/control-plane.json';
+  'https://raw.githubusercontent.com/mushtaqahmaduop/hostyllo-releases/main/control-plane.json';
 
 /** The cache `config.load()` reads synchronously at every boot. */
 const CACHE_FILE = config.DISCOVERY_CACHE_FILE;

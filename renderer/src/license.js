@@ -15,8 +15,6 @@
    ─────────────────────────────────────────────────────────────────────────── */
 
 // Phase 7 stubs
-function checkOnlineLicense() { return Promise.resolve({ valid: true, mode: 'offline' }); }
-function syncLicense()        { return Promise.resolve({ synced: false, reason: 'offline' }); }
 function checkUpdates()       { return Promise.resolve({ hasUpdate: false }); }
 
 // ── STARTUP LICENSE CHECK ─────────────────────────────────────────────────────
@@ -230,7 +228,3 @@ async function deactivateLicense() {
 }
 
 // ── GET LICENSE INFO (for settings page display) ──────────────────────────────
-async function getLicenseInfo() {
-  if (!window.electronAPI || !window.electronAPI.licenseCheck) return null;
-  try { return await window.electronAPI.licenseCheck(); } catch(e) { return null; }
-}

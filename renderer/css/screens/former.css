@@ -19,7 +19,37 @@
 /* ── Toolbar ─────────────────────────────────────────────────────────────── */
 .fm-tools { display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; padding:var(--space-3) var(--space-4); }
 .fm-tools .ui-search  { flex:1 1 200px; min-width:170px; max-width:340px; }
-.fm-tools .ui-selectw { min-width:132px; }
+/* A <select> is as wide as its widest OPTION, and the reasons are free text
+   typed into a cancellation - so one "Shifted to a hostel closer to the
+   university campus" stretched this filter until .fm-tools__end wrapped and
+   Export left the toolbar row (owner review #6). Capped, with the overflow
+   ellipsised; the full reason is still in the open list. */
+.fm-tools .ui-selectw { min-width:132px; max-width:180px; }
+.fm-tools .ui-select  { text-overflow:ellipsis; }
+.fm-tools__end { flex-shrink:0; }
+
+/* The same tier payments.css uses, for the same reason: at 1093 (a 1366 screen
+   at 125%) the panel is 826px and the bar wants ~1045, so Export dropped to a
+   second row - which is the whole of owner review #6. The width comes off the
+   search box, the only control here that can give up room without giving up a
+   choice, and off selects whose widest option is shorter than the box the
+   browser sizes for them. No filter and no action leaves the bar. */
+@media (max-width:1440px) {
+    .fm-tools { gap:var(--space-1); }
+    .fm-tools .ui-search  { flex:1 1 170px; min-width:140px; max-width:190px; }
+    .fm-tools .ui-selectw { min-width:112px; max-width:150px; }
+    .fm-tools__end { gap:var(--space-1); }
+}
+
+/* 1093 needs a second step. Measured there: the panel is 794px inside its
+   padding and the bar wanted 858 - the search box had grown back to its 190px
+   cap because row one had free space to give it, and that is what pushed
+   Export over. 782 at these widths, which is 12px of slack, so the four
+   filters and both actions hold one line at every tier down to the floor. */
+@media (max-width:1200px) {
+    .fm-tools .ui-search  { flex:1 1 150px; min-width:120px; max-width:150px; }
+    .fm-tools .ui-selectw { min-width:108px; max-width:132px; }
+}
 .fm-tools__end { margin-left:auto; display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; }
 
 /* ── The strip between the toolbar and the table ─────────────────────────── */
@@ -86,7 +116,16 @@
    from wrapping onto three lines in a 90px Occupation column beside a Reason
    column holding one word. */
 .ui-table th.fm-reason,
-.ui-table td.fm-reason { width:100%; white-space:normal; min-width:120px; }
+.ui-table td.fm-reason { width:100%; white-space:nowrap; min-width:120px; }
+/* ONE LINE, AND THE REST ON HOVER (owner review #9). A reason is free text with
+   no length limit, and `white-space:normal` let a long one wrap to three lines
+   and set the height of every other cell in its row. The cap is on the span,
+   not the cell: the column still takes the table's slack, it just stops
+   claiming more than it can use. The full text is the title. */
+.fm-reason__t {
+    display:block; max-width:320px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
 .fm-occ { white-space:nowrap; }
 
 /* ════════════════════════════════════════════════════════════════════════════

@@ -212,6 +212,74 @@ ok('a payment against a manual name stays out of the ledger', () => {
   assert.strictEqual(L.ledgerTrackDeleted(m), null);
 });
 
+/* ══ A REFUND POSTS A PAIR (owner, 2026-09-23) ════════════════════════════
+   The balance here is charges − payments ± adjustments, and `collected` adds
+   every reversal back so the payment side stands at what was ever collected.
+   Under that definition ONE entry cannot tell the truth about money handed
+   back: +amount re-opens a debt the student does not owe, −amount says the
+   hostel owes THEM. Both halves are posted and they net to zero.
+
+   This runs on its own fixture: the tests above share and mutate one record. */
+ok('a refund posts the reversal AND the release, and leaves the balance alone', () => {
+  fresh();
+  const p = rec({ id: 'pr1' }); DB.payments.push(p);
+  L.ledgerTrack(p);
+  L.applyPayment(p, { amount: 14500, date: '2026-09-05' });
+  L.ledgerTrack(p);
+  const before = L.ledgerBalance('s1');
+  assert.strictEqual(before, 0, 'settled before the refund');
+
+  L.reversePayment(p, { amount: 1000, kind: 'refund', reason: 'Overcharged mess',
+                        date: '2026-09-23' });
+  const all = L.ledgerEntriesFor('s1');
+  const rev = all[all.length - 2], rel = all[all.length - 1];
+
+  assert.strictEqual(rev.part, 'reversal');
+  assert.strictEqual(rev.amount, 1000);
+  assert.ok(/Refunded: Overcharged mess/.test(rev.reason), rev.reason);
+  assert.strictEqual(rel.part, 'refund');
+  assert.strictEqual(rel.amount, -1000);
+  assert.ok(/Charge released by the refund/.test(rel.reason), rel.reason);
+
+  assert.strictEqual(L.ledgerBalance('s1'), 0, 'the pair must net to nothing');
+  assert.strictEqual(L.calculateOutstanding(p), 0);
+  /* The ledger and the record have to agree, or the correctness check reports
+     a student who owes money they do not. */
+  noDrift();
+});
+
+ok('a correction still posts one entry, and still re-opens the debt', () => {
+  fresh();
+  const p = rec({ id: 'pc1' }); DB.payments.push(p);
+  L.ledgerTrack(p);
+  L.applyPayment(p, { amount: 14500, date: '2026-09-05' });
+  L.ledgerTrack(p);
+  L.reversePayment(p, { amount: 1000, reason: 'Mis-keyed', date: '2026-09-23' });
+  const all = L.ledgerEntriesFor('s1');
+  assert.strictEqual(all[all.length - 1].part, 'reversal', 'no release on a correction');
+  assert.strictEqual(L.ledgerBalance('s1'), 1000);
+  assert.strictEqual(L.calculateOutstanding(p), 1000);
+  noDrift();
+});
+
+ok('posting a refunded record twice adds nothing — the release is not re-posted', () => {
+  fresh();
+  const p = rec({ id: 'pr2' }); DB.payments.push(p);
+  L.ledgerTrack(p);
+  L.applyPayment(p, { amount: 14500, date: '2026-09-05' });
+  L.ledgerTrack(p);
+  L.reversePayment(p, { amount: 1000, kind: 'refund', date: '2026-09-23' });
+  const n = L.ledgerEntriesFor('s1').length;
+  /* The release carries part 'refund', which _ledgerPosted() must recognise.
+     Left to the default branch it would be filed under `parts`, where
+     _ledgerDiff() reads every key as a charge part and would post an
+     adjustment to "remove" a charge that never existed. */
+  L.ledgerTrack(p); L.ledgerTrack(p);
+  assert.strictEqual(L.ledgerEntriesFor('s1').length, n, 'a settled record posts nothing');
+  assert.strictEqual(L.ledgerBalance('s1'), 0);
+  noDrift();
+});
+
 ok('running balances follow entry order across a student\'s months', () => {
   fresh();
   const a = rec({ id: 'pa', month: 'August 2026', monthlyRent: 10000, messCharge: 0 });

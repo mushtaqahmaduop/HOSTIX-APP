@@ -289,6 +289,21 @@ const wideDef = {
   ok((mdoc.html.match(/class="group__t"/g) || []).length === 2,
      '§35 a grouped section prints a table per group');
 
+  /* `oneTable` (owner, 2026-09-24: "one heading strip on every printable page
+     and the categories should only be differentiated by Category and its sub
+     total"). The same two groups, drawn as one register. */
+  const one = Object.assign({}, multi, { sections: [Object.assign({}, multi.sections[2], { oneTable: true })] });
+  const odoc = ctx.EXPORT.document(one).html;
+  ok((odoc.match(/<table>/g) || []).length === 1 && (odoc.match(/<thead>/g) || []).length === 1,
+     'oneTable: two categories share ONE table and ONE heading row');
+  ok((odoc.match(/<tr class="grp">/g) || []).length === 2 && (odoc.match(/class="group__t"/g) || []).length === 2,
+     'oneTable: each category is its own row inside it');
+  ok((odoc.match(/<tr class="subtotal">/g) || []).length === 2,
+     'oneTable: each category keeps its sub-total, inside the same table (§64)');
+  ok(odoc.indexOf('Electricity') < odoc.indexOf('Cleaning') &&
+     odoc.indexOf('<tr class="subtotal">') < odoc.indexOf('Cleaning'),
+     'oneTable: a category\'s sub-total closes it before the next category opens');
+
   const mspec = ctx.EXPORT.workbook(multi);
   ok(mspec.sheets.map(s => s.name).join(',') === 'Students,Payments,Expenses,Cancellations',
      '§39 the workbook puts each section on its own sheet');

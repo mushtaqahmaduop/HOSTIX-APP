@@ -149,9 +149,12 @@ function waBuildLinks(rawPhone, encodedMsg) {
   var budget = LIMIT - Math.max(appPre.length, webPre.length);
   var msg    = encodedMsg;
   if (msg.length > budget) {
-    msg = msg.slice(0, budget);
-    // Never cut mid-escape: %XX must survive whole or the URL is malformed.
-    msg = msg.replace(/%[0-9A-Fa-f]?$/, '');
+    // Trim whole characters, not the encoded string: a multi-byte letter is
+    // several %XX escapes, and cutting between them malformed the link. See
+    // waFitText() in utils.js.
+    var raw;
+    try { raw = decodeURIComponent(encodedMsg); } catch (e) { raw = ''; }
+    msg = waFitText(raw, budget);
   }
   return { app: appPre + msg, web: webPre + msg };
 }

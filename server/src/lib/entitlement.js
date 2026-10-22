@@ -27,7 +27,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const features = require('./features');
+const access = require('./access');
 
 /** Matches STATUS in the app's services/entitlement.js. */
 const STATUS = {
@@ -92,8 +92,12 @@ function unverifiedStatus() {
  * @param {Date} now
  */
 function resolveStatus(licence, now) {
-  if (licence.status === 'revoked' || licence.verification === 'rejected') return STATUS.REVOKED;
-  if (licence.status === 'suspended') return STATUS.SUSPENDED;
+  const level = access.effectiveLevel(licence, now);
+  if (level === 'revoked' || licence.verification === 'rejected') return STATUS.REVOKED;
+  if (level === 'suspended') return STATUS.SUSPENDED;
+  // readonly and restricted are NOT statuses on the wire: the app rejects a
+  // status it does not know. They travel as the calendar status below plus
+  // `restrictions` in the claims.
 
   const expiry = licence.expiresAt.getTime();
   const graceEnds = expiry + policy().graceDays * DAY_MS;
@@ -112,12 +116,26 @@ function resolveStatus(licence, now) {
  * @param {string} input.deviceId
  * @param {string} input.licenseId
  * @param {string} input.machineId
- * @param {{status:string, verification:string, expiresAt:Date, features:object}} input.licence
+ * @param {{status:string, verification:string, expiresAt:Date, features:object,
+ *          status_until?:Date, status_before?:string, status_reason?:string,
+ *          restrictions?:object, revision?:number}} input.licence
+ * @param {{features?:object, restrictions?:object, revision?:number}} [input.fleet]
+ * @param {{status?:string, reason?:string}} [input.device]  a released device is locked
  * @param {Date} [input.now]
  */
 function buildClaims(input) {
   const now = input.now || new Date();
   const p = policy();
+  const lic = input.licence;
+  const fleet = input.fleet || {};
+  const released = !!(input.device && input.device.status === 'deactivated');
+
+  // A device the owner removed from this licence ("release device") is locked
+  // at its next sync. It still authenticates — its secret is its identity — so
+  // it can be TOLD, which is the whole difference between a lock and a PC that
+  // quietly carries on from its cache.
+  const level = released ? 'revoked' : access.effectiveLevel(lic, now);
+  const timed = !released && lic.status !== 'revoked' && !!lic.status_until && level === lic.status;
 
   return {
     ver: 1,
@@ -130,8 +148,8 @@ function buildClaims(input) {
     // perfectly — which is exactly the sharing a licence exists to prevent.
     machineId: input.machineId,
 
-    status: resolveStatus(input.licence, now),
-    expiresAt: input.licence.expiresAt.toISOString(),
+    status: released ? STATUS.REVOKED : resolveStatus(lic, now),
+    expiresAt: lic.expiresAt.toISOString(),
 
     // Server time. This is the claim that lets the app detect a clock wound
     // backwards, because it cannot be forged the way a local timestamp can.
@@ -146,9 +164,24 @@ function buildClaims(input) {
     // flag reads as `undefined` in the app, which is falsy — so sending a
     // partial map would switch a feature off for everyone the moment a new
     // flag is added to the catalogue.
-    features: features.resolve(input.licence.features),
+    features: access.resolveFeatures(lic.features, fleet.features),
 
-    verification: input.licence.verification
+    verification: lic.verification,
+
+    // ── Added 2026-09-24, inside ver 1 ─────────────────────────────────────
+    // New fields, not a new `ver`: the app rejects any ver other than 1, so a
+    // bump would make every shipped build discard its entitlement. Builds that
+    // predate these fields ignore them; builds that know them enforce them.
+    level,
+    restrictions: access.resolveRestrictions(level, lic.restrictions, fleet.restrictions),
+    // Shown to the hostel on the banner or the lock screen.
+    reason: released
+      ? ((input.device && input.device.reason) || 'This computer has been removed from the licence.')
+      : (level === 'active' ? null : (lic.status_reason || null)),
+    until: timed ? new Date(lic.status_until).toISOString() : null,
+    // Licence revision + fleet revision: the app reports it back when it next
+    // fetches, which is how the portal can say "change received".
+    revision: Number(lic.revision || 0) + Number(fleet.revision || 0)
   };
 }
 

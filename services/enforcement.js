@@ -16,6 +16,14 @@
 // needed for expiry to work. This module therefore treats the local licence as
 // the baseline and a signed entitlement as an optional, more current opinion.
 //
+// ── The owner's controls (2026-09-24) ───────────────────────────────────────
+//
+// A SUSPENDED licence is LOCKED, not read-only: the app shows the licence
+// screen and nothing else, with no data download (owner's decision D1). The
+// owner can also switch off data entry, printing and exporting one at a time
+// ("read-only" and "restricted" in the portal) — those arrive as
+// `restrictions` on an ACTIVE entitlement and are enforced here.
+//
 // ── Read-only, never destructive ────────────────────────────────────────────
 //
 // Past grace the app stops accepting new work. It never deletes, never
@@ -33,16 +41,19 @@ const STATE = {
   ACTIVE:     'ACTIVE',      // full operation
   GRACE:      'GRACE',       // full operation, renewal warning
   EXPIRED:    'EXPIRED',     // read-only
-  SUSPENDED:  'SUSPENDED',   // read-only, with the owner's reason
+  SUSPENDED:  'SUSPENDED',   // locked (D1) — the licence screen, with the owner's reason
   REVOKED:    'REVOKED',     // blocked — back to the activation screen
   UNLICENSED: 'UNLICENSED'   // no usable licence file at all
 };
 
 /** States in which the app runs but refuses new work. */
-const READ_ONLY_STATES = new Set([STATE.EXPIRED, STATE.SUSPENDED]);
+const READ_ONLY_STATES = new Set([STATE.EXPIRED]);
 
 /** States in which the app does not open at all. */
-const BLOCKED_STATES = new Set([STATE.REVOKED, STATE.UNLICENSED]);
+const BLOCKED_STATES = new Set([STATE.SUSPENDED, STATE.REVOKED, STATE.UNLICENSED]);
+
+/** Everything the owner can switch off. `true` = allowed. */
+const ALL_ALLOWED = Object.freeze({ dataEntry: true, printing: true, exporting: true });
 
 const DAY_MS = 86400000;
 
@@ -186,7 +197,12 @@ function resolve(input) {
       state: ent.state, source: 'entitlement', reason: null,
       expiresAt: ent.expiresAt || licence.expiry || null,
       now, policy, features: ent.features || null,
-      entitlementIssuedAt: ent.issuedAt || null
+      entitlementIssuedAt: ent.issuedAt || null,
+      restrictions: ent.restrictions || null,
+      level: ent.level || null,
+      ownerReason: ent.reason || null,
+      until: ent.until || null,
+      revision: ent.revision != null ? ent.revision : null
     });
   }
 
@@ -221,15 +237,33 @@ function decision(d) {
   // readOnlyOnExpiry is server-configurable (D-3). With it off, an expired
   // licence still warns but does not lock — for a customer being given room to
   // pay.
-  const readOnly = READ_ONLY_STATES.has(d.state)
-    && (d.state === STATE.SUSPENDED || d.policy.readOnlyOnExpiry !== false);
+  const blocked = BLOCKED_STATES.has(d.state);
+  const expiredReadOnly = READ_ONLY_STATES.has(d.state) && d.policy.readOnlyOnExpiry !== false;
+
+  // What the hostel may do. A lock takes everything; an expired licence stops
+  // data entry (D-3: printing and export keep working); the owner's switches
+  // take away whatever they name. Each can only take away.
+  const restrictions = Object.assign({}, ALL_ALLOWED);
+  if (blocked) { restrictions.dataEntry = false; restrictions.printing = false; restrictions.exporting = false; }
+  if (expiredReadOnly) restrictions.dataEntry = false;
+  if (d.restrictions && typeof d.restrictions === 'object') {
+    for (const k of Object.keys(ALL_ALLOWED)) if (d.restrictions[k] === false) restrictions[k] = false;
+  }
 
   return {
     state: d.state,
     source: d.source,
     reason: d.reason || null,
-    readOnly,
-    blocked: BLOCKED_STATES.has(d.state),
+    // `readOnly` stays the write gate's one question, so writeBlocked() needs
+    // no second path: an owner's "no data entry" is read-only by another name.
+    readOnly: !blocked && !restrictions.dataEntry,
+    blocked,
+    restrictions,
+    level: d.level || null,
+    // The owner's words, shown to the hostel. Never the local `reason` code.
+    ownerReason: d.ownerReason || null,
+    until: d.until || null,
+    revision: d.revision != null ? d.revision : null,
     expiresAt,
     daysRemaining,
     graceDays: d.policy.graceDays,
@@ -259,13 +293,50 @@ function writeBlocked(decision, table) {
   return !ALWAYS_WRITABLE.has(String(table));
 }
 
+/**
+ * Whether an OUTPUT is allowed: 'printing' or 'exporting'. Main-process gates
+ * call this; like writeBlocked() it is the one that counts.
+ */
+function outputBlocked(decision, kind) {
+  if (!decision) return false;
+  if (decision.blocked) return true;
+  const r = decision.restrictions;
+  return !!(r && r[kind] === false);
+}
+
+/** The words for a refused output, naming the owner's reason when there is one. */
+function outputRefusal(decision, kind) {
+  const what = kind === 'printing' ? 'Printing' : 'Exporting';
+  const why = decision && decision.ownerReason ? ' Reason: ' + decision.ownerReason + '.' : '';
+  return what + ' is switched off for this licence.' + why;
+}
+
+function _fmtDate(iso) {
+  return new Date(iso).toLocaleDateString('en-PK', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
 /** What to tell the customer. Plain, specific, and always with a way out. */
 function message(decision, opts) {
   const d = decision || {};
   const support = (opts && opts.supportContact) || 'your provider';
-  const on = d.expiresAt
-    ? new Date(d.expiresAt).toLocaleDateString('en-PK', { day: '2-digit', month: 'long', year: 'numeric' })
-    : null;
+  const on = d.expiresAt ? _fmtDate(d.expiresAt) : null;
+  const why = d.ownerReason ? ' Reason: ' + d.ownerReason + '.' : '';
+  const until = d.until ? ' until ' + _fmtDate(d.until) : '';
+
+  // The owner's switches outrank a renewal reminder: a hostel that cannot save
+  // needs to be told why before it is told when its licence ends.
+  const r = d.restrictions;
+  if (d.state === STATE.ACTIVE || d.state === STATE.GRACE) {
+    if (r && (!r.dataEntry || !r.printing || !r.exporting)) {
+      const off = [];
+      if (!r.dataEntry) off.push('data entry');
+      if (!r.printing) off.push('printing');
+      if (!r.exporting) off.push('exporting');
+      const list = off.length > 1 ? off.slice(0, -1).join(', ') + ' and ' + off[off.length - 1] : off[0];
+      return { tone: 'warn', text: 'Switched off on this licence' + until + ': ' + list + '.'
+        + why + ' Your records are safe. Contact ' + support + '.' };
+    }
+  }
 
   switch (d.state) {
     case STATE.ACTIVE:
@@ -277,9 +348,9 @@ function message(decision, opts) {
     case STATE.EXPIRED:
       return { tone: 'error', text: 'Your licence expired on ' + on + '. You can still view, search and print everything, but new entries and edits are paused until it is renewed.' };
     case STATE.SUSPENDED:
-      return { tone: 'error', text: 'This licence has been suspended. You can still view, search and print everything. Contact ' + support + ' to restore full access.' };
+      return { tone: 'error', text: 'This licence has been suspended' + until + '. The app is locked until it is restored.' + why + ' Contact ' + support + '.' };
     case STATE.REVOKED:
-      return { tone: 'error', text: 'This licence has been revoked. Contact ' + support + '.' };
+      return { tone: 'error', text: (d.ownerReason ? d.ownerReason.replace(/\.?$/, '.') + ' ' : 'This licence has been revoked. ') + 'Contact ' + support + '.' };
     default:
       return null;
   }
@@ -287,5 +358,5 @@ function message(decision, opts) {
 
 module.exports = {
   STATE, READ_ONLY_STATES, BLOCKED_STATES, ALWAYS_WRITABLE, DEFAULT_POLICY,
-  effectiveNow, resolve, writeBlocked, message
+  effectiveNow, resolve, writeBlocked, outputBlocked, outputRefusal, message
 };

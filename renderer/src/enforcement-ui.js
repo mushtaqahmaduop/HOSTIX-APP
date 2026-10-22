@@ -12,6 +12,11 @@
    Read-only means new entries and edits are paused. Every list, every search,
    every report and every print stays exactly as it was, and export keeps
    working. A hostel that pays late must lose nothing (D-3).
+
+   ── Except where the owner says so (2026-09-24) ─────────────────────────────
+   The owner can switch printing and exporting off per licence from the
+   portal. Then this file greys out Print and Export and says why; the main
+   process refuses them regardless.
    ─────────────────────────────────────────────────────────────────────────── */
 
 'use strict';
@@ -35,14 +40,49 @@ function isReadOnly() { return !!(_enforcement && _enforcement.readOnly); }
 function requireWritable(what) {
   if (!isReadOnly()) return true;
   var noun = what || 'This change';
-  var why = _enforcement.state === 'SUSPENDED'
-    ? 'this licence is suspended'
-    : 'this licence has expired';
+  var why = _enforcement.state === 'EXPIRED'
+    ? 'this licence has expired'
+    : 'data entry is switched off for this licence';
+  var reason = _enforcement.ownerReason ? ' Reason: ' + _enforcement.ownerReason + '.' : '';
   if (typeof toast === 'function') {
-    toast(noun + ' cannot be saved because ' + why + '. Your existing records are safe and can still be viewed and printed.', 'error');
+    toast(noun + ' cannot be saved because ' + why + '.' + reason + ' Your existing records are safe.', 'error');
   }
   return false;
 }
+
+// ── Printing and exporting (owner, 2026-09-24) ──────────────────────────────
+
+/** 'printing' or 'exporting' — allowed unless the decision explicitly says no. */
+function canOutput(kind) {
+  if (!_enforcement) return true;
+  if (_enforcement.blocked) return false;
+  var r = _enforcement.restrictions;
+  return !(r && r[kind] === false);
+}
+
+/**
+ * Guard for Print / PDF / Export entry points:
+ *   if (!requireOutput('printing')) return;
+ */
+function requireOutput(kind) {
+  if (canOutput(kind)) return true;
+  var what = kind === 'printing' ? 'Printing and PDFs are' : 'Exporting is';
+  var reason = _enforcement && _enforcement.ownerReason ? ' Reason: ' + _enforcement.ownerReason + '.' : '';
+  if (typeof toast === 'function') {
+    toast(what + ' switched off for this licence.' + reason + ' Contact support.', 'error', 'Not available');
+  }
+  return false;
+}
+
+/* window.print() is called from a dozen places (receipts, the visit sheet,
+   student cards). One wrapper here covers every one of them and any added
+   later; the main process gates the PDF paths itself. */
+(function wrapPrint() {
+  if (typeof window === 'undefined' || typeof window.print !== 'function' || window.__hxPrintWrapped) return;
+  var original = window.print.bind(window);
+  window.print = function () { if (requireOutput('printing')) return original(); };
+  window.__hxPrintWrapped = true;
+})();
 
 // ── Feature flags ───────────────────────────────────────────────────────────
 //
@@ -64,7 +104,9 @@ var FEATURE_PAGES = {
   reports:  ['reports'],
   archive:  ['archive'],
   backup:   ['backup'],
-  expenses: ['expenses']
+  expenses: ['expenses'],
+  ownerFunds: ['ownerfunds'],
+  payroll:    ['payroll']
   // printDocs and multiUser gate actions rather than pages — see below.
 };
 
@@ -75,8 +117,45 @@ var FEATURE_LABELS = {
   backup:    'Backup & restore',
   printDocs: 'Printable documents',
   multiUser: 'Multiple staff logins',
-  expenses:  'Expenses & fund transfers'
+  expenses:  'Expenses & fund transfers',
+  ownerFunds: 'Owner Funds',
+  payroll:    'Staff & Payroll'
 };
+
+/* ── OPT-IN FEATURES: OFF UNLESS THE CONTROL PLANE SAYS ON ────────────────────
+   Every flag above fails OPEN, for the reason given at the top of this section.
+   A feature built for ONE client cannot: failing open would hand it to every
+   hostel that has not heard from the control plane — which is most of them,
+   most of the time. Owner Funds (2026-09-28) is the first; the owner switches
+   it on per hostel from the portal.
+
+   So an opt-in flag is ON only when the entitlement says `true`. And because
+   the entitlement goes stale when a hostel is offline for long enough — and
+   stale means `features: null` — the last explicit answer is REMEMBERED on this
+   machine: a hostel that had it keeps it while offline, and loses it only when
+   the control plane says `false`. An entitlement from a control plane too old
+   to know the flag (key absent) reads as "no news", not as "off". */
+var OPT_IN_FEATURES = { ownerFunds: true };
+var _OPT_IN_MEMO = 'hx_feat_on_';
+
+function _optInRemembered(key) {
+  try { return localStorage.getItem(_OPT_IN_MEMO + key) === '1'; } catch (_) { return false; }
+}
+function _optInRemember(key, on) {
+  try {
+    if (on) localStorage.setItem(_OPT_IN_MEMO + key, '1');
+    else    localStorage.removeItem(_OPT_IN_MEMO + key);
+  } catch (_) {}
+}
+function _optInState(key) {
+  var f = _enforcement && _enforcement.features;
+  if (f && Object.prototype.hasOwnProperty.call(f, key)) {
+    var on = f[key] === true;
+    _optInRemember(key, on);
+    return on;
+  }
+  return _optInRemembered(key);
+}
 
 /**
  * Is this feature available to this hostel?
@@ -85,6 +164,7 @@ var FEATURE_LABELS = {
  * connection, an older build of the control plane — all mean yes.
  */
 function hasFeature(key) {
+  if (Object.prototype.hasOwnProperty.call(OPT_IN_FEATURES, key)) return _optInState(key);
   if (!_enforcement || !_enforcement.features) return true;
   return _enforcement.features[key] !== false;
 }
@@ -97,7 +177,9 @@ function requireFeature(key) {
   if (hasFeature(key)) return true;
   var label = FEATURE_LABELS[key] || key;
   if (typeof toast === 'function') {
-    toast(label + ' is not included in this hostel’s plan. Contact support to add it.',
+    toast(OPT_IN_FEATURES[key]
+        ? label + ' is not switched on for this hostel. Contact support to have it added.'
+        : label + ' is not included in this hostel’s plan. Contact support to add it.',
       'error', 'Not included');
   }
   return false;
@@ -212,6 +294,10 @@ function _fmt(iso) {
  */
 function _applyReadOnly(readOnly) {
   document.body.classList.toggle('is-readonly', !!readOnly);
+  // Separate hooks so a stylesheet can grey out Print and Export buttons
+  // without touching data entry, and the other way round.
+  document.body.classList.toggle('lic-no-printing', !canOutput('printing'));
+  document.body.classList.toggle('lic-no-exporting', !canOutput('exporting'));
 }
 
 // ── Boot ────────────────────────────────────────────────────────────────────
@@ -220,7 +306,14 @@ function _apply(decision) {
   _enforcement = decision || null;
   try { _renderBanner(_enforcement); } catch (e) { console.error('[licence] banner:', e); }
   try { _applyReadOnly(isReadOnly()); } catch (e) { console.error('[licence] readonly:', e); }
-  try { applyFeaturesToChrome(); } catch (e) { console.error('[licence] features:', e); }
+  /* The whole chrome pass when someone is signed in, not only the feature
+     pass: features only ever HIDE, and an opt-in feature switched ON while the
+     app is open (Owner Funds) has a rail item to REVEAL — which only the
+     permission pass does, and it re-applies features last. */
+  try {
+    if (typeof CUR_USER !== 'undefined' && CUR_USER && typeof applyPermissionsToChrome === 'function') applyPermissionsToChrome();
+    else applyFeaturesToChrome();
+  } catch (e) { console.error('[licence] features:', e); }
   // A page the customer is standing on may have just been switched off. Send
   // them somewhere that still exists rather than leaving them on a screen that
   // no longer renders.

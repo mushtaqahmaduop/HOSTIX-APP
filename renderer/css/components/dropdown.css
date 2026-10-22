@@ -39,3 +39,22 @@
 .ui-menu__read b { font-weight: var(--weight-medium); color: var(--text-primary); }
 
 .ui-menu__sep { height: 1px; margin: var(--space-2) 0; background: var(--border); }
+
+/* ONE-CLICK FILTER RESET (owner, 2026-09-21: "add a reset svg on the
+   dropdown when some filters are activated").
+
+   It is a SIBLING of the filter button, never a child, so it needs to look
+   attached without being inside it. Rendered only while something is set,
+   which is why there is no disabled state to design. */
+.flt-reset {
+  display:inline-flex; align-items:center; justify-content:center;
+  vertical-align:middle; margin-left:var(--space-1);
+  width:28px; height:28px; padding:0;
+  border:1px solid var(--border); border-radius:var(--radius-sm);
+  background:var(--surface-1); color:var(--text-tertiary);
+  cursor:pointer; transition:color var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+.flt-reset:hover  { color:var(--danger-fg); border-color:var(--danger-fg); background:var(--danger-bg); }
+.flt-reset:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }

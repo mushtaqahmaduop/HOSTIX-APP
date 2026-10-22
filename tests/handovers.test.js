@@ -50,6 +50,7 @@ const H = vm.runInContext(`({
   ledgerTrack, ledgerLoaded, ledgerImportIfEmpty,
   handoverSync, hoPendingLines, hoSum, hoByMethod, hoOpenFor, hoItems, hoLabel, hoHue,
   hoEvaluate, hoSend, hoTakeBack, hoApprove, hoFlag, hoAlerts, hoMarkSeen,
+  hoRecordReceived, hoNeedsHandover,
   as: id => { CUR_ROLE = id; CUR_USER = WARDENS[id]; },
   log: () => LOG,
 })`, sandbox);
@@ -61,6 +62,20 @@ const ok = (name, fn) => {
   catch (e) { fail++; console.log('  FAIL ' + name + '\n       ' + (e && e.message || e)); }
 };
 const same = (a, b, m) => assert.strictEqual(JSON.stringify(a), JSON.stringify(b), m);
+
+/* A per-method map (hoByMethod, h.expected, h.countedHow) has no meaningful key
+   order. Its keys arrive in whatever order the LINES are in, and both
+   hoPendingLines and hoItems sort by entry.createdAt, which is an ISO string at
+   MILLISECOND resolution: two collections recorded in the same millisecond tie,
+   the stable sort then leaves them in insertion order instead of newest-first,
+   and the keys come out the other way round. Machine timing decided whether
+   these assertions passed -- about one run in five failed, with identical
+   totals in a different order. Compare the pairs, not the string.
+
+   (deepStrictEqual is not an option: these objects are built inside the vm
+   sandbox, so they carry another realm’s prototypes.) */
+const sameMap = (a, b, m) => same(Object.keys(a || {}).sort().map(k => [k, a[k]]),
+                                  Object.keys(b || {}).sort().map(k => [k, b[k]]), m);
 
 function rec(o) {
   const p = Object.assign({ id: 'p1', studentId: 's1', studentName: 'Fixture', month: 'September 2026',
@@ -97,7 +112,7 @@ ok('a warden hands over net cash: collections less the reversals they recorded',
   const lines = H.hoPendingLines('w_sara');
   assert.strictEqual(lines.length, 3);
   assert.strictEqual(H.hoSum(lines), 7000);
-  same(H.hoByMethod(lines), { Cash: 4000, JazzCash: 3000 });
+  sameMap(H.hoByMethod(lines), { Cash: 4000, JazzCash: 3000 });
 });
 
 ok('imported history is never a line', () => {
@@ -116,7 +131,7 @@ ok('sending takes a snapshot of every waiting line', () => {
   assert.strictEqual(HO.status, 'pending');
   assert.strictEqual(HO.totalAmount, 7000);
   assert.strictEqual(HO.lineCount, 3);
-  same(HO.expected, { Cash: 4000, JazzCash: 3000 });
+  sameMap(HO.expected, { Cash: 4000, JazzCash: 3000 });
   assert.ok(DB.wardenCollections.every(x => x.status === 'handed_over' && x.handoverId === HO.id));
   assert.strictEqual(H.hoLabel(HO), 'Waiting');
 });
@@ -199,7 +214,7 @@ ok('approving a discrepancy needs a note; unticked lines go back when approved',
   assert.strictEqual(H.hoLabel(HO), 'Part approved');
   assert.strictEqual(HO.approvedAmount, 6000);
   assert.strictEqual(HO.adminName, 'Owner');
-  same(HO.countedHow, { Cash: 'typed', JazzCash: 'matched' });
+  sameMap(HO.countedHow, { Cash: 'typed', JazzCash: 'matched' });
   const jazz = DB.wardenCollections.find(x => x.ledgerEntryId === entryOf('JazzCash', 3000));
   assert.strictEqual(jazz.status, 'pending_handover');
   assert.strictEqual(jazz.handoverId, null);
@@ -227,6 +242,84 @@ ok('the bell tells an approver what waits, and a warden what happened until seen
   assert.ok(H.hoMarkSeen('w_sara') >= 1);
   assert.ok(!H.hoAlerts().some(a => /part approved/.test(a.msg)));
   assert.ok(H.log().some(l => /Handover Part Approved/.test(l)));
+});
+
+
+// ── the admin records one they received ──────────────────────────────
+/* Owner, 2026-09-23: a warden hands the admin cash, or sends a transfer, while
+   the admin is the one signed in. Until this there was no way to write that
+   down — a handover could only ever start with the warden pressing Send, which
+   is also why the admin had nothing to confirm.
+
+   LAST IN THE FILE ON PURPOSE. Every test above shares one fixture, passed
+   hand to hand: the alert test reads the part-approved handover the review
+   tests left behind. These call start(), which wipes DB.handovers, so put them
+   anywhere earlier and they break a test that is not about them. */
+
+ok('an admin records a handover received, and it settles at once', () => {
+  start();
+  const holding = H.hoSum(H.hoPendingLines('w_sara'));
+  assert.ok(holding > 0, 'the fixture should be holding money');
+  H.as('owner');
+  const r = H.hoRecordReceived('w_sara', { note: 'JazzCash transfer' });
+  assert.strictEqual(r.ok, true, r.reason);
+  const h = r.handover;
+  assert.strictEqual(h.status, 'approved');
+  assert.strictEqual(h.totalAmount, holding);
+  assert.strictEqual(h.approvedAmount, holding);
+  assert.strictEqual(h.wardenId, 'w_sara');
+  assert.strictEqual(h.adminName, 'Owner');
+  // What tells it apart from one the warden sent.
+  assert.strictEqual(h.recordedBy, 'owner');
+  assert.strictEqual(h.recordedByName, 'Owner');
+  assert.strictEqual(H.hoSum(H.hoPendingLines('w_sara')), 0, 'the warden still holds it');
+  assert.ok(H.hoItems(h.id).every(x => x.item.outcome === 'approved'));
+  // It reads like a reviewed one: the count is stored per method.
+  sameMap(h.counted, h.expected, 'what was recorded must equal what was owed');
+  assert.ok(Object.keys(h.countedHow).every(m => h.countedHow[m] === 'recorded'));
+});
+
+ok('it is recorded against the warden, so their own account shows it', () => {
+  const mine = (DB.handovers || []).filter(x => x.wardenId === 'w_sara');
+  assert.strictEqual(mine.length, 1);
+  assert.strictEqual(mine[0].status, 'approved');
+  /* Not seen: the warden was not there when it was written down. The bell is
+     what tells them, and hoAlerts() reads wardenSeenAt to decide. */
+  assert.strictEqual(mine[0].wardenSeenAt, null);
+  H.as('w_sara');
+  assert.ok(H.hoAlerts().some(a => /was approved/.test(a.msg)),
+    'the warden is never told the money was taken');
+});
+
+ok('an admin cannot record a handover from themselves', () => {
+  H.as('owner');
+  const r = H.hoRecordReceived('owner', {});
+  assert.strictEqual(r.ok, false);
+  assert.ok(/from yourself/i.test(r.reason), r.reason);
+});
+
+ok('only an account that manages users may record one', () => {
+  start();
+  H.as('w_ali');
+  const r = H.hoRecordReceived('w_sara', {});
+  assert.strictEqual(r.ok, false);
+  assert.ok(/manages users/i.test(r.reason), r.reason);
+});
+
+ok('it refuses when the warden already sent one — that is a review, not a record', () => {
+  start();
+  H.as('w_sara');
+  assert.strictEqual(H.hoSend('w_sara').ok, true);
+  H.as('owner');
+  const r = H.hoRecordReceived('w_sara', {});
+  assert.strictEqual(r.ok, false);
+  assert.ok(/waiting for review/i.test(r.reason), r.reason);
+});
+
+ok('it refuses when the account is holding nothing', () => {
+  start();
+  H.as('owner');
+  assert.strictEqual(H.hoRecordReceived('w_ali', {}).ok, false);
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

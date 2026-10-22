@@ -7,6 +7,7 @@
 const configModule = require('./config');
 const db = require('./db');
 const { buildApp } = require('./app');
+const sweeper = require('./lib/sweeper');
 
 async function main() {
   const config = configModule.assertValid(configModule.load());
@@ -24,9 +25,16 @@ async function main() {
 
   const app = await buildApp({ config });
 
+  // Live delivery: LISTEN for licence changes and fan them out to app streams.
+  app.realtime.start();
+  // Lift timed levels (a 7-day ban) on their own, with an audit row.
+  const stopSweeper = sweeper.start(60000, app.log);
+
   const shutdown = async (signal) => {
     app.log.info({ signal }, 'shutting down');
     try {
+      stopSweeper();
+      await app.realtime.stop();
       await app.close();
       await db.close();
     } finally {

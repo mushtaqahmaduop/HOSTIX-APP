@@ -39,10 +39,11 @@
      summary:  [{ label, value, tone }],                           // §15
      columns:  [column],
      rows:     [...]   or   groups: [{ label, meta, rows, total }],
+     oneTable: bool,                   // PDF: groups share ONE table and heading row
      grand:    { label, value },
      note:     'a closing line',
      empty:    'No payment records match the selected filters.',   // §42
-     sections: [ { title, meta, columns, rows|groups, grand, empty } ],
+     sections: [ { title, meta, columns, rows|groups, oneTable, grand, empty } ],
      sheetPerSection: bool            // Excel: one sheet per section, §39
    }
 
@@ -256,6 +257,7 @@ function exSections(def) {
     title: null,
     columns: def.columns || [],
     groups: def.groups || [{ rows: def.rows || [] }],
+    oneTable: def.oneTable,
     grand: def.grand,
     empty: def.empty,
     summary: null,
@@ -428,18 +430,49 @@ function exCellHtml(c, row, i) {
   return html;
 }
 
-function exTable(columns, group) {
-  /* `pdfLabel` (opt-in, 2026-09-14): the printed heading on two lines, split at
-     "\n" — "Charges\n(Rs.)". Headings never wrap on their own (th is nowrap),
-     so a sixteen-column register whose money headings carry "(Rs.)" is set by
-     its headings rather than its figures. The workbook keeps `label`. */
-  const head = '<tr>' + columns.map(function (c) {
+/* `pdfLabel` (opt-in, 2026-09-14): the printed heading on two lines, split at
+   "\n" — "Charges\n(Rs.)". Headings never wrap on their own (th is nowrap),
+   so a sixteen-column register whose money headings carry "(Rs.)" is set by
+   its headings rather than its figures. The workbook keeps `label`. */
+function exHeadRow(columns) {
+  return '<tr>' + columns.map(function (c) {
     // ' <br>', not '<br>': the heading still READS "Charges (Rs.)" when copied
     // or read aloud, and the line break costs nothing in a nowrap cell.
     const text = c.pdfLabel ? _exEsc(c.pdfLabel).replace(/\n/g, ' <br>') : _exEsc(c.label);
     return '<th class="a-' + exAlign(c) + '">' + text + '</th>';
   }).join('') + '</tr>';
+}
 
+function exTable(columns, group) {
+  return '<table><thead>' + exHeadRow(columns) + '</thead><tbody>' +
+         exBodyRows(columns, group) + '</tbody></table>';
+}
+
+/* ONE TABLE FOR A GROUPED REGISTER (`oneTable`, opt-in — owner, 2026-09-24:
+   "the headings are used again and again for every category which gives the
+   pdf a messy look … one heading strip on every printable page and the
+   categories should only be differentiated by Category and its sub total").
+
+   The default draws each group as its own table under its own heading row, so
+   a ten-category expense register printed the column headings ten times down
+   one page. Here the heading row is printed once — thead repeats it at the
+   top of every page (§9) — and a group is a full-width category row, its
+   records, and its Sub-Total row inside the same table (§64 still holds: the
+   subtotal cannot be separated from its rows by anything but a page break). */
+function exGroupedTable(columns, groups) {
+  const n = Math.max(1, columns.length);
+  const body = groups.map(function (g) {
+    const label = g.label
+      ? '<tr class="grp"><td colspan="' + n + '"><span class="group__t">' + _exEsc(g.label) + '</span>' +
+        (g.meta ? '<span class="group__m">' + _exEsc(g.meta) + '</span>' : '') + '</td></tr>'
+      : '';
+    return label + exBodyRows(columns, g);
+  }).join('');
+  return '<table><thead>' + exHeadRow(columns) + '</thead><tbody>' + body + '</tbody></table>';
+}
+
+/* A group's records and its subtotal, as table rows. */
+function exBodyRows(columns, group) {
   /* `i` is the row's number WITHIN ITS GROUP, and `group.from` offsets it when
      a document is grouped or sectioned: the sheet's `#` column counts the
      register, not the block it happens to be printed in. */
@@ -464,7 +497,7 @@ function exTable(columns, group) {
       _exEsc(group.total.value) + '</td></tr>'
     : '';
 
-  return '<table><thead>' + head + '</thead><tbody>' + body + foot + '</tbody></table>';
+  return body + foot;
 }
 
 function exSectionHtml(sec) {
@@ -484,7 +517,7 @@ function exSectionHtml(sec) {
       '</div></section>';
   }
 
-  const body = sec.groups.map(function (g) {
+  const body = sec.oneTable ? exGroupedTable(columns, sec.groups) : sec.groups.map(function (g) {
     if (!g.label) return exTable(columns, g);
     return '<div class="ex-grp"><div class="ex-grp__h">' +
       '<span class="group__t">' + _exEsc(g.label) + '</span>' +
@@ -666,6 +699,12 @@ function exStyles(landscape, dense, colCount) {
   '.pos{color:' + c.positive + ';font-weight:700}' +
   'tr.subtotal td{border-top:1px solid ' + c.border + ';border-bottom:none;font-weight:800;' +
                  'background:' + c.soft + '}' +
+  /* `oneTable`: a category's own row inside the one register table. A strong
+     rule above it is what separates one category from the next; the name and
+     its meta sit on one line, and it is never left alone at a page's foot. */
+  'tr.grp td{padding-top:9px;border-top:1.4px solid ' + c.blue + ';border-right:none}' +
+  'tr.grp td .group__m{margin-left:10px}' +
+  'tr.grp{break-after:avoid;page-break-after:avoid}' +
   /* status pills — colour plus the word, never colour alone (§47) */
   '.ex-st{display:inline-block;padding:1px 7px;border-radius:9px;font-size:8.5pt;font-weight:700;' +
          'white-space:nowrap}' +
@@ -980,6 +1019,9 @@ const EXPORT = {
     /* No placeholder name on paper (hostel-name.js): every register export
        comes through here, so one question covers all of them. */
     if (typeof hostelNameGate === 'function' && hostelNameGate(() => EXPORT.pdf(def))) return null;
+    // The owner can switch PDFs off per licence; the main process refuses the
+    // save regardless — this says why before any work is done.
+    if (typeof requireOutput === 'function' && !requireOutput('printing')) return null;
     try {
       const doc = exDocument(def);
       _exBusy(def, doc.rows, 'PDF');
@@ -996,6 +1038,7 @@ const EXPORT = {
      the browser; the caller does not need to await it. */
   async excel(def) {
     if (typeof hostelNameGate === 'function' && hostelNameGate(() => EXPORT.excel(def))) return null;
+    if (typeof requireOutput === 'function' && !requireOutput('exporting')) return null;
     try {
       const spec = exWorkbook(def);
       const rows = exRowCount(exSections(def));

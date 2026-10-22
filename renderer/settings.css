@@ -980,7 +980,7 @@
 }
 .conn-sum__d { width: 9px; height: 9px; border-radius: 50%; background: var(--c-fg); flex-shrink: 0; }
 .conn-sum b     { display: block; font-size: 12.5px; font-weight: 700; color: var(--text); }
-.conn-sum small { display: block; font-size: 11px; color: var(--text3); margin-top: 2px; }
+.conn-sum small { display: block; font-size: 11px; color: var(--text2); margin-top: 2px; }   /* text3 was 4.35:1 on the tint (audit C7) */
 
 .conn-rows { margin-top: 14px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
 .conn-row {

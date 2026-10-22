@@ -181,7 +181,7 @@ function renderFormerStudents() {
       <td>${room ? roomLabel(room, (DB.rooms.find(r => String(r.number) === room) || {}).floor, true)
                  : '<span class="fm-dash">—</span>'}</td>
       <td><div class="fm-when">${icon('calendar','xs')}${s.leftDate ? escHtml(fmtDate(s.leftDate)) : '—'}</div></td>
-      <td class="fm-reason">${reason ? escHtml(reason) : '<span class="fm-dash">—</span>'}</td>
+      <td class="fm-reason">${reason ? `<span class="fm-reason__t" title="${escHtml(reason)}">${escHtml(reason)}</span>` : '<span class="fm-dash">—</span>'}</td>
       ${''/* PAID ON TOP, WHAT IS STILL OWED UNDER IT. The reference draws one
              figure and a chip; the figure it draws is the money that came in,
              and the chip is about the money that did not. Both are named,

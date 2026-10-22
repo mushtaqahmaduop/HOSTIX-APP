@@ -42,7 +42,7 @@ test('the daily screens are reachable without scrolling the rail', async () => {
   await win.waitForLoadState('domcontentloaded');
   await win.waitForSelector('#login-input',{state:'visible',timeout:30000});
   await win.waitForFunction(()=>typeof WARDENS!=='undefined'&&WARDENS.warden1&&WARDENS.warden1.pw,null,{timeout:30000});
-  await win.fill('#login-user','warden1'); await win.fill('#login-input','admin123'); await win.click('#login-btn');
+  await win.selectOption('#login-user','warden1'); await win.fill('#login-input','admin123'); await win.click('#login-btn');
   await win.waitForFunction(()=>{const s=document.getElementById('login-screen');return s&&s.style.display==='none';},null,{timeout:30000});
 
   // size note -> the data-page keys that did NOT fit. Filled per size below,

@@ -9,6 +9,7 @@
 'use strict';
 
 const { test, expect, _electron: electron } = require('@playwright/test');
+const { settleFreshInstall } = require('./_fresh-install');
 const path = require('path');
 const { resetProfile } = require('./_profile');
 
@@ -31,12 +32,13 @@ async function launch(seed) {
   await win.waitForSelector('#login-input', { state: 'visible', timeout: 60000 });
   await win.waitForFunction(() => typeof WARDENS !== 'undefined' && Object.keys(WARDENS).length > 0,
     null, { timeout: 60000 });
-  await win.fill('#login-user', 'warden1');
+  await win.selectOption('#login-user', 'warden1');
   await win.fill('#login-input', 'admin123');
   await win.click('#login-btn');
   await win.waitForFunction(
     () => { const s = document.getElementById('login-screen'); return s && s.style.display === 'none'; },
     null, { timeout: 60000 });
+  await settleFreshInstall(win);   // setup done + the 42 rooms these specs expect
   await win.waitForTimeout(600);
   if (seed) {
     await win.evaluate(async () => {
@@ -75,7 +77,9 @@ test('the students register reads the way the owner asked for', async () => {
       heads,
       waFirst: !!row.querySelector('.stu-contact .stu-wa'),
       phoneSecond: !!row.querySelector('.stu-contact__em .stu-ph'),
-      floor: (row.querySelector('.stu-room__t') || {}).textContent || '',
+      // The room cell is the shared .ui-room component since 50e1380; its first
+      // .ui-room__t is the floor, the second the room type.
+      floor: (row.querySelector('.ui-room .ui-room__t') || {}).textContent || '',
       actionWords: (row.querySelector('.stu-actc .ui-btn') || {}).textContent || '',
       actionName: (row.querySelector('.stu-actc .ui-btn') || {}).getAttribute
         ? row.querySelector('.stu-actc .ui-btn').getAttribute('aria-label') : '',

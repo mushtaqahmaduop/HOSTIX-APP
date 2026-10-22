@@ -45,7 +45,7 @@ async function login(win) {
   await win.waitForFunction(
     () => typeof WARDENS !== 'undefined' && WARDENS.warden1 && WARDENS.warden1.pw,
     null, { timeout: 30000 });
-  await win.fill('#login-user', 'warden1');
+  await win.selectOption('#login-user', 'warden1');
   await win.fill('#login-input', 'admin123');
   await win.click('#login-btn');
   await win.waitForFunction(
@@ -119,9 +119,13 @@ test('the glance counts today, and the heading says which day', async () => {
         amount: rent, unpaid: mess, overpaid: 0, status: 'Paid', paidDate: d(4),
         monthlyRent: rent, messCharge: mess, messIncluded: true, method: 'JazzCash' },
     ];
-    DB.complaints  = [{ id: 'cp1', seq: 1, subject: 'Fan', date: td,   status: 'Open' },
-                      { id: 'cp2', seq: 2, subject: 'Door', date: d(3), status: 'Open' }];
-    DB.maintenance = [{ id: 'mt1', seq: 1, title: 'Tap', date: td, status: 'Open' }];
+    /* ONE REGISTER since 2026-09-21: the dashboard reads DB.issues and tells
+       the two kinds apart by `kind`. Seeding DB.complaints/DB.maintenance now
+       fills a collection nothing reads. */
+    DB.issues = [{ id: 'cp1', kind: 'complaint',  seq: 1, title: 'Fan',  date: td,   status: 'Open' },
+                 { id: 'cp2', kind: 'complaint',  seq: 2, title: 'Door', date: d(3), status: 'Open' },
+                 { id: 'mt1', kind: 'maintenance', seq: 1, title: 'Tap', date: td,   status: 'Open' }];
+    DB.complaints = []; DB.maintenance = [];
     DB.checkinlog  = [{ id: 'ci1', studentId: 's1', type: 'Check-in',  date: td,   time: '09:00' },
                       { id: 'ci2', studentId: 's1', type: 'Check-out', date: td,   time: '18:00' },
                       { id: 'ci3', studentId: 's3', type: 'Check-in',  date: d(2), time: '10:00' }];
@@ -185,7 +189,7 @@ test('the glance and Collection by Method cover different windows, and each says
         unpaid: 0, overpaid: 0, status: 'Paid', paidDate: d(3),
         monthlyRent: rent, messCharge: mess, messIncluded: true, method: 'JazzCash' },
     ];
-    DB.complaints = []; DB.maintenance = []; DB.checkinlog = []; DB.cancellations = [];
+    DB.issues = []; DB.complaints = []; DB.maintenance = []; DB.checkinlog = []; DB.cancellations = [];
     await saveDB();
   }, [RENT, MESS]);
 
@@ -236,7 +240,7 @@ test('the glance does NOT follow the sidebar month picker — it is a day card',
       { id: 's2', name: 'July Joiner',  roomId: 'r1', status: 'Active', joinDate: '2026-07-04', messOptIn: true, paymentMethod: 'Cash' },
       { id: 's3', name: 'Aug Joiner',   roomId: 'r1', status: 'Active', joinDate: '2026-08-06', messOptIn: true, paymentMethod: 'Cash' },
     ];
-    DB.payments = []; DB.complaints = []; DB.maintenance = []; DB.checkinlog = []; DB.cancellations = [];
+    DB.payments = []; DB.issues = []; DB.complaints = []; DB.maintenance = []; DB.checkinlog = []; DB.cancellations = [];
     await saveDB();
   }, [RENT, MESS]);
 
@@ -275,13 +279,14 @@ test('Needs Action keeps all four rows, and only the numbers change', async () =
   await seed(win, async () => {
     DB.rooms = [{ id: 'r1', number: '1', floor: 'G', typeId: '2s', studentIds: ['s1'], amenities: [], notes: '' }];
     DB.students = [{ id: 's1', name: 'A', roomId: 'r1', status: 'Active', joinDate: today(), messOptIn: true, paymentMethod: 'Cash' }];
-    DB.payments = []; DB.complaints = []; DB.maintenance = []; DB.cancellations = []; DB.checkinlog = [];
+    DB.payments = []; DB.issues = []; DB.complaints = []; DB.maintenance = []; DB.cancellations = []; DB.checkinlog = [];
     await saveDB();
   });
 
   let n = await win.evaluate(() => ({
     rows: [...document.querySelectorAll('.dl-need')].map(r => ({
-      text: r.innerText.replace(/\s+/g, ' ').trim(), clear: r.classList.contains('is-clear') })),
+      text: r.innerText.replace(/\s+/g, ' ').trim(), locked: r.disabled,
+      tone: (r.className.match(/dh-\w+/) || [''])[0] })),
     /* `.dash-pill` again. This selector has now been right, wrong and right
        within one day: the 9 Sep rebuild moved the count into `.dl-head2__pill`,
        and the owner's 9 Sep revert to the old card moved it back. The badge
@@ -292,14 +297,19 @@ test('Needs Action keeps all four rows, and only the numbers change', async () =
   }));
 
   expect(n.rows.length, 'all four rows are always present').toBe(4);
-  expect(n.rows.every(r => r.clear)).toBe(true);
+  /* ONLY THE NUMBER CHANGES (owner review #7, 2026-09-18). A zero row used to
+     become a different object — tone drained, verb replaced by "Clear". It
+     keeps its tone and its verb now, and is locked instead: nothing is waiting
+     on that screen, so the control stops promising an action. */
+  expect(n.rows.every(r => r.locked), 'a zero row is locked').toBe(true);
+  expect(n.rows.map(r => r.tone)).toEqual(['dh-amber', 'dh-red', 'dh-violet', 'dh-blue']);
   expect(n.rows.map(r => r.text)).toEqual([
-    '0 pending cancellations Clear',
-    '0 pending payments Clear',
-    '0 open complaints Clear',
+    '0 pending cancellations View',
+    '0 pending payments Collect',
+    '0 open complaints Resolve',
     // "0 open maintenances" — the naive + 's' pluraliser was wrong at every
     // count, not just at zero; it was simply never visible before.
-    '0 open maintenance jobs Clear',
+    '0 open maintenance jobs Assign',
   ]);
   expect(n.pill, 'no badge when nothing wants attention').toBeNull();
 
@@ -309,7 +319,8 @@ test('Needs Action keeps all four rows, and only the numbers change', async () =
     DB.payments = [{ id: 'p1', studentId: 's1', studentName: 'A', month: thisMonth(),
                      date: td, amount: 0, unpaid: 14500, status: 'Pending',
                      monthlyRent: 8000, messCharge: 6500, messIncluded: true, method: 'Cash' }];
-    DB.complaints = [{ id: 'cp1', seq: 1, subject: 'Fan', date: td, status: 'Open' }];
+    DB.issues = [{ id: 'cp1', kind: 'complaint', seq: 1, title: 'Fan', date: td, status: 'Open' }];
+    DB.complaints = []; DB.maintenance = [];
     await saveDB();
     navigate('dashboard');
   });
@@ -317,7 +328,8 @@ test('Needs Action keeps all four rows, and only the numbers change', async () =
 
   n = await win.evaluate(() => ({
     rows: [...document.querySelectorAll('.dl-need')].map(r => ({
-      text: r.innerText.replace(/\s+/g, ' ').trim(), clear: r.classList.contains('is-clear') })),
+      text: r.innerText.replace(/\s+/g, ' ').trim(), locked: r.disabled,
+      tone: (r.className.match(/dh-\w+/) || [''])[0] })),
     /* `.dash-pill` again. This selector has now been right, wrong and right
        within one day: the 9 Sep rebuild moved the count into `.dl-head2__pill`,
        and the owner's 9 Sep revert to the old card moved it back. The badge
@@ -329,11 +341,13 @@ test('Needs Action keeps all four rows, and only the numbers change', async () =
 
   expect(n.rows.length).toBe(4);
   // Same order, same positions — the list is scannable because it does not move.
-  expect(n.rows[0].text).toBe('0 pending cancellations Clear');
+  expect(n.rows[0].text).toBe('0 pending cancellations View');
   expect(n.rows[1].text).toBe('1 pending payment Collect');
   expect(n.rows[2].text).toBe('1 open complaint Resolve');
-  expect(n.rows[3].text).toBe('0 open maintenance jobs Clear');
-  expect(n.rows.map(r => r.clear)).toEqual([true, false, false, true]);
+  expect(n.rows[3].text).toBe('0 open maintenance jobs Assign');
+  expect(n.rows.map(r => r.locked)).toEqual([true, false, false, true]);
+  // The tones did not move when the counts did.
+  expect(n.rows.map(r => r.tone)).toEqual(['dh-amber', 'dh-red', 'dh-violet', 'dh-blue']);
   expect(n.pill, 'the badge counts what wants attention, not the rows').toBe('2');
 
   await app.close();
@@ -351,7 +365,7 @@ test('every Quick Action opens its own form, and Seat Availability can expand an
   await seed(win, async () => {
     DB.rooms = [{ id: 'r1', number: '1', floor: 'G', typeId: '2s', studentIds: ['s1'], amenities: [], notes: '' }];
     DB.students = [{ id: 's1', name: 'A', roomId: 'r1', status: 'Active', joinDate: today(), messOptIn: true, paymentMethod: 'Cash' }];
-    DB.payments = []; DB.complaints = []; DB.maintenance = []; DB.cancellations = []; DB.checkinlog = [];
+    DB.payments = []; DB.issues = []; DB.complaints = []; DB.maintenance = []; DB.cancellations = []; DB.checkinlog = [];
     await saveDB();
   });
 
@@ -446,7 +460,7 @@ test('the expanded seat grid separates rooms with space, full rooms and over-fil
     mk('sr1', 1, 'a');          // space left
     mk('sr2', cap, 'b');        // exactly full
     mk('sr3', cap + 2, 'c');    // deliberately over-filled
-    DB.payments = []; DB.complaints = []; DB.maintenance = []; DB.cancellations = [];
+    DB.payments = []; DB.issues = []; DB.complaints = []; DB.maintenance = []; DB.cancellations = [];
     await saveDB();
   });
 
@@ -528,8 +542,9 @@ test('rows A-C reach the fold at every shipped size, on a 40-room hostel', async
                          status: i % 3 ? 'Paid' : 'Pending', paidDate: i % 3 ? td : '',
                          monthlyRent: 8000, messCharge: 6500, messIncluded: true, method: 'Cash' });
     }
-    DB.complaints = [{ id: 'cp1', seq: 1, subject: 'Fan', date: td, status: 'Open' }];
-    DB.maintenance = [{ id: 'mt1', seq: 1, title: 'Tap', date: td, status: 'Open' }];
+    DB.issues = [{ id: 'cp1', kind: 'complaint',  seq: 1, title: 'Fan', date: td, status: 'Open' },
+                 { id: 'mt1', kind: 'maintenance', seq: 1, title: 'Tap', date: td, status: 'Open' }];
+    DB.complaints = []; DB.maintenance = [];
     DB.cancellations = [{ id: 'c1', seq: 1, studentId: 's1', studentName: 'Student 1',
                           roomNumber: '2', requestDate: td, vacateDate: '2026-09-30',
                           status: 'Pending', reason: 'x', createdAt: td }];

@@ -99,6 +99,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dbUpsert:      (table, id, record) => ipcRenderer.invoke('db:upsert',      table, id, record),
   dbDelete:      (table, id)         => ipcRenderer.invoke('db:delete',      table, id),
   dbBulkReplace: (table, records)    => ipcRenderer.invoke('db:bulkReplace', table, records),
+  // One save, one SQLite transaction (finance Phase 7). See db:applyChangeset
+  // in main.js — the per-row channels above stay for the fallback path.
+  dbApplyChangeset: (changeset)      => ipcRenderer.invoke('db:applyChangeset', changeset),
   dbGetSetting:  (key)               => ipcRenderer.invoke('db:getSetting',  key),
   dbSetSetting:  (key, value)        => ipcRenderer.invoke('db:setSetting',  key, value),
   // §17. dbHealth answers even when the database does not open — that is the
@@ -202,6 +205,12 @@ contextBridge.exposeInMainWorld('titlebar', {
     if (typeof cb === 'function') ipcRenderer.on('window:maximized', (_e, v) => cb(!!v));
   },
   isDev:            () => ipcRenderer.invoke('app:isDev'),
+  // Display scale (services/display-scale.js): the current fit, and a push
+  // whenever it changes, so View can show the % and the auto-fit tick.
+  getScale:         () => ipcRenderer.invoke('display:getScale'),
+  onScale:          (cb) => {
+    if (typeof cb === 'function') ipcRenderer.on('display:scale', (_e, v) => cb(v || null));
+  },
   menu:             (action) => {
     if (typeof action === 'string') ipcRenderer.send('titlebar:menu', action);
   }
